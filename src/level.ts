@@ -66,7 +66,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
   switch (type) {
     case "start": return { type, x, y, z };
     case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 20, rot: 0, fences: { n: false, e: true, s: false, w: true } };
-    case "curve": return { type, x, y, z, inner: 4, outer: 4 + LANE_WIDTH, rot: 0, fences: { inner: true, outer: true, a: false, b: false } };
+    case "curve": return { type, x, y, z, inner: 10, outer: 10 + LANE_WIDTH, rot: 0, fences: { inner: true, outer: true, a: false, b: false } };
     case "block": return { type, x, y, z, w: 3, h: 1.2, d: 4, rot: 0 };
     case "spinner": return { type, x, y, z, length: 6, speed: 1.2 };
     case "goal": return { type, x, y, z, r: 2 };
