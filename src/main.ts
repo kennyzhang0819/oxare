@@ -1,64 +1,52 @@
 import * as THREE from "three";
-import { BALL_RADIUS, STEP, createSim } from "./sim";
+import "./style.css";
+import { Editor } from "./editor.ts";
+import { Game } from "./game.ts";
+import { LEVELS } from "./levels/index.ts";
+import { Menu } from "./menu.ts";
+import { initPhysics } from "./sim.ts";
+import { loadTuning } from "./tuning.ts";
+import type { Level } from "./level.ts";
+
+export interface Ctx { renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement; overlay: HTMLElement }
+export interface Mode { dispose(): void }
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
+const overlay = document.getElementById("overlay") as HTMLElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+const ctx: Ctx = { renderer, canvas, overlay };
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8ec5ff);
-scene.fog = new THREE.Fog(0xdfefff, 20, 60);
+loadTuning();
+void initPhysics();
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x6a8fbf, 1.2));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(5, 10, 3);
-scene.add(sun);
-
-scene.add(
-  new THREE.Mesh(
-    new THREE.BoxGeometry(12, 1, 12),
-    new THREE.MeshStandardMaterial({ color: 0xd8dde3, flatShading: true }),
-  ).translateY(-0.5),
-);
-const ballMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(BALL_RADIUS, 32, 16),
-  new THREE.MeshStandardMaterial({ color: 0xff6b3d, flatShading: true }),
-);
-scene.add(ballMesh);
-
-const keys = new Set<string>();
-addEventListener("keydown", (e) => keys.add(e.key));
-addEventListener("keyup", (e) => keys.delete(e.key));
-
-function resize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+let mode: Mode | null = null;
+function show(next: () => Mode) {
+  mode?.dispose();
+  mode = next();
 }
-addEventListener("resize", resize);
-resize();
 
-const sim = await createSim();
-let acc = 0;
-let last = performance.now();
-
-function frame(now: number) {
-  acc += Math.min((now - last) / 1000, 0.1);
-  last = now;
-  const tx = (keys.has("ArrowRight") ? 1 : 0) - (keys.has("ArrowLeft") ? 1 : 0);
-  const tz = (keys.has("ArrowDown") ? 1 : 0) - (keys.has("ArrowUp") ? 1 : 0);
-  while (acc >= STEP) {
-    sim.step(tx, tz);
-    acc -= STEP;
-  }
-  const p = sim.ball.translation();
-  const r = sim.ball.rotation();
-  ballMesh.position.set(p.x, p.y, p.z);
-  ballMesh.quaternion.set(r.x, r.y, r.z, r.w);
-  camera.position.set(p.x, p.y + 8, p.z + 10);
-  camera.lookAt(p.x, p.y, p.z);
-  renderer.render(scene, camera);
-  requestAnimationFrame(frame);
+function menu() {
+  show(() => new Menu(ctx, { onPlay: playLevel, onEdit: edit }));
 }
-requestAnimationFrame(frame);
+
+function playLevel(i: number) {
+  const level = LEVELS[i];
+  if (!level) return menu();
+  show(() => new Game(ctx, level, {
+    onExit: menu,
+    onRetry: () => playLevel(i),
+    onNext: LEVELS[i + 1] ? () => playLevel(i + 1) : undefined,
+  }));
+}
+
+function edit(level: Level) {
+  show(() => new Editor(ctx, level, {
+    onExit: menu,
+    onPlay: (l) => show(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l) })),
+  }));
+}
+
+menu();

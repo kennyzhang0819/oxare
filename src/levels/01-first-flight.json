@@ -1,0 +1,22 @@
+{
+  "id": "01-first-flight",
+  "name": "First Flight",
+  "pieces": [
+    { "type": "start", "x": 0, "y": 0, "z": 0 },
+    { "type": "slab", "x": 0, "y": 0, "z": 0, "w": 6, "d": 6, "rot": 0, "fences": { "n": false, "e": true, "s": true, "w": true } },
+    { "type": "slab", "x": 0, "y": 0, "z": -9, "w": 4, "d": 12, "rot": 0, "fences": { "n": false, "e": true, "s": false, "w": true } },
+    { "type": "gem", "x": 0, "y": 0, "z": -12 },
+    { "type": "curve", "x": 4, "y": 0, "z": -15, "inner": 2, "outer": 6, "rot": 90, "fences": { "inner": true, "outer": true, "a": false, "b": false } },
+    { "type": "slab", "x": 10, "y": 0, "z": -19, "w": 12, "d": 4, "rot": 0, "fences": { "n": true, "e": false, "s": true, "w": false } },
+    { "type": "block", "x": 8, "y": 0, "z": -20.2, "w": 1, "h": 1, "d": 1.6, "rot": 0 },
+    { "type": "block", "x": 11, "y": 0, "z": -17.8, "w": 1, "h": 1, "d": 1.6, "rot": 0 },
+    { "type": "gem", "x": 14, "y": 0, "z": -19 },
+    { "type": "curve", "x": 16, "y": 0, "z": -23, "inner": 2, "outer": 6, "rot": 270, "fences": { "inner": true, "outer": true, "a": false, "b": false } },
+    { "type": "slab", "x": 20, "y": 0, "z": -31, "w": 8, "d": 16, "rot": 0, "fences": { "n": false, "e": true, "s": false, "w": true } },
+    { "type": "spinner", "x": 20, "y": 0, "z": -31, "length": 4.5, "speed": 1.5 },
+    { "type": "gem", "x": 17, "y": 0, "z": -27 },
+    { "type": "gem", "x": 23, "y": 0, "z": -35 },
+    { "type": "slab", "x": 20, "y": 0, "z": -42, "w": 6, "d": 6, "rot": 0, "fences": { "n": true, "e": true, "s": false, "w": true } },
+    { "type": "goal", "x": 20, "y": 0, "z": -42, "r": 1.5 }
+  ]
+}
