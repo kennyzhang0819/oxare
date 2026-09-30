@@ -17,16 +17,21 @@ export function tileTexture(anisotropy: number): THREE.Texture {
   const n = 16, px = 64;
   const [c, ctx] = canvas(n * px, n * px);
   const rnd = seeded(7);
+  const taken = new Set<number>();
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    const l = 86 + Math.floor(rnd() * 10);
-    ctx.fillStyle = `hsl(210 12% ${l}%)`;
-    ctx.fillRect(x * px, y * px, px, px);
-    ctx.fillStyle = `hsl(210 12% ${l + 3}%)`;
-    ctx.fillRect(x * px, y * px, px, 2);
+    if (taken.has(y * n + x)) continue;
+    const wide = x + 1 < n && !taken.has(y * n + x + 1) && rnd() < 0.35;
+    if (wide) taken.add(y * n + x + 1);
+    const w = wide ? 2 : 1;
+    const l = 90 + rnd() * 5;
+    ctx.fillStyle = `hsl(210 10% ${l}%)`;
+    ctx.fillRect(x * px, y * px, w * px, px);
+    ctx.fillStyle = `hsl(210 10% ${l + 2}%)`;
+    ctx.fillRect(x * px, y * px, w * px, 2);
     ctx.fillRect(x * px, y * px, 2, px);
-    ctx.fillStyle = `hsl(210 12% ${l - 4}%)`;
-    ctx.fillRect(x * px, y * px + px - 2, px, 2);
-    ctx.fillRect(x * px + px - 2, y * px, 2, px);
+    ctx.fillStyle = `hsl(210 10% ${l - 2}%)`;
+    ctx.fillRect(x * px, y * px + px - 2, w * px, 2);
+    ctx.fillRect((x + w) * px - 2, y * px, 2, px);
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;

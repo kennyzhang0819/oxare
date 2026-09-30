@@ -4,13 +4,14 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { sectorMesh } from "./geometry.ts";
 import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, pieceSectors, type Level, type PartKind } from "./level.ts";
 import { TILE, ballTextures, tileTexture } from "./textures.ts";
+import { buildRails } from "./rails.ts";
 
-export const EDGE_RADIUS = 0.18;
+export const EDGE_RADIUS = 0.3;
 
 export const SKY_TOP = 0x4f9dff;
 export const SKY_HORIZON = 0xe2f2ff;
 
-let MAT: Record<PartKind, THREE.Material> | null = null;
+let MAT: Record<Exclude<PartKind, "fence">, THREE.Material> | null = null;
 let ENV: THREE.Texture | null = null;
 
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
@@ -18,7 +19,6 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
   const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy());
   MAT = {
     platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.85 }),
-    fence: new THREE.MeshStandardMaterial({ color: 0xb4c0cc, roughness: 0.6 }),
     block: new THREE.MeshStandardMaterial({ map: tiles, color: 0x9aa8b8, roughness: 0.8 }),
   };
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -28,7 +28,7 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
 
 // Box UVs projected from the dominant normal axis so tiles stay world-sized on every face.
 function roundedBox(w: number, h: number, d: number, r: number): THREE.BufferGeometry {
-  const geo = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2));
+  const geo = new RoundedBoxGeometry(w, h, d, 4, Math.min(r, w / 2, h / 2, d / 2));
   const p = geo.getAttribute("position"), n = geo.getAttribute("normal");
   const uv = new Float32Array(p.count * 2);
   for (let i = 0; i < p.count; i++) {
@@ -95,15 +95,17 @@ export function buildLevel(level: Level, editor: boolean): Built {
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
     g.userData.pieceIndex = index;
     for (const b of pieceBoxes(p)) {
-      const geo = b.kind === "fence" ? new THREE.BoxGeometry(b.w, b.h, b.d) : roundedBox(b.w, b.h, b.d, EDGE_RADIUS);
-      const m = new THREE.Mesh(geo, mat[b.kind]);
+      if (b.kind === "fence") continue;
+      const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat[b.kind]);
       m.position.set(b.x, b.y, b.z);
       m.castShadow = b.kind !== "platform";
       m.receiveShadow = true;
       g.add(m);
     }
+    buildRails(p, g, ENV);
     for (const s of pieceSectors(p)) {
-      const t = sectorMesh(s.inner, s.outer, s.y0, s.y1, { bevel: s.kind === "fence" ? 0 : EDGE_RADIUS, tile: TILE });
+      if (s.kind === "fence") continue;
+      const t = sectorMesh(s.inner, s.outer, s.y0, s.y1, { bevel: EDGE_RADIUS, tile: TILE });
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(t.positions, 3));
       geo.setAttribute("uv", new THREE.BufferAttribute(t.uvs, 2));

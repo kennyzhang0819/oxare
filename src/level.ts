@@ -1,7 +1,7 @@
 export const BALL_RADIUS = 0.5;
 export const PLATFORM_THICKNESS = 1;
-export const FENCE_HEIGHT = 0.7;
-export const FENCE_THICKNESS = 0.25;
+export const FENCE_HEIGHT = 0.9;
+export const FENCE_THICKNESS = 0.4;
 export const SPINNER_HEIGHT = 0.6;
 export const SPINNER_WIDTH = 0.4;
 
