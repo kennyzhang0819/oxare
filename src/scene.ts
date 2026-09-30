@@ -49,8 +49,8 @@ export function createScene(): { scene: THREE.Scene; sun: THREE.DirectionalLight
   scene.background = new THREE.Color(SKY_HORIZON);
   scene.fog = new THREE.Fog(SKY_HORIZON, 30, 110);
   scene.add(makeSky());
-  scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x5f7d9e, 0.65));
-  const sun = new THREE.DirectionalLight(0xfff4e6, 1.15);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 1.1));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(8, 14, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);

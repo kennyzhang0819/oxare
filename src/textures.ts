@@ -23,7 +23,7 @@ export function tileTexture(anisotropy: number): THREE.Texture {
     const wide = x + 1 < n && !taken.has(y * n + x + 1) && rnd() < 0.35;
     if (wide) taken.add(y * n + x + 1);
     const w = wide ? 2 : 1;
-    const l = 86 + rnd() * 5;
+    const l = 90 + rnd() * 5;
     ctx.fillStyle = `hsl(210 10% ${l}%)`;
     ctx.fillRect(x * px, y * px, w * px, px);
     ctx.fillStyle = `hsl(210 10% ${l + 2}%)`;
