@@ -15,11 +15,11 @@ export type Piece =
   | (At & { type: "curve"; inner: number; outer: number; rot: number; fences: CurveFences })
   | (At & { type: "block"; w: number; h: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
-  | (At & { type: "gem" })
   | (At & { type: "goal"; r: number });
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "block", "spinner", "gem", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "block", "spinner", "goal", "start"];
+export const LANE_WIDTH = 10;
 
 export interface Level { id: string; name: string; pieces: Piece[] }
 
@@ -65,12 +65,11 @@ export function pieceRot(p: Piece): number {
 export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
   switch (type) {
     case "start": return { type, x, y, z };
-    case "slab": return { type, x, y, z, w: 4, d: 8, rot: 0, fences: { n: false, e: true, s: false, w: true } };
-    case "curve": return { type, x, y, z, inner: 2, outer: 6, rot: 0, fences: { inner: true, outer: true, a: false, b: false } };
-    case "block": return { type, x, y, z, w: 1, h: 1, d: 1, rot: 0 };
-    case "spinner": return { type, x, y, z, length: 4, speed: 1.5 };
-    case "gem": return { type, x, y, z };
-    case "goal": return { type, x, y, z, r: 1.5 };
+    case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 20, rot: 0, fences: { n: false, e: true, s: false, w: true } };
+    case "curve": return { type, x, y, z, inner: 4, outer: 4 + LANE_WIDTH, rot: 0, fences: { inner: true, outer: true, a: false, b: false } };
+    case "block": return { type, x, y, z, w: 3, h: 1.2, d: 4, rot: 0 };
+    case "spinner": return { type, x, y, z, length: 6, speed: 1.2 };
+    case "goal": return { type, x, y, z, r: 2 };
   }
 }
 
@@ -108,7 +107,7 @@ export function validateLevel(raw: unknown): Level {
     const at = { x: num(p.x, `piece ${i}.x`), y: num(p.y, `piece ${i}.y`), z: num(p.z, `piece ${i}.z`) };
     const f = (p.fences ?? {}) as Record<string, unknown>;
     switch (p.type) {
-      case "start": case "gem": return { type: p.type, ...at };
+      case "start": return { type: "start", ...at };
       case "slab": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"),
         fences: { n: bool(f.n), e: bool(f.e), s: bool(f.s), w: bool(f.w) } };
       case "curve": return { type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"),

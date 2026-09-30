@@ -28,6 +28,5 @@ Each level is a JSON file in `src/levels/`, picked up automatically and listed i
 | `curve`   | x y z inner outer rot fences{inner,outer,a,b} | 90° annulus around (x, z), sweeping from local +x to local -z; `a` and `b` fence the two ends |
 | `block`   | x y z w h d rot                          | obstacle sitting on a surface at y |
 | `spinner` | x y z length speed                       | rotating bar, speed in rad/s |
-| `gem`     | x y z                                    | collectible |
 
 `rot` is degrees about the vertical axis. Use the in-game editor (Edit on the menu) to lay a level out, then Export and drop the file into `src/levels/`.

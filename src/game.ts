@@ -29,11 +29,9 @@ export class Game implements Mode {
   private raf = 0;
   private time = 0;
   private falls = 0;
-  private collected = new Set<number>();
   private done = false;
   private hud: HTMLElement;
   private timeEl = h("span", { class: "pill" }, "0:00.00");
-  private gemEl = h("span", { class: "pill" });
   private tunePanel: HTMLElement | null = null;
   private onResize = () => this.resize();
   private onKey = (e: KeyboardEvent) => {
@@ -56,12 +54,11 @@ export class Game implements Mode {
     this.hud = h("div", { class: "hud" },
       h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
       h("span", { class: "pill" }, level.name),
-      this.timeEl, this.gemEl,
+      this.timeEl,
       h("span", { class: "spacer" }),
       h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)"),
     );
     ctx.overlay.append(this.hud);
-    this.updateGemHud();
     this.input.attach(ctx.canvas);
     if (this.input.tiltOn) this.input.calibrate();
     addEventListener("resize", this.onResize);
@@ -112,17 +109,6 @@ export class Game implements Mode {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle;
     }
-    for (const [i, m] of this.built.gems) {
-      if (this.collected.has(i)) continue;
-      m.rotation.y = this.time * 2;
-      m.position.y = 0.8 + Math.sin(this.time * 3 + i) * 0.1;
-      const g = this.level.pieces[i]!;
-      if (Math.hypot(p.x - g.x, p.y - (g.y + 0.8), p.z - g.z) < BALL_RADIUS + 0.5) {
-        this.collected.add(i);
-        m.visible = false;
-        this.updateGemHud();
-      }
-    }
     if (!this.done) {
       if (p.y < TUNING.respawnY) this.fall();
       const goal = this.built.goal;
@@ -157,10 +143,6 @@ export class Game implements Mode {
     this.sim!.respawn();
   }
 
-  private updateGemHud() {
-    this.gemEl.textContent = `◆ ${this.collected.size}/${this.built.gems.size}`;
-  }
-
   private finish() {
     this.done = true;
     const progress = loadProgress();
@@ -172,7 +154,7 @@ export class Game implements Mode {
         h("div", { class: "card" },
           h("h2", {}, "Level complete"),
           h("div", {}, `Time ${fmtTime(this.time)}${best ? " · new best" : ""}`),
-          h("div", {}, `Gems ${this.collected.size}/${this.built.gems.size} · Falls ${this.falls}`),
+          h("div", {}, `Falls ${this.falls}`),
           h("div", { class: "row" },
             h("button", { onclick: () => this.opts.onRetry() }, "Retry"),
             this.opts.onNext ? h("button", { onclick: () => this.opts.onNext!() }, "Next") : null,

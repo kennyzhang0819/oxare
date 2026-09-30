@@ -16,7 +16,6 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
-  gem: [],
   goal: [["r", 0.5]],
 };
 const snap = (v: number) => Math.round(v * 2) / 2;
@@ -55,8 +54,8 @@ export class Editor implements Mode {
     this.controls = new OrbitControls(this.camera, ctx.canvas);
     this.controls.enableDamping = true;
     const s = level.pieces.find((p) => p.type === "start") ?? { x: 0, y: 0, z: 0 };
-    this.camera.position.set(s.x + 12, s.y + 18, s.z + 16);
-    this.controls.target.set(s.x, s.y, s.z - 6);
+    this.camera.position.set(s.x + 28, s.y + 36, s.z + 30);
+    this.controls.target.set(s.x + 10, s.y, s.z - 20);
 
     this.panel = h("div", { class: "editor" },
       h("div", { class: "bar" },

@@ -11,7 +11,6 @@ const MAT: Record<PartKind, THREE.Material> = {
   block: new THREE.MeshStandardMaterial({ color: 0x6f7f92, flatShading: true, roughness: 0.7 }),
 };
 const SPINNER_MAT = new THREE.MeshStandardMaterial({ color: 0xff8a3d, flatShading: true, roughness: 0.6 });
-const GEM_MAT = new THREE.MeshStandardMaterial({ color: 0x59e5ff, emissive: 0x1fb8e0, emissiveIntensity: 0.9, flatShading: true, roughness: 0.3 });
 const GOAL_MAT = new THREE.MeshStandardMaterial({ color: 0x7dffb0, emissive: 0x2fd66f, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 });
 const START_MAT = new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true });
 
@@ -49,7 +48,6 @@ export interface Built {
   group: THREE.Group;
   pieceGroups: THREE.Group[];
   spinnerBars: Map<number, THREE.Mesh>;
-  gems: Map<number, THREE.Mesh>;
   goal: { index: number; mesh: THREE.Object3D } | null;
 }
 
@@ -57,7 +55,6 @@ export function buildLevel(level: Level, editor: boolean): Built {
   const group = new THREE.Group();
   const pieceGroups: THREE.Group[] = [];
   const spinnerBars = new Map<number, THREE.Mesh>();
-  const gems = new Map<number, THREE.Mesh>();
   let goal: Built["goal"] = null;
 
   level.pieces.forEach((p, index) => {
@@ -92,13 +89,6 @@ export function buildLevel(level: Level, editor: boolean): Built {
       g.add(bar, hub);
       spinnerBars.set(index, bar);
     }
-    if (p.type === "gem") {
-      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), GEM_MAT);
-      m.position.y = 0.8;
-      m.castShadow = true;
-      g.add(m);
-      gems.set(index, m);
-    }
     if (p.type === "goal") {
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, 0.08, 32), GOAL_MAT);
       pad.position.y = 0.04;
@@ -117,7 +107,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
     pieceGroups.push(g);
   });
 
-  return { group, pieceGroups, spinnerBars, gems, goal };
+  return { group, pieceGroups, spinnerBars, goal };
 }
 
 export function makeBall(): THREE.Mesh {

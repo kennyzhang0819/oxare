@@ -5,8 +5,8 @@ export const TUNING = {
   linearDamping: 1.0,
   angularDamping: 0.8,
   yawRate: 2.2,
-  camDist: 7,
-  camHeight: 4.5,
+  camDist: 10,
+  camHeight: 6,
   respawnY: -12,
 };
 export type Tuning = typeof TUNING;
