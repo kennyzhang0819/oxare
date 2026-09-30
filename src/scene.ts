@@ -1,15 +1,45 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { sectorMesh } from "./geometry.ts";
 import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, pieceSectors, type Level, type PartKind } from "./level.ts";
+import { TILE, ballTextures, tileTexture } from "./textures.ts";
+
+export const EDGE_RADIUS = 0.18;
 
 export const SKY_TOP = 0x4f9dff;
 export const SKY_HORIZON = 0xe2f2ff;
 
-const MAT: Record<PartKind, THREE.Material> = {
-  platform: new THREE.MeshStandardMaterial({ color: 0xdde3ea, flatShading: true, roughness: 0.9 }),
-  fence: new THREE.MeshStandardMaterial({ color: 0xa9b6c6, flatShading: true, roughness: 0.8 }),
-  block: new THREE.MeshStandardMaterial({ color: 0x6f7f92, flatShading: true, roughness: 0.7 }),
-};
+let MAT: Record<PartKind, THREE.Material> | null = null;
+let ENV: THREE.Texture | null = null;
+
+export function initMaterials(renderer: THREE.WebGLRenderer): void {
+  if (MAT) return;
+  const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy());
+  MAT = {
+    platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.85 }),
+    fence: new THREE.MeshStandardMaterial({ color: 0xb4c0cc, roughness: 0.6 }),
+    block: new THREE.MeshStandardMaterial({ map: tiles, color: 0x9aa8b8, roughness: 0.8 }),
+  };
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+}
+
+// Box UVs projected from the dominant normal axis so tiles stay world-sized on every face.
+function roundedBox(w: number, h: number, d: number, r: number): THREE.BufferGeometry {
+  const geo = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2));
+  const p = geo.getAttribute("position"), n = geo.getAttribute("normal");
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    const [u, v] = ay >= ax && ay >= az ? [x, z] : ax >= az ? [z, y] : [x, y];
+    uv[i * 2] = u / TILE; uv[i * 2 + 1] = v / TILE;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  return geo;
+}
 const SPINNER_MAT = new THREE.MeshStandardMaterial({ color: 0xff8a3d, flatShading: true, roughness: 0.6 });
 const GOAL_MAT = new THREE.MeshStandardMaterial({ color: 0x7dffb0, emissive: 0x2fd66f, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 });
 const START_MAT = new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true });
@@ -52,6 +82,8 @@ export interface Built {
 }
 
 export function buildLevel(level: Level, editor: boolean): Built {
+  if (!MAT) throw new Error("initMaterials first");
+  const mat = MAT;
   const group = new THREE.Group();
   const pieceGroups: THREE.Group[] = [];
   const spinnerBars = new Map<number, THREE.Mesh>();
@@ -63,19 +95,21 @@ export function buildLevel(level: Level, editor: boolean): Built {
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
     g.userData.pieceIndex = index;
     for (const b of pieceBoxes(p)) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), MAT[b.kind]);
+      const geo = b.kind === "fence" ? new THREE.BoxGeometry(b.w, b.h, b.d) : roundedBox(b.w, b.h, b.d, EDGE_RADIUS);
+      const m = new THREE.Mesh(geo, mat[b.kind]);
       m.position.set(b.x, b.y, b.z);
       m.castShadow = b.kind !== "platform";
       m.receiveShadow = true;
       g.add(m);
     }
     for (const s of pieceSectors(p)) {
-      const t = sectorMesh(s.inner, s.outer, s.y0, s.y1);
+      const t = sectorMesh(s.inner, s.outer, s.y0, s.y1, { bevel: s.kind === "fence" ? 0 : EDGE_RADIUS, tile: TILE });
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(t.positions, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(t.uvs, 2));
       geo.setIndex(new THREE.BufferAttribute(t.indices, 1));
       geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, MAT[s.kind]);
+      const m = new THREE.Mesh(geo, mat[s.kind]);
       m.castShadow = s.kind !== "platform";
       m.receiveShadow = true;
       g.add(m);
@@ -84,7 +118,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
       bar.position.y = SPINNER_HEIGHT / 2;
       bar.castShadow = true;
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, SPINNER_HEIGHT + 0.1, 12), MAT.block);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, SPINNER_HEIGHT + 0.1, 12), mat.block);
       hub.position.y = SPINNER_HEIGHT / 2;
       g.add(bar, hub);
       spinnerBars.set(index, bar);
@@ -111,18 +145,13 @@ export function buildLevel(level: Level, editor: boolean): Built {
 }
 
 export function makeBall(): THREE.Mesh {
-  const c = document.createElement("canvas");
-  c.width = 256; c.height = 128;
-  const ctx = c.getContext("2d")!;
-  for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) {
-    ctx.fillStyle = (x + y) % 2 ? "#ff6b3d" : "#fff3e6";
-    ctx.fillRect(x * 32, y * 32, 32, 32);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  const { map, emissive } = ballTextures();
   const m = new THREE.Mesh(
-    new THREE.SphereGeometry(BALL_RADIUS, 32, 16),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.15 }),
+    new THREE.SphereGeometry(BALL_RADIUS, 48, 24),
+    new THREE.MeshStandardMaterial({
+      map, emissiveMap: emissive, emissive: 0xffffff, emissiveIntensity: 0.9,
+      roughness: 0.22, metalness: 0.1, envMap: ENV, envMapIntensity: 0.9,
+    }),
   );
   m.castShadow = true;
   return m;

@@ -4,6 +4,7 @@ import { Editor } from "./editor.ts";
 import { Game } from "./game.ts";
 import { LEVELS } from "./levels/index.ts";
 import { Menu } from "./menu.ts";
+import { initMaterials } from "./scene.ts";
 import { initPhysics } from "./sim.ts";
 import { loadTuning } from "./tuning.ts";
 import type { Level } from "./level.ts";
@@ -18,6 +19,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const ctx: Ctx = { renderer, canvas, overlay };
+initMaterials(renderer);
 
 loadTuning();
 void initPhysics();

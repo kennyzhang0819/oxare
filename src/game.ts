@@ -133,7 +133,7 @@ export class Game implements Mode {
     const p = this.sim!.ball.translation();
     const target = new THREE.Vector3(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
     this.camera.position.lerp(target, 1 - Math.exp(-10 * dt));
-    this.camera.lookAt(p.x, p.y + 0.5, p.z);
+    this.camera.lookAt(p.x, p.y + 0.4, p.z);
     this.sun.position.set(p.x + 8, p.y + 14, p.z + 6);
     this.sun.target.position.set(p.x, p.y, p.z);
   }

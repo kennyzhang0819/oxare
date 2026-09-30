@@ -5,8 +5,8 @@ export const TUNING = {
   linearDamping: 1.0,
   angularDamping: 0.8,
   yawRate: 2.2,
-  camDist: 10,
-  camHeight: 6,
+  camDist: 4.5,
+  camHeight: 2.4,
   respawnY: -12,
 };
 export type Tuning = typeof TUNING;
@@ -38,9 +38,12 @@ export function loadTuning(): void {
   } catch { /* ignore */ }
 }
 
+// Only values that differ from the defaults are stored, so a new default reaches untouched dials.
 export function saveTuning(): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(TUNING));
+  const diff: Partial<Tuning> = {};
+  for (const k of Object.keys(TUNING) as TuningKey[]) if (TUNING[k] !== DEFAULT_TUNING[k]) diff[k] = TUNING[k];
+  localStorage.setItem(KEY, JSON.stringify(diff));
 }
 
 export function resetTuning(): void {
