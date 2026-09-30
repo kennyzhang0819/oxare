@@ -23,7 +23,7 @@ export function tileTexture(anisotropy: number): THREE.Texture {
     const wide = x + 1 < n && !taken.has(y * n + x + 1) && rnd() < 0.35;
     if (wide) taken.add(y * n + x + 1);
     const w = wide ? 2 : 1;
-    const l = 90 + rnd() * 5;
+    const l = 77 + rnd() * 5;
     ctx.fillStyle = `hsl(210 10% ${l}%)`;
     ctx.fillRect(x * px, y * px, w * px, px);
     ctx.fillStyle = `hsl(210 10% ${l + 2}%)`;
@@ -44,16 +44,16 @@ export function ballTextures(): { map: THREE.Texture; emissive: THREE.Texture } 
   const W = 1024, H = 512;
   const [c, ctx] = canvas(W, H);
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#3d7cf0");
-  grad.addColorStop(0.5, "#1c4fd3");
-  grad.addColorStop(1, "#123a9e");
+  grad.addColorStop(0, "#2559c4");
+  grad.addColorStop(0.5, "#123a9c");
+  grad.addColorStop(1, "#0b2668");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
   const rnd = seeded(3);
   for (let i = 0; i < 40; i++) {
     const x = rnd() * W, y = rnd() * H, r = 40 + rnd() * 120;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, `rgba(150,200,255,${0.12 + rnd() * 0.18})`);
+    g.addColorStop(0, `rgba(120,170,240,${0.08 + rnd() * 0.12})`);
     g.addColorStop(1, "rgba(150,200,255,0)");
     ctx.fillStyle = g;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
@@ -83,7 +83,7 @@ export function ballTextures(): { map: THREE.Texture; emissive: THREE.Texture } 
       }
     }
   };
-  seams(ctx, "#8ff6ff", 10);
+  seams(ctx, "#4fd8ec", 10);
   seams(ectx, "#2ee8ff", 10);
   const map = new THREE.CanvasTexture(c);
   map.colorSpace = THREE.SRGBColorSpace;

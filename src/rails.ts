@@ -2,10 +2,10 @@ import * as THREE from "three";
 import { sectorMesh } from "./geometry.ts";
 import { type Piece } from "./level.ts";
 
-const RAIL_Y = 0.78;
-const RAIL_R = 0.11;
+const RAIL_Y = 0.39;
+const RAIL_R = 0.09;
 const INSET = 0.32;
-const CORNER = 0.3;
+const CORNER = 0.2;
 const COLLAR_EVERY = 4;
 
 type XZ = [number, number];
@@ -13,9 +13,9 @@ type Seg =
   | { kind: "line"; pts: XZ[]; inward: XZ }
   | { kind: "arc"; pts: XZ[]; r: number; inward: 1 | -1 };
 
-const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xe9eef3, roughness: 0.3, metalness: 0.15 });
-const COLLAR_MAT = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, roughness: 0.35, metalness: 0.15 });
-const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0x2ee8ff, emissive: 0x2ee8ff, emissiveIntensity: 1.4, roughness: 0.4 });
+const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.4, metalness: 0.2 });
+const COLLAR_MAT = new THREE.MeshStandardMaterial({ color: 0xb9c3cd, roughness: 0.45, metalness: 0.1 });
+const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0x2ee8ff, emissive: 0x2ee8ff, emissiveIntensity: 0.8, roughness: 0.4 });
 const UP = new THREE.Vector3(0, 1, 0);
 
 function arcPts(r: number, segments = 12): XZ[] {
@@ -92,6 +92,9 @@ function tubePath(pts: THREE.Vector3[], closed: boolean): THREE.CurvePath<THREE.
 
 export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | null): void {
   RAIL_MAT.envMap = env;
+  RAIL_MAT.envMapIntensity = 0.4;
+  COLLAR_MAT.envMap = env;
+  COLLAR_MAT.envMapIntensity = 0.4;
   for (const run of runs(segments(p))) {
     const pts: THREE.Vector3[] = [];
     for (const s of run.segs) for (const [x, z] of s.pts) {
@@ -114,7 +117,7 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
         const [a, b] = [s.pts[0]!, s.pts[1]!];
         const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
         const yaw = Math.atan2(-dz, dx);
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0, L - 0.5), 0.07, 0.05), STRIPE_MAT);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0, L - 0.5), 0.06, 0.04), STRIPE_MAT);
         stripe.position.set((a[0] + b[0]) / 2 + s.inward[0] * RAIL_R, RAIL_Y, (a[1] + b[1]) / 2 + s.inward[1] * RAIL_R);
         stripe.rotation.y = yaw;
         into.add(stripe);
@@ -126,7 +129,7 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
         }
       } else {
         const rs = s.r + s.inward * RAIL_R;
-        const t = sectorMesh(rs - 0.025, rs + 0.025, RAIL_Y - 0.035, RAIL_Y + 0.035, { segments: 24 });
+        const t = sectorMesh(rs - 0.025, rs + 0.025, RAIL_Y - 0.03, RAIL_Y + 0.03, { segments: 24 });
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(t.positions, 3));
         geo.setIndex(new THREE.BufferAttribute(t.indices, 1));
@@ -146,7 +149,7 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
 }
 
 function collar(): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(RAIL_R + 0.05, RAIL_R + 0.05, 0.3, 12), COLLAR_MAT);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(RAIL_R + 0.04, RAIL_R + 0.04, 0.24, 12), COLLAR_MAT);
   m.castShadow = true;
   return m;
 }
