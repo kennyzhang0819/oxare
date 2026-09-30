@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { sectorMesh } from "./geometry.ts";
-import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, pieceSectors, type Level, type PartKind } from "./level.ts";
+import { BALL_RADIUS, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, type Level, type PartKind } from "./level.ts";
 import { TILE, ballTextures, tileTexture } from "./textures.ts";
 import { buildRails } from "./rails.ts";
+import { platformGeometry } from "./platform.ts";
 
 export const EDGE_RADIUS = 0.3;
 
@@ -95,27 +95,22 @@ export function buildLevel(level: Level, editor: boolean): Built {
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
     g.userData.pieceIndex = index;
     for (const b of pieceBoxes(p)) {
-      if (b.kind === "fence") continue;
-      const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat[b.kind]);
+      if (b.kind !== "block") continue;
+      const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat.block);
       m.position.set(b.x, b.y, b.z);
-      m.castShadow = b.kind !== "platform";
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+    }
+    if (p.type === "slab" || p.type === "curve") {
+      const geo = p.type === "slab"
+        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, EDGE_RADIUS, TILE)
+        : platformGeometry(((p.inner + p.outer) / 2) * (Math.PI / 2), p.outer - p.inner, PLATFORM_THICKNESS, EDGE_RADIUS, TILE, { rmid: (p.inner + p.outer) / 2 });
+      const m = new THREE.Mesh(geo, mat.platform);
       m.receiveShadow = true;
       g.add(m);
     }
     buildRails(p, g, ENV);
-    for (const s of pieceSectors(p)) {
-      if (s.kind === "fence") continue;
-      const t = sectorMesh(s.inner, s.outer, s.y0, s.y1, { bevel: EDGE_RADIUS, tile: TILE });
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(t.positions, 3));
-      geo.setAttribute("uv", new THREE.BufferAttribute(t.uvs, 2));
-      geo.setIndex(new THREE.BufferAttribute(t.indices, 1));
-      geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, mat[s.kind]);
-      m.castShadow = s.kind !== "platform";
-      m.receiveShadow = true;
-      g.add(m);
-    }
     if (p.type === "spinner") {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
       bar.position.y = SPINNER_HEIGHT / 2;

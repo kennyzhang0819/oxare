@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
-import { sectorMesh } from "./geometry.ts";
-import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, pieceSectors, startOf, type Level } from "./level.ts";
+import { floorMesh } from "./floor.ts";
+import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, startOf, type Level } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -36,22 +36,18 @@ export async function createSim(level: Level): Promise<Sim> {
   const world = new RAPIER.World({ x: 0, y: -TUNING.gravity, z: 0 });
   world.timestep = STEP;
 
+  const floor = floorMesh(level);
+  world.createCollider(
+    RAPIER.ColliderDesc.trimesh(floor.positions, floor.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(1),
+  );
   for (const p of level.pieces) {
     const rot = pieceRot(p);
     for (const b of pieceBoxes(p)) {
+      if (b.kind === "platform") continue;
       const o = rotXZ(b.x, b.z, rot);
       world.createCollider(
         RAPIER.ColliderDesc.cuboid(b.w / 2, b.h / 2, b.d / 2)
           .setTranslation(p.x + o.x, p.y + b.y, p.z + o.z)
-          .setRotation(yQuat(rot))
-          .setFriction(1),
-      );
-    }
-    for (const s of pieceSectors(p)) {
-      const m = sectorMesh(s.inner, s.outer, s.y0, s.y1);
-      world.createCollider(
-        RAPIER.ColliderDesc.trimesh(m.positions, m.indices)
-          .setTranslation(p.x, p.y, p.z)
           .setRotation(yQuat(rot))
           .setFriction(1),
       );
