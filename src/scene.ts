@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { BALL_RADIUS, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, type Level, type PartKind } from "./level.ts";
-import { TILE, ballTexture, tileTexture } from "./textures.ts";
+import { TILE, ballTextures, tileTexture } from "./textures.ts";
 import { buildRails } from "./rails.ts";
 import { platformGeometry } from "./platform.ts";
 
@@ -259,12 +259,15 @@ export interface Ball { mesh: THREE.Mesh; reflect(renderer: THREE.WebGLRenderer,
 // Lacquered ball mirroring the live scene: a cube camera at the ball re-renders the surroundings
 // each frame into its environment map, so platforms, rails and sky slide across it as it rolls.
 export function makeBall(): Ball {
+  const maps = ballTextures();
   const target = new THREE.WebGLCubeRenderTarget(256);
   const cube = new THREE.CubeCamera(0.2, 400, target);
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(BALL_RADIUS, 48, 24),
     new THREE.MeshPhysicalMaterial({
-      map: ballTexture(), roughness: 0.2, metalness: 1, envMap: target.texture, envMapIntensity: 1.1,
+      map: maps.map, roughnessMap: maps.roughness, roughness: 1, metalness: 1,
+      emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1,
+      envMap: target.texture, envMapIntensity: 1.2, clearcoat: 0.6, clearcoatRoughness: 0.15,
     }),
   );
   mesh.castShadow = true;

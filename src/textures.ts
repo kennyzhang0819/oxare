@@ -40,16 +40,60 @@ export function tileTexture(anisotropy: number): THREE.Texture {
   return t;
 }
 
-export function ballTexture(): THREE.Texture {
-  const W = 64, H = 256;
+export interface BallMaps { map: THREE.Texture; emissive: THREE.Texture; roughness: THREE.Texture }
+
+// Deep blue metal split into eight panels by great-circle seams: a dark groove with a
+// bright bevel on each side, and cyan light dashes running inside the groove.
+export function ballTextures(): BallMaps {
+  const W = 1024, H = 512;
   const [c, ctx] = canvas(W, H);
+  const [e, ectx] = canvas(W, H);
+  const [r, rctx] = canvas(W, H);
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#86b0f4");
-  grad.addColorStop(0.5, "#5688e2");
-  grad.addColorStop(1, "#3a68c4");
+  grad.addColorStop(0, "#2c5fd6");
+  grad.addColorStop(0.5, "#1d46b4");
+  grad.addColorStop(1, "#163a93");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-  const map = new THREE.CanvasTexture(c);
-  map.colorSpace = THREE.SRGBColorSpace;
-  return map;
+  ectx.fillStyle = "#000";
+  ectx.fillRect(0, 0, W, H);
+  rctx.fillStyle = "#2a2a2a";
+  rctx.fillRect(0, 0, W, H);
+
+  type Line = (lon: number) => number;
+  const tilt = Math.atan(Math.SQRT2);
+  const lines: Line[] = [0, 1, 2].map((k) => (lon) => Math.atan(Math.tan(tilt) * Math.sin(lon - (k * 2 * Math.PI) / 3)));
+  lines.push(() => 0);
+  const stroke = (target: CanvasRenderingContext2D, color: string, width: number, dash: number[], offset = 0) => {
+    target.strokeStyle = color;
+    target.lineWidth = width;
+    target.lineCap = "round";
+    target.setLineDash(dash);
+    lines.forEach((line, k) => {
+      target.lineDashOffset = offset + k * 97;
+      for (let wrap = -1; wrap <= 1; wrap++) {
+        target.beginPath();
+        for (let i = 0; i <= 512; i++) {
+          const lon = (i / 512) * 2 * Math.PI;
+          const x = ((lon + wrap * 2 * Math.PI) / (2 * Math.PI)) * W + W / 2;
+          const y = (0.5 - line(lon) / Math.PI) * H;
+          if (i === 0) target.moveTo(x, y); else target.lineTo(x, y);
+        }
+        target.stroke();
+      }
+    });
+  };
+  stroke(ctx, "#4d82ea", 26, []);
+  stroke(ctx, "#0a1d55", 14, []);
+  stroke(ctx, "#2fd9f2", 6, [150, 90]);
+  stroke(ectx, "#2fe6ff", 6, [150, 90]);
+  stroke(rctx, "#aaaaaa", 14, []);
+
+  const mk = (cv: HTMLCanvasElement, srgb: boolean) => {
+    const t = new THREE.CanvasTexture(cv);
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  };
+  return { map: mk(c, true), emissive: mk(e, true), roughness: mk(r, false) };
 }
