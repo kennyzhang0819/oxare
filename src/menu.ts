@@ -43,7 +43,7 @@ export class Menu implements Mode {
           ),
         ),
         h("div", { class: "row" }, Input.tiltAvailable() ? tiltBtn : null),
-        h("div", { class: "hint" }, "Left / right steers the camera around the ball; up / down rolls it forward and back. Keyboard: arrows or WASD. Touch: drag. Press T in a level to tune the feel, R to respawn."),
+        h("div", { class: "hint" }, "Left / right steers the camera around the ball; up / down rolls it forward and back. Keyboard: arrows or WASD. Mouse: drag to look around. Touch: drag as a stick. Press T in a level to tune the feel, R to respawn."),
       ),
     );
   }

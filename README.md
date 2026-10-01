@@ -12,7 +12,7 @@ npm run build    # static bundle in dist/
 ## Controls
 
 Aerox-style: left / right swings the camera around the ball, up / down rolls it toward or away from the camera.
-Keyboard arrows or WASD, touch drag, or device tilt (enable it on the menu; iOS asks for permission).
+Keyboard arrows or WASD, mouse drag to look around, touch drag as a virtual stick, or device tilt (enable it on the menu; iOS asks for permission).
 In a level: `T` opens the feel-tuning panel (gravity, throttle, speed cap, damping, camera), `R` respawns, `Esc` returns to the menu.
 Tuning values persist in the browser; the panel's Copy button gives them as JSON to paste into `src/tuning.ts`.
 
@@ -29,4 +29,4 @@ Each level is a JSON file in `src/levels/`, picked up automatically and listed i
 | `block`   | x y z w h d rot                          | obstacle sitting on a surface at y |
 | `spinner` | x y z length speed                       | rotating bar, speed in rad/s |
 
-`rot` is degrees about the vertical axis. Use the in-game editor (Edit on the menu) to lay a level out, then Export and drop the file into `src/levels/`.
+`rot` is degrees about the vertical axis. Slabs and curves may touch along an edge but never overlap; the editor refuses moves that would make them, and `npm run check` rejects levels that do. Use the in-game editor (Edit on the menu) to lay a level out, then Export and drop the file into `src/levels/`.

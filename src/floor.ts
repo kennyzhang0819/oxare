@@ -1,5 +1,4 @@
-import { pieceRot, type Level } from "./level.ts";
-import { rotXZ } from "./sim.ts";
+import { pieceRot, rotXZ, type Level } from "./level.ts";
 
 type XZ = [number, number];
 const SNAP = 1000;

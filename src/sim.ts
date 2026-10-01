@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
-import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, startOf, type Level } from "./level.ts";
+import { BALL_RADIUS, SPINNER_HEIGHT, SPINNER_WIDTH, pieceBoxes, pieceRot, rotXZ, startOf, type Level } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -18,11 +18,6 @@ export interface Sim {
 export function yQuat(deg: number): { x: number; y: number; z: number; w: number } {
   const h = (deg * Math.PI) / 360;
   return { x: 0, y: Math.sin(h), z: 0, w: Math.cos(h) };
-}
-
-export function rotXZ(x: number, z: number, deg: number): { x: number; z: number } {
-  const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
-  return { x: x * c + z * s, z: -x * s + z * c };
 }
 
 let ready: Promise<void> | null = null;

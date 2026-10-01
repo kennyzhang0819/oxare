@@ -6,7 +6,8 @@ export class Input {
   throttle = 0;
   tiltOn = false;
   private keys = new Set<string>();
-  private drag: { id: number; x: number; y: number } | null = null;
+  private drag: { id: number; x: number; y: number; mouse: boolean } | null = null;
+  private yawPx = 0;
   private tiltSteer = 0;
   private tiltThrottle = 0;
   private neutralBeta = 40;
@@ -20,9 +21,14 @@ export class Input {
     on("keydown", (e) => { if (!(e.target instanceof HTMLInputElement)) this.keys.add(e.code); });
     on("keyup", (e) => this.keys.delete(e.code));
     on("blur", () => this.keys.clear());
-    const down = (e: PointerEvent) => { if (!this.drag) { this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; el.setPointerCapture(e.pointerId); } };
+    const down = (e: PointerEvent) => {
+      if (!this.drag) { this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" }; el.setPointerCapture(e.pointerId); }
+    };
+    // A mouse drag turns the camera by the distance moved and nothing more; a touch drag is a
+    // virtual stick that keeps steering and throttling while held off centre.
     const move = (e: PointerEvent) => {
       if (this.drag?.id !== e.pointerId) return;
+      if (this.drag.mouse) { this.yawPx += e.clientX - this.drag.x; this.drag.x = e.clientX; return; }
       this.steerPtr = clamp((e.clientX - this.drag.x) / 70);
       this.throttlePtr = clamp(-(e.clientY - this.drag.y) / 70);
     };
@@ -63,6 +69,13 @@ export class Input {
   calibrate(): void {
     const once = (e: DeviceOrientationEvent) => { if (e.beta != null) this.neutralBeta = e.beta; };
     addEventListener("deviceorientation", once, { once: true });
+  }
+
+  // Mouse drag since the last call, in pixels; the caller turns it into yaw.
+  takeYawPx(): number {
+    const px = this.yawPx;
+    this.yawPx = 0;
+    return px;
   }
 
   update(): void {

@@ -1,13 +1,16 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
 import { BALL_RADIUS, type Level } from "./level.ts";
-import { buildLevel, createScene, makeBall, type Built } from "./scene.ts";
+import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 const PROGRESS_KEY = "balling.progress";
+// Shadow-camera axes (three's lookAt with up = +Y), used to snap the light to whole shadow texels.
+const SUN_RIGHT = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIR).normalize();
+const SUN_UP = new THREE.Vector3().crossVectors(SUN_DIR, SUN_RIGHT);
 type Progress = Record<string, { best: number }>;
 export function loadProgress(): Progress {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
@@ -18,12 +21,19 @@ export interface GameOpts { onExit(): void; onNext?: () => void; onRetry(): void
 export class Game implements Mode {
   private scene: THREE.Scene;
   private sun: THREE.DirectionalLight;
+  private env: SceneEnv;
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private built: Built;
-  private ballMesh = makeBall();
+  private ball = makeBall();
   private input = new Input();
   private sim: Sim | null = null;
+  // Pose before the latest physics step; the frame renders between it and the current pose.
+  private prevPos = new THREE.Vector3();
+  private prevRot = new THREE.Quaternion();
+  private shown = new THREE.Vector3();
+  private anchor = new THREE.Vector3(); // eased ball position the camera orbits
   private yaw = 0;
+  private yawVel = 0;
   private acc = 0;
   private last = 0;
   private raf = 0;
@@ -48,9 +58,10 @@ export class Game implements Mode {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
-    ({ scene: this.scene, sun: this.sun } = createScene());
+    this.env = createScene();
+    ({ scene: this.scene, sun: this.sun } = this.env);
     this.built = buildLevel(level, false);
-    this.scene.add(this.built.group, this.ballMesh);
+    this.scene.add(this.built.group, this.ball.mesh);
     this.hud = h("div", { class: "hud" },
       h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
       h("span", { class: "pill" }, level.name),
@@ -70,6 +81,7 @@ export class Game implements Mode {
   private async boot() {
     this.sim = await createSim(this.level);
     if (this.raf === -1) { this.sim.free(); return; }
+    this.savePrev();
     this.snapCamera();
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
@@ -92,22 +104,31 @@ export class Game implements Mode {
     this.last = now;
     this.input.update();
     if (!this.done) {
-      this.yaw -= this.input.steer * TUNING.yawRate * dt;
+      // Turn rate chases the input with a short time constant: a brief tail after a key release or
+      // drag, while the total rotation of a drag stays exactly its distance times mouseSens.
+      const want = -this.input.steer * TUNING.yawRate - (this.input.takeYawPx() * TUNING.mouseSens) / Math.max(dt, 1e-3);
+      this.yawVel += (want - this.yawVel) * (TUNING.yawEase > 0 ? 1 - Math.exp(-dt / TUNING.yawEase) : 1);
+      this.yaw += this.yawVel * dt;
       this.acc += dt;
       this.time += dt;
       while (this.acc >= STEP) {
+        this.savePrev();
         const f = this.forward();
         sim.step(this.input.throttle, f.x, f.z);
         this.acc -= STEP;
       }
     }
+    // Frames run 0-3 physics steps each, so the raw post-step pose judders; blending back toward
+    // the previous pose by the unconsumed fraction of a step moves the ball by exactly the frame's dt.
+    const alpha = this.done ? 1 : this.acc / STEP;
     const p = sim.ball.translation();
     const r = sim.ball.rotation();
-    this.ballMesh.position.set(p.x, p.y, p.z);
-    this.ballMesh.quaternion.set(r.x, r.y, r.z, r.w);
+    this.shown.set(p.x, p.y, p.z).lerp(this.prevPos, 1 - alpha);
+    this.ball.mesh.position.copy(this.shown);
+    this.ball.mesh.quaternion.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
-      if (bar) bar.rotation.y = s.angle;
+      if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);
     }
     if (!this.done) {
       if (p.y < TUNING.respawnY) this.fall();
@@ -119,28 +140,46 @@ export class Game implements Mode {
     }
     this.timeEl.textContent = fmtTime(this.time);
     this.updateCamera(dt);
+    this.env.tick(this.camera);
+    this.ball.reflect(this.ctx.renderer, this.scene);
     this.ctx.renderer.render(this.scene, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
 
-  private snapCamera() {
+  private savePrev() {
     const p = this.sim!.ball.translation();
+    const r = this.sim!.ball.rotation();
+    this.prevPos.set(p.x, p.y, p.z);
+    this.prevRot.set(r.x, r.y, r.z, r.w);
+  }
+
+  private snapCamera() {
+    const p = this.shown.set(this.prevPos.x, this.prevPos.y, this.prevPos.z);
+    this.anchor.copy(p);
     this.camera.position.set(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
     this.camera.lookAt(p.x, p.y, p.z);
   }
 
   private updateCamera(dt: number) {
-    const p = this.sim!.ball.translation();
-    const target = new THREE.Vector3(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
-    this.camera.position.lerp(target, 1 - Math.exp(-10 * dt));
+    const p = this.shown;
+    // Only the follow eases; the orbit angle is applied rigidly so the view stops the instant steering does.
+    const o = this.anchor.lerp(p, 1 - Math.exp(-10 * dt));
+    this.camera.position.set(o.x + Math.sin(this.yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(this.yaw) * TUNING.camDist);
     this.camera.lookAt(p.x, p.y + 0.4, p.z);
-    this.sun.position.set(p.x + 8, p.y + 14, p.z + 6);
-    this.sun.target.position.set(p.x, p.y, p.z);
+    // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
+    const sc = this.sun.shadow.camera;
+    const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.width;
+    const a = p.dot(SUN_RIGHT), b = p.dot(SUN_UP);
+    const t = this.sun.target.position.copy(p)
+      .addScaledVector(SUN_RIGHT, Math.round(a / texel) * texel - a)
+      .addScaledVector(SUN_UP, Math.round(b / texel) * texel - b);
+    this.sun.position.copy(t).add(SUN_OFFSET);
   }
 
   private fall() {
     this.falls++;
     this.sim!.respawn();
+    this.savePrev();
   }
 
   private finish() {
@@ -192,6 +231,7 @@ export class Game implements Mode {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = -1;
     this.sim?.free();
+    this.ball.dispose();
     this.input.detach();
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);

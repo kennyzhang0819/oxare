@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PIECE_TYPES, cloneLevel, levelProblems, newPiece, validateLevel, type Level, type Piece, type PieceType } from "./level.ts";
-import { buildLevel, createScene, type Built } from "./scene.ts";
+import { PIECE_TYPES, cloneLevel, levelProblems, newPiece, platformOverlaps, validateLevel, type Level, type Piece, type PieceType } from "./level.ts";
+import { buildLevel, createScene, type Built, type SceneEnv } from "./scene.ts";
 import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -19,11 +19,19 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   goal: [["r", 0.5]],
 };
 const snap = (v: number) => Math.round(v * 2) / 2;
+const overlapKeys = (level: Level) => new Set(platformOverlaps(level).map(([i, j]) => `${i}-${j}`));
+// True when `level` has an overlapping platform pair that `before` (a JSON snapshot) did not.
+function addsOverlap(level: Level, before: string): boolean {
+  const had = overlapKeys(JSON.parse(before) as Level);
+  for (const k of overlapKeys(level)) if (!had.has(k)) return true;
+  return false;
+}
 
 export interface EditorOpts { onPlay(level: Level): void; onExit(): void }
 
 export class Editor implements Mode {
   private scene: THREE.Scene;
+  private env: SceneEnv;
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private controls: OrbitControls;
   private built: Built;
@@ -34,6 +42,8 @@ export class Editor implements Mode {
   private panel: HTMLElement;
   private body = h("div", { class: "body" });
   private problems = h("div", { class: "problems" });
+  private notice = h("div", { class: "problems" });
+  private noticeTimer = 0;
   private ray = new THREE.Raycaster();
   private drag: { plane: THREE.Plane; off: THREE.Vector3; moved: boolean; before: string } | null = null;
   private onResize = () => this.resize();
@@ -47,7 +57,8 @@ export class Editor implements Mode {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
-    ({ scene: this.scene } = createScene());
+    this.env = createScene();
+    this.scene = this.env.scene;
     this.scene.add(new THREE.GridHelper(200, 100, 0x9fb4cc, 0xc7d6e6));
     this.built = buildLevel(level, true);
     this.scene.add(this.built.group);
@@ -68,6 +79,7 @@ export class Editor implements Mode {
       ),
       h("div", { class: "bar add" }, ...PIECE_TYPES.map((t) => h("button", { onclick: () => this.add(t) }, `+ ${t}`))),
       this.problems,
+      this.notice,
       this.body,
       h("div", { class: "hint" }, "Click to select, drag to move (snaps to 0.5). Arrows nudge, PgUp/PgDn raise, R rotates 90°, Ctrl+D duplicates, Delete removes, Ctrl+Z undoes. Orbit with right-drag / wheel."),
     );
@@ -84,6 +96,7 @@ export class Editor implements Mode {
 
   private frame = () => {
     this.controls.update();
+    this.env.tick(this.camera);
     this.ctx.renderer.render(this.scene, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
@@ -95,9 +108,24 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    if (before !== JSON.stringify(this.level)) this.undoStack.push(before);
+    if (addsOverlap(this.level, before)) {
+      this.level = JSON.parse(before) as Level;
+      this.flash("Platforms can't overlap");
+    } else if (before !== JSON.stringify(this.level)) this.undoStack.push(before);
     if (this.undoStack.length > 100) this.undoStack.shift();
     this.refresh();
+  }
+
+  private flash(msg: string) {
+    this.notice.textContent = msg;
+    clearTimeout(this.noticeTimer);
+    this.noticeTimer = window.setTimeout(() => { this.notice.textContent = ""; }, 1800);
+  }
+
+  // Slide a new platform along +x until it sits clear of every other platform.
+  private placeFree(piece: Piece) {
+    const others = { ...this.level, pieces: [...this.level.pieces, piece] };
+    for (let tries = 0; tries < 400 && platformOverlaps(others).length; tries++) piece.x += 0.5;
   }
 
   private refresh() {
@@ -165,7 +193,9 @@ export class Editor implements Mode {
     const t = this.controls.target;
     const sel = this.level.pieces[this.selected];
     const base = sel ?? { x: snap(t.x), y: snap(t.y), z: snap(t.z) };
-    this.level.pieces.push(newPiece(type, base.x + (sel ? 2 : 0), base.y, base.z));
+    const piece = newPiece(type, base.x + (sel ? 2 : 0), base.y, base.z);
+    this.placeFree(piece);
+    this.level.pieces.push(piece);
     this.selected = this.level.pieces.length - 1;
     this.commit(before);
   }
@@ -176,6 +206,7 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     const c = JSON.parse(JSON.stringify(p)) as Piece;
     c.x += 2;
+    this.placeFree(c);
     this.level.pieces.push(c);
     this.selected = this.level.pieces.length - 1;
     this.commit(before);
@@ -186,7 +217,8 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     this.level.pieces.splice(this.selected, 1);
     this.selected = -1;
-    this.commit(before);
+    this.undoStack.push(before);
+    this.refresh();
   }
 
   private undo() {
@@ -252,7 +284,10 @@ export class Editor implements Mode {
     if (!this.ray.ray.intersectPlane(this.drag.plane, pt)) return;
     const nx = snap(pt.x + this.drag.off.x), nz = snap(pt.z + this.drag.off.z);
     if (nx === p.x && nz === p.z) return;
+    const ox = p.x, oz = p.z;
     p.x = nx; p.z = nz;
+    // A platform dragged into another stays put at its last clear spot.
+    if (addsOverlap(this.level, this.drag.before)) { p.x = ox; p.z = oz; return; }
     this.drag.moved = true;
     const g = this.built.pieceGroups[this.selected];
     if (g) { g.position.set(p.x, p.y, p.z); this.helper?.update(); }

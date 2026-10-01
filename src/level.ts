@@ -58,6 +58,70 @@ export function pieceSectors(p: Piece): Sector[] {
   return out;
 }
 
+export function rotXZ(x: number, z: number, deg: number): { x: number; z: number } {
+  const t = (deg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
+  return { x: x * c + z * s, z: -x * s + z * c };
+}
+
+export type XZ = [number, number];
+export const CURVE_SEGMENTS = 24;
+
+// A platform's top as convex polygons in world XZ (a curve is a fan of sector quads).
+export function platformFootprint(p: Piece): XZ[][] {
+  const rot = pieceRot(p);
+  const W = (x: number, z: number): XZ => { const o = rotXZ(x, z, rot); return [p.x + o.x, p.z + o.z]; };
+  if (p.type === "slab") {
+    const hx = p.w / 2, hz = p.d / 2;
+    return [[W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)]];
+  }
+  if (p.type === "curve") {
+    const out: XZ[][] = [];
+    for (let i = 0; i < CURVE_SEGMENTS; i++) {
+      const a0 = (i / CURVE_SEGMENTS) * (Math.PI / 2), a1 = ((i + 1) / CURVE_SEGMENTS) * (Math.PI / 2);
+      out.push([
+        W(p.inner * Math.cos(a0), -p.inner * Math.sin(a0)), W(p.outer * Math.cos(a0), -p.outer * Math.sin(a0)),
+        W(p.outer * Math.cos(a1), -p.outer * Math.sin(a1)), W(p.inner * Math.cos(a1), -p.inner * Math.sin(a1)),
+      ]);
+    }
+    return out;
+  }
+  return [];
+}
+
+const OVERLAP_EPS = 0.02;
+// Separating-axis test that treats edge-to-edge contact (the normal seam) as not overlapping.
+function convexOverlap(a: XZ[], b: XZ[]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]!, q = poly[(i + 1) % poly.length]!;
+      const nx = q[1] - p[1], nz = p[0] - q[0];
+      const len = Math.hypot(nx, nz);
+      if (len < 1e-9) continue;
+      let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+      for (const v of a) { const d = (v[0] * nx + v[1] * nz) / len; minA = Math.min(minA, d); maxA = Math.max(maxA, d); }
+      for (const v of b) { const d = (v[0] * nx + v[1] * nz) / len; minB = Math.min(minB, d); maxB = Math.max(maxB, d); }
+      if (maxA <= minB + OVERLAP_EPS || maxB <= minA + OVERLAP_EPS) return false;
+    }
+  }
+  return true;
+}
+
+// Index pairs of slabs/curves whose bodies intersect. Pieces that merely touch are fine.
+export function platformOverlaps(level: Level): [number, number][] {
+  const fp = level.pieces.map((p) => platformFootprint(p));
+  const out: [number, number][] = [];
+  for (let i = 0; i < fp.length; i++) {
+    if (!fp[i]!.length) continue;
+    for (let j = i + 1; j < fp.length; j++) {
+      if (!fp[j]!.length) continue;
+      const yi = level.pieces[i]!.y, yj = level.pieces[j]!.y;
+      if (Math.min(yi, yj) - Math.max(yi, yj) + PLATFORM_THICKNESS <= OVERLAP_EPS) continue;
+      if (fp[i]!.some((a) => fp[j]!.some((b) => convexOverlap(a, b)))) out.push([i, j]);
+    }
+  }
+  return out;
+}
+
 export function pieceRot(p: Piece): number {
   return p.type === "slab" || p.type === "curve" || p.type === "block" ? p.rot : 0;
 }
@@ -88,6 +152,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
   });
+  for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
   return out;
 }
 
