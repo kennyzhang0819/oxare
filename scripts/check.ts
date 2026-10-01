@@ -1,10 +1,18 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, fenceRailPath, fenceRuns, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
+import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
 
+// A hand-built test level: its goal is solid like everything else, so it is moved far off to the
+// side, out of the path the test rolls the ball along.
+function testLevel(raw: unknown): Level {
+  const level = validateLevel(raw);
+  for (const p of level.pieces) if (p.type === "goal") p.x += 1000;
+  return level;
+}
 const dir = new URL("../src/levels/", import.meta.url);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
 if (!files.length) throw new Error("no levels");
@@ -32,19 +40,19 @@ for (const f of files) {
   else console.log(`ok ${f}: ${level.pieces.length} pieces, peak ${peak.toFixed(2)} m/s over ${(2 * 120 * STEP).toFixed(0)}s`);
 }
 // The ball must cross platform seams with only a small hop and roll around a curve flat.
-const seamLevel = validateLevel({ id: "seam", name: "seam", pieces: [
+const seamLevel = testLevel({ id: "seam", name: "seam", pieces: [
   { type: "start", x: 0, y: 0, z: 0 },
   { type: "slab", x: 0, y: 0, z: 0, w: 10, d: 10, rot: 0, fences: {} },
   { type: "slab", x: 0, y: 0, z: -15, w: 10, d: 20, rot: 0, fences: {} },
   { type: "slab", x: 0, y: 0, z: -30, w: 10, d: 10, rot: 0, fences: {} },
   { type: "goal", x: 0, y: 0, z: -30, r: 2 },
 ] });
-const curveLevel = validateLevel({ id: "curve", name: "curve", pieces: [
+const curveLevel = testLevel({ id: "curve", name: "curve", pieces: [
   { type: "start", x: 15, y: 0, z: -1.2 },
   { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: {} },
   { type: "goal", x: 0, y: 0, z: -15, r: 2 },
 ] });
-const teeLevel = validateLevel({ id: "tee", name: "tee", pieces: [
+const teeLevel = testLevel({ id: "tee", name: "tee", pieces: [
   { type: "start", x: 0, y: 0, z: 0 },
   { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 20, rot: 0, fences: {} },
   { type: "slab", x: 5, y: 0, z: -25, w: 30, d: 20, rot: 0, fences: {} },
@@ -87,19 +95,24 @@ Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_
 // tube's side, and just above the rail there is nothing; where a span stops there is no rail at all.
 // Nothing guarantees the ball stays in: it can roll over a rail.
 {
-  const deg = Math.PI / 180;
+  // A probe on a 10..20 curve's arc side at `s` along it, facing out over that side.
+  const arcProbe = (fences: object, key: string, s: number) => {
+    const piece = { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences } as Piece & { type: "curve" };
+    const side = fenceSides(piece as Piece & { type: "curve" }).find((q) => q.key === key)!, a = side.at(s, FENCE_RAIL_INSET), b = side.at(s, FENCE_RAIL_INSET + 0.1), l = Math.hypot(a.x - b.x, a.z - b.z);
+    return { piece: piece as unknown as Record<string, unknown>, at: [a.x, a.z] as [number, number], surface: 0, out: [(a.x - b.x) / l, (a.z - b.z) / l] as [number, number] };
+  };
   const cases: { name: string; piece: Record<string, unknown>; at: [number, number]; surface: number; out: [number, number]; fenced: boolean }[] = [
     { name: "slab-n", piece: { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: { n: [[0, 5]] } }, at: [-2.5, -10 + FENCE_RAIL_INSET], surface: 0, out: [0, -1], fenced: true },
     { name: "slab-n-gap", piece: { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: { n: [[0, 5]] } }, at: [2.5, -10 + FENCE_RAIL_INSET], surface: 0, out: [0, -1], fenced: false },
-    // Arc probes sit on a vertex of the rail's polyline (7.5 degree steps), where it meets the circle.
-    { name: "outer", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { outer: [[0, 45]] } }, at: [(20 - FENCE_RAIL_INSET) * Math.cos(22.5 * deg), -(20 - FENCE_RAIL_INSET) * Math.sin(22.5 * deg)], surface: 0, out: [Math.cos(22.5 * deg), -Math.sin(22.5 * deg)], fenced: true },
-    { name: "outer-gap", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { outer: [[0, 45]] } }, at: [(20 - FENCE_RAIL_INSET) * Math.cos(70 * deg), -(20 - FENCE_RAIL_INSET) * Math.sin(70 * deg)], surface: 0, out: [Math.cos(70 * deg), -Math.sin(70 * deg)], fenced: false },
-    { name: "inner", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { inner: [[0, 45]] } }, at: [(10 + FENCE_RAIL_INSET) * Math.cos(67.5 * deg), -(10 + FENCE_RAIL_INSET) * Math.sin(67.5 * deg)], surface: 0, out: [-Math.cos(67.5 * deg), Math.sin(67.5 * deg)], fenced: true },
+    // Arc probes sit on a vertex of the rail's polyline (7.5 degree steps), where it meets the arc.
+    { name: "outer", ...arcProbe({ outer: [[0, 45]] }, "outer", 22.5), fenced: true },
+    { name: "outer-gap", ...arcProbe({ outer: [[0, 45]] }, "outer", 70), fenced: false },
+    { name: "inner", ...arcProbe({ inner: [[0, 45]] }, "inner", 22.5), fenced: true },
     { name: "ramp-e", piece: { type: "ramp", x: 0, y: 0, z: -12, w: 8, d: 24, rot: 0, rise: 4, fences: { e: [[0, 12]] } }, at: [4 - FENCE_RAIL_INSET, -18], surface: 4, out: [1, 0], fenced: true },
     { name: "ramp-e-gap", piece: { type: "ramp", x: 0, y: 0, z: -12, w: 8, d: 24, rot: 0, rise: 4, fences: { e: [[0, 12]] } }, at: [4 - FENCE_RAIL_INSET, -6], surface: 0, out: [1, 0], fenced: false },
   ];
   for (const c of cases) {
-    const level = validateLevel({ id: `fence-${c.name}`, name: c.name, pieces: [
+    const level = testLevel({ id: `fence-${c.name}`, name: c.name, pieces: [
       c.piece,
       { type: "start", x: -40, y: 0, z: 40 },
       { type: "slab", x: -40, y: 0, z: 40, w: 4, d: 4, rot: 0, fences: {} },
@@ -109,7 +122,10 @@ Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_
     sim.step(0, 0, 0);
     const ray = (o: [number, number, number], d: [number, number, number], len: number) =>
       sim.world.castRay(new RAPIER_RT.Ray({ x: o[0], y: o[1], z: o[2] }, { x: d[0], y: d[1], z: d[2] }), len, true, undefined, undefined, undefined, sim.ball)?.timeOfImpact ?? null;
-    const [x, z] = c.at, top = c.surface + FENCE_RAIL_Y + RAIL_R;
+    // On a curve a fenced probe sits on the nearest vertex of the rail's own line, where it is centred.
+    const line = fenceRuns(level.pieces[0]!).flatMap(fenceRailPath).filter((v) => Math.abs(v[1] - c.surface - FENCE_RAIL_Y) < 0.01);
+    const near = c.fenced && level.pieces[0]!.type === "curve" ? line.reduce((b, v) => (Math.hypot(v[0] - c.at[0], v[2] - c.at[1]) < Math.hypot(b[0] - c.at[0], b[2] - c.at[1]) ? v : b), line[0]!) : null;
+    const [x, z] = near ? [near[0], near[2]] : c.at, top = c.surface + FENCE_RAIL_Y + RAIL_R;
     const down = ray([x, c.surface + 3, z], [0, -1, 0], 6), hitY = down === null ? null : c.surface + 3 - down;
     const across = ray([x - c.out[0], c.surface + FENCE_RAIL_Y, z - c.out[1]], [c.out[0], 0, c.out[1]], 2);
     const above = ray([x - c.out[0], top + 0.02, z - c.out[1]], [c.out[0], 0, c.out[1]], 2);
@@ -121,6 +137,18 @@ Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_
     else console.log(`ok fence-${c.name}: ${c.fenced ? `rail top at ${hitY!.toFixed(3)}, side at ${across!.toFixed(3)}, nothing above it` : "no rail where the fence stops"}`);
   }
 }
+// A curve's ends run dead straight for CURVE_STRAIGHT before its arc, in its footprint (and so its
+// floor) and in its drawn mesh, whose walls break exactly where the straights meet the arc.
+{
+  const S = CURVE_STRAIGHT, piece = { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: {} } as unknown as Curve;
+  const fp = platformFootprint(piece), same = (q: [number, number][], r: [number, number][]) => q.every((v, i) => Math.hypot(v[0] - r[i]![0], v[1] - r[i]![1]) < 1e-9);
+  const ends = same(fp[0]!, [[10, 0], [20, 0], [20, -S], [10, -S]]) && same(fp[fp.length - 1]!, [[S, -10], [S, -20], [0, -20], [0, -10]]);
+  const c = curveStrip(piece), m = platformMesh(c.len, 10, PLATFORM_THICKNESS, PLATFORM_LIP, 1, { at: (u, z) => c.at(u, 15 + z), knots: [c.s, c.len - c.s] });
+  const has = (x: number, z: number) => { for (let i = 0; i < m.positions.length; i += 3) if (Math.hypot(m.positions[i]! - x, m.positions[i + 2]! - z) < 1e-6) return true; return false; };
+  const drawn = has(20, -S) && has(10, -S) && has(S, -20) && has(S, -10);
+  if (!ends || !drawn) { failed = true; console.error(`FAIL curve-straight: footprint ends straight ${ends}, drawn walls break at the arc ${drawn}`); }
+  else console.log(`ok curve-straight: both ends run ${S} straight before the arc`);
+}
 // A stool slides along its track when pushed that way and stops at the track's end; pushed from
 // the side it does not move at all and stops the ball like a wall.
 for (const [name, rot, from, dir, expect] of [
@@ -128,7 +156,7 @@ for (const [name, rot, from, dir, expect] of [
   ["across", 0, [0, -2], [0, -1], { x: 0, z: -6, slid: false }],
   ["rotated", 90, [0, -2], [0, -1], { x: 0, z: -9, slid: true }],
 ] as const) {
-  const level = validateLevel({ id: `stool-${name}`, name, pieces: [
+  const level = testLevel({ id: `stool-${name}`, name, pieces: [
     { type: "start", x: -6, y: 0, z: -14 },
     { type: "slab", x: 0, y: 0, z: -8, w: 16, d: 16, rot: 0, fences: {} },
     { type: "stool", x: 0, y: 0, z: -6, w: 2, h: 1.2, d: 1, rot, track: 8, offset: 0 },
@@ -157,7 +185,7 @@ for (const [name, from, push] of [
   ["rolling", [0, -2], 1],
   ["beside", [1, -2], 1],
 ] as const) {
-  const level = validateLevel({ id: `jump-${name}`, name, pieces: [
+  const level = testLevel({ id: `jump-${name}`, name, pieces: [
     { type: "start", x: -4, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -12, w: 12, d: 30, rot: 0, fences: {} },
     { type: "jump", x: 0, y: 0, z: -10, w: 4, d: 4, rot: 0, rise: 4 },
@@ -184,7 +212,7 @@ for (const [name, from, push] of [
 }
 // A blockade and a pillar in the lane must stop the ball, not let it through or pop it up.
 for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "pillar", x: 0, y: 0, z: -8 }]) {
-  const level = validateLevel({ id: `stop-${piece.type}`, name: piece.type, pieces: [
+  const level = testLevel({ id: `stop-${piece.type}`, name: piece.type, pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
     piece,
@@ -205,7 +233,7 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
 // A ramp must carry the ball a whole layer up or down and leave it resting on the far slab.
 for (const rise of [RAMP_RISE, -RAMP_RISE]) {
   const y0 = rise > 0 ? 0 : LAYER_H, y1 = y0 + rise * LAYER_H;
-  const level = validateLevel({ id: `ramp-${rise > 0 ? "up" : "down"}`, name: "ramp", pieces: [
+  const level = testLevel({ id: `ramp-${rise > 0 ? "up" : "down"}`, name: "ramp", pieces: [
     { type: "start", x: 0, y: y0, z: -3 },
     { type: "slab", x: 0, y: y0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "ramp", x: 0, y: y0, z: -20, w: 10, d: 20, rot: 0, rise, fences: { e: true, w: true } },
@@ -225,7 +253,7 @@ for (const rise of [RAMP_RISE, -RAMP_RISE]) {
 // A hole swallows the ball; the floor beside it still carries one. A hole across the slab's
 // edge notches it: the ball falls through the notch and rolls past it.
 for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, false], ["notch", 4, 5, true], ["past-notch", -1, 5, false]] as const) {
-  const level = validateLevel({ id: `hole-${name}`, name, pieces: [
+  const level = testLevel({ id: `hole-${name}`, name, pieces: [
     { type: "start", x, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
     { type: "hole", x: hx, y: 0, z: -9, w: 4, d: 6, rot: 0 },
@@ -242,7 +270,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
 }
 // A raised slab's side wall must stop a ball rolling along the slab beneath it.
 {
-  const level = validateLevel({ id: "side", name: "side", pieces: [
+  const level = testLevel({ id: "side", name: "side", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -15, w: 10, d: 30, rot: 0, fences: {} },
     { type: "slab", x: 0, y: 2, z: -20, w: 10, d: 20, rot: 0, fences: {} },
@@ -258,7 +286,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
 }
 // A barrier stops the ball; a crate gets shoved along and stays on the floor.
 {
-  const level = validateLevel({ id: "push", name: "push", pieces: [
+  const level = testLevel({ id: "push", name: "push", pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
     { type: "crate", x: 0, y: 0, z: -6, w: 1.2, h: 1.2, d: 1.2, rot: 0 },
@@ -277,7 +305,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
 }
 // A slab tilted 90 degrees is a wall: solid from the side.
 {
-  const level = validateLevel({ id: "wall", name: "wall", pieces: [
+  const level = testLevel({ id: "wall", name: "wall", pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
     { type: "slab", x: 0, y: 1, z: -12, w: 10, d: 2, rot: 0, tilt: 90, fences: {} },
@@ -294,7 +322,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
 // A hanging bridge: at rest it sags a little below its hinge line; the ball rolls down onto it,
 // across the planks and back up the far platform's lip, and the chain never comes apart.
 {
-  const level = validateLevel({ id: "bridge", name: "bridge", pieces: [
+  const level = testLevel({ id: "bridge", name: "bridge", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "bridge", x: 0, y: 0, z: -15, w: 4, d: 10, rot: 0 },
@@ -344,7 +372,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
 // player steers), it never kicks upward while riding them.
 const railsRide = async (lines: 1 | 2, end: { x: number; z: number }, mid?: { x: number; z: number }) => {
   const ya = 2, yb = 0;
-  const level = validateLevel({ id: "rails", name: "rails", pieces: [
+  const level = testLevel({ id: "rails", name: "rails", pieces: [
     { type: "start", x: 0, y: 2, z: -2 },
     { type: "slab", x: 0, y: 2, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "rails", x: 0, y: ya, z: -10, rot: 0, lines, a: "side", b: "top",
@@ -388,7 +416,7 @@ for (const [name, lines, end, mid] of [
 // next to each, a level stub at least 0.5 long points square away from the platform, and only past
 // it does the rail slope or turn.
 {
-  const level = validateLevel({ id: "ends", name: "ends", pieces: [
+  const level = testLevel({ id: "ends", name: "ends", pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: 0, w: 8, d: 8, rot: 0, fences: {} },
     { type: "slab", x: 0, y: -2, z: -20, w: 8, d: 8, rot: 0, fences: {} },
@@ -423,7 +451,7 @@ for (const [name, lines, end, mid] of [
 // A knock-down plank stands balanced on its hinge until the ball touches it, then falls across
 // the gap, and the ball can roll over it onto the far platform.
 {
-  const level = validateLevel({ id: "plank", name: "plank", pieces: [
+  const level = testLevel({ id: "plank", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 10, rot: 0, freeze: true },
@@ -454,7 +482,7 @@ function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
 // A side plank hinged to a platform's wall stands until touched, then swings freely and rests on
 // whatever it hits: down onto a lower platform, across onto a far one, or back onto its own.
 {
-  const level = validateLevel({ id: "plank-side-down", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-side-down", name: "plank", pieces: [
     { type: "start", x: 0, y: 4, z: -2 },
     { type: "slab", x: 0, y: 4, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 4, z: -10, w: 4, h: 8, rot: 0, side: true, freeze: true },
@@ -475,7 +503,7 @@ function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
   else console.log(`ok plank-side-down: swung down onto the lower platform (tip y ${tip.toFixed(3)}), ball rolled down it to z ${p.z.toFixed(2)}`);
 }
 {
-  const level = validateLevel({ id: "plank-side", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-side", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 10, rot: 0, side: true, freeze: true },
@@ -495,7 +523,7 @@ function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
   else console.log(`ok plank-side: rested across on the far platform (tip y ${tip.toFixed(3)}), ball crossed to z ${p.z.toFixed(2)}`);
 }
 {
-  const level = validateLevel({ id: "plank-side-in", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-side-in", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 6, rot: 0, side: true, freeze: true },
@@ -515,7 +543,7 @@ function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
 // A side plank can start past level, down to hanging straight down: frozen at 135° it holds there,
 // and a tilt past 180° clamps to hanging straight down.
 for (const [tilt, want] of [[135, 135], [200, 180]] as const) {
-  const level = validateLevel({ id: "plank-side-tilt", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-side-tilt", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 6, rot: 0, tilt, side: true, freeze: true },
@@ -534,7 +562,7 @@ for (const [tilt, want] of [[135, 135], [200, 180]] as const) {
 // the stool takes the plank's support with it; the plank must wake and swing down until its tip is
 // on the floor, clear of the fence's low rail.
 {
-  const level = validateLevel({ id: "plank-stool", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-stool", name: "plank", pieces: [
     { type: "start", x: -3.5, y: 4, z: -60 },
     { type: "slab", x: 0, y: 4, z: -62, w: 16, d: 16, rot: 0, fences: { n: true } },
     { type: "stool", x: 0, y: 4, z: -66.5, w: 2, h: 1.2, d: 1, rot: 0, track: 12, offset: 0 },
@@ -558,7 +586,7 @@ for (const [tilt, want] of [[135, 135], [200, 180]] as const) {
 // is the yoke's top, and level into a side plank's wall bracket from outside it is the bracket's face.
 for (const side of [false, true]) {
   const plank = { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0, tilt: 0, side, freeze: true } as const;
-  const level = validateLevel({ id: "plank-mounts", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-mounts", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: side ? -4 : -5, w: 10, d: side ? 8 : 10, rot: 0, fences: {} },
     plank,
@@ -578,7 +606,7 @@ for (const side of [false, true]) {
 }
 // A plank standing in the middle of a platform, with floor in front of it, must still topple.
 {
-  const level = validateLevel({ id: "plank-mid", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-mid", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, freeze: true },
@@ -596,7 +624,7 @@ for (const side of [false, true]) {
 }
 // Hit from its other face, a plank follows through and falls the other way.
 {
-  const level = validateLevel({ id: "plank-back", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-back", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -14 },
     { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0, freeze: true },
@@ -614,7 +642,7 @@ for (const side of [false, true]) {
 }
 // Support pillars beside a platform edge are solid: a ball pushed at one stops on the platform.
 {
-  const level = validateLevel({ id: "support", name: "support", pieces: [
+  const level = testLevel({ id: "support", name: "support", pieces: [
     { type: "start", x: 0, y: 0, z: -10 },
     { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
     { type: "support", x: 5, y: 0, z: -10, w: 6, h: 8, rot: 90 },
@@ -633,7 +661,7 @@ for (const side of [false, true]) {
 // lands beyond it on the platform.
 for (const cap of [2.5, 6.5]) {
   TUNING.maxSpeed = cap;
-  const level = validateLevel({ id: "kicker", name: "kicker", pieces: [
+  const level = testLevel({ id: "kicker", name: "kicker", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -12, w: 10, d: 30, rot: 0, fences: {} },
     { type: "kicker", x: 0, y: 0, z: -9, w: 3, d: 4, h: 0.7, rot: 0 },
@@ -653,7 +681,7 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
 // A seesaw starts at its set angle, near end down; the ball rolls up it, tips it past level so
 // the far end comes down, and rolls off onto the platform beyond.
 {
-  const level = validateLevel({ id: "seesaw", name: "seesaw", pieces: [
+  const level = testLevel({ id: "seesaw", name: "seesaw", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -14, w: 8, d: 32, rot: 0, fences: {} },
     { type: "seesaw", x: 0, y: 0, z: -12, w: 4, d: 8, rot: 0, tilt: 10 },
@@ -677,7 +705,7 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
 // Freeze: a frozen seesaw or plank holds its start pose untouched; without freeze both are live
 // from the start, and a leaning plank falls on its own.
 for (const freeze of [true, false]) {
-  const level = validateLevel({ id: "freeze", name: "freeze", pieces: [
+  const level = testLevel({ id: "freeze", name: "freeze", pieces: [
     { type: "start", x: 0, y: 0, z: 6 },
     { type: "slab", x: 0, y: 0, z: -4, w: 24, d: 24, rot: 0, fences: {} },
     { type: "seesaw", x: -6, y: 0, z: -8, w: 4, d: 8, rot: 0, tilt: 10, freeze },
@@ -696,7 +724,7 @@ for (const freeze of [true, false]) {
 }
 // A plank set to start lying flat (tilt 90) stays flat and the ball rolls straight over it.
 {
-  const level = validateLevel({ id: "plank-flat", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-flat", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 90, freeze: true },
@@ -716,7 +744,7 @@ for (const freeze of [true, false]) {
 // A plank set to start leaning at 45 degrees holds that angle untouched, then falls flat once the
 // ball reaches it.
 {
-  const level = validateLevel({ id: "plank-lean", name: "plank", pieces: [
+  const level = testLevel({ id: "plank-lean", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
     { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 45, freeze: true },
@@ -738,7 +766,7 @@ for (const freeze of [true, false]) {
 // Held forward, the ball climbs a tube four layers up and out onto the upper platform, or runs
 // down one, through smooth and sharp elbows alike. Nothing pumps it: the push does the work.
 for (const [name, bend, y0, y1] of [["up-smooth", 1.5, 0, 4], ["up-sharp", 0, 0, 4], ["down-sharp", 0, 4, 0], ["down-smooth", 1.5, 4, 0]] as const) {
-  const level = validateLevel({ id: `tube-${name}`, name, pieces: [
+  const level = testLevel({ id: `tube-${name}`, name, pieces: [
     { type: "start", x: 0, y: y0, z: -2 },
     { type: "slab", x: 0, y: y0, z: -5, w: 8, d: 10, rot: 0, fences: {} },
     { type: "tube", x: 0, y: y0, z: -7, rot: 0, path: [
@@ -765,7 +793,7 @@ for (const reversed of [false, true]) {
   const tube = reversed
     ? { type: "tube", x: 0, y: 4, z: -24, rot: 0, path: [{ x: 0, y: 0, z: 11, bend: 1.5 }, { x: 0, y: -4, z: 11, bend: 1.5 }, { x: 0, y: -4, z: 17, bend: 0 }] }
     : { type: "tube", x: 0, y: 0, z: -7, rot: 0, path: path.map((n, k) => ({ ...n, bend: k < 2 ? 1.5 : 0 })) };
-  const level = validateLevel({ id: "tube-manual", name: "tube-manual", pieces: [
+  const level = testLevel({ id: "tube-manual", name: "tube-manual", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 8, d: 10, rot: 0, fences: {} },
     tube,
@@ -786,7 +814,7 @@ for (const reversed of [false, true]) {
 }
 // The tube's outside is solid: a ball rolled at it from the side stops against it.
 {
-  const level = validateLevel({ id: "tube-side", name: "tube-side", pieces: [
+  const level = testLevel({ id: "tube-side", name: "tube-side", pieces: [
     { type: "start", x: -3, y: 0, z: -8 },
     { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 16, rot: 0, fences: {} },
     { type: "tube", x: 0, y: 0, z: -2, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }] },
@@ -803,7 +831,7 @@ for (const reversed of [false, true]) {
 // A tube mouth's collar is solid: rolled at it from the side, the ball stops against the collar's
 // outside, not the thinner glass under it.
 {
-  const level = validateLevel({ id: "tube-collar", name: "tube-collar", pieces: [
+  const level = testLevel({ id: "tube-collar", name: "tube-collar", pieces: [
     { type: "start", x: 4, y: 0, z: -7.2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 12, d: 16, rot: 0, fences: {} },
     { type: "tube", x: 0, y: 0, z: -7, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: 0 }] },
@@ -826,7 +854,7 @@ for (const reversed of [false, true]) {
 // the ball rolls in one mouth, round the half circle and out the other.
 {
   const half = { type: "tube", x: -4, y: 0, z: -6, rot: 0, path: [{ x: 8, y: 1, z: 0, bend: 0, mid: { x: 4, y: 0.5, z: -4 } }] };
-  const rings = tubeRings(validateLevel({ id: "c", name: "c", pieces: [
+  const rings = tubeRings(testLevel({ id: "c", name: "c", pieces: [
     { type: "start", x: 0, y: 0, z: 0 }, { type: "slab", x: 0, y: 0, z: -4, w: 16, d: 16, rot: 0, fences: {} }, half, { type: "goal", x: 0, y: 0, z: -2, r: 1 },
   ] }).pieces[2] as Tube);
   const ys = rings.map((q) => q.c[1] - TUBE_R), radii = rings.map((q) => Math.hypot(q.c[0] - 4, q.c[2]));
@@ -835,7 +863,7 @@ for (const reversed of [false, true]) {
   if (!round || Math.min(...steps) < -1e-9 || Math.max(...steps) > 0.1 || Math.abs(ys.at(-1)! - 1) > 1e-9) { failed = true; console.error(`FAIL tube-curve: round ${round}, height steps ${Math.min(...steps).toFixed(3)} to ${Math.max(...steps).toFixed(3)}, ends at y ${ys.at(-1)!.toFixed(2)}`); }
   else console.log(`ok tube-curve: half circle stays radius 4 and climbs 0 to 1 in ${steps.length} steps of at most ${Math.max(...steps).toFixed(3)}`);
 
-  const level = validateLevel({ id: "tube-u", name: "tube-u", pieces: [
+  const level = testLevel({ id: "tube-u", name: "tube-u", pieces: [
     { type: "start", x: -4, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -6, w: 16, d: 16, rot: 0, fences: {} },
     { type: "tube", x: -4, y: 0, z: -6, rot: 0, path: [{ x: 8, y: 0, z: 0, bend: 0, mid: { x: 4, y: 0, z: -4 } }] },
@@ -858,7 +886,7 @@ for (const reversed of [false, true]) {
 // Tubes are rigid: the ball, fired at a tube's side, top and mouth collars from rolling height to
 // airborne, fast and slow, square on and glancing, never ends up inside the wall or a collar.
 {
-  const level = validateLevel({ id: "tube-phase", name: "tube-phase", pieces: [
+  const level = testLevel({ id: "tube-phase", name: "tube-phase", pieces: [
     { type: "start", x: 6, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 16, d: 20, rot: 0, fences: {} },
     { type: "tube", x: 0, y: 0, z: -6, rot: 0, path: [{ x: 0, y: 0, z: -10, bend: 0 }] },
@@ -901,7 +929,7 @@ for (const reversed of [false, true]) {
 // parked on them out and back without it sliding off, and lift it up layers.
 {
   const mover = (extra: object) => ({ type: "mover", x: 0, y: 0, z: -8, w: 8, d: 8, rot: 0, speed: 2, wait: 1, offset: 0, loop: "pingpong", stops: [{ x: 0, y: 0, z: -16, wait: 2 }], ...extra });
-  const levelWith = (m: object) => validateLevel({ id: "mover", name: "mover", pieces: [
+  const levelWith = (m: object) => testLevel({ id: "mover", name: "mover", pieces: [
     { type: "start", x: 0, y: 0, z: 2 }, { type: "slab", x: 0, y: 0, z: 2, w: 8, d: 4, rot: 0, fences: {} },
     m, { type: "goal", x: 0, y: 0, z: 1, r: 1 },
   ] });
@@ -941,7 +969,7 @@ for (const reversed of [false, true]) {
     holed: [{ pieces: [{ type: "slab", x: 0, y: 1, z: 9, w: 8, d: 8, rot: 0, fences: {} }, { type: "hole", x: 0, y: 1, z: 7, w: 2, d: 2, rot: 0 }], at: [0, 5], out: [0, -1] }],
     curve: [
       { pieces: [{ type: "curve", x: -4, y: 1, z: 5, inner: 2, outer: 10, rot: 270, fences: {} }], at: [2, 5], out: [0, -1] },
-      { pieces: [{ type: "curve", x: -4, y: 1, z: 5, inner: 2, outer: 10, rot: 270, fences: {} }], at: [-4 + 7.071, 5 + 7.071], out: [0.7071, 0.7071] },
+      { pieces: [{ type: "curve", x: -4, y: 1, z: 5, inner: 2, outer: 10, rot: 270, fences: {} }], at: [-4 + CURVE_STRAIGHT + (10 - CURVE_STRAIGHT) * 0.7071, 5 + CURVE_STRAIGHT + (10 - CURVE_STRAIGHT) * 0.7071], out: [0.7071, 0.7071] },
     ],
     ramp: [15, 17].map((z) => ({ pieces: [{ type: "ramp", x: 0, y: 0, z: 12, w: 8, d: 24, rot: 0, rise: 4, fences: {} }], at: [4, z] as [number, number], out: [1, 0] as [number, number], ground: { type: "slab", x: 12, y: 0, z: 12, w: 16, d: 40, rot: 0, fences: {} } })),
   };
@@ -965,7 +993,7 @@ for (const reversed of [false, true]) {
   let runs = 0;
   const bad: string[] = [];
   for (const [name, targets] of Object.entries(raised)) for (const t of targets) {
-    const level = validateLevel({ id: `phase-${name}`, name, pieces: [
+    const level = testLevel({ id: `phase-${name}`, name, pieces: [
       ...(t.ground ? [{ type: "start", x: 12, y: 0, z: 0 }, t.ground, { type: "goal", x: 12, y: 0, z: 28, r: 1 }]
         : [{ type: "start", x: 0, y: 0, z: -12 }, { type: "slab", x: 0, y: 0, z: 0, w: 40, d: 40, rot: 0, fences: {} }, { type: "goal", x: 0, y: 0, z: -16, r: 1 }]),
       ...t.pieces,

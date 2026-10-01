@@ -77,6 +77,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .editor .bar.snap { gap: 12px; padding: 6px 10px; font-size: 12px; color: #4a5a6c; }
 .editor .bar.snap label { display: flex; align-items: center; gap: 6px; }
 .editor .bar.snap select { font: inherit; padding: 2px 4px; border: 1px solid #b7c3d1; border-radius: 6px; background: #fff; }
+.editor .bar.snap input[type=number] { width: 56px; font: inherit; padding: 2px 4px; border: 1px solid #b7c3d1; border-radius: 6px; background: #fff; }
 .editor .add button.pick { padding: 2px; background: #eef3f8; border: 1px solid #c9d6e3; }
 .editor .add button.pick:hover { background: #dfeaf5; border-color: #2d7d46; }
 .editor .add img { display: block; width: 56px; height: 42px; border-radius: 6px; }
@@ -102,6 +103,8 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .editor .tube-path .node input { width: 46px; }
 .editor .tube-path .node button { padding: 2px 8px; font-size: 12px; }
 .editor .tube-path .tag { min-width: 26px; font-weight: 600; }
+.editor .tube-path .node.curve { margin-left: 14px; font-size: 12px; color: #2f6b4f; }
+.editor .tube-path .node.curve .range { font: 500 10px var(--mono); opacity: 0.7; }
 .editor .tube-path .hint { padding: 0; border: 0; }
 .editor .tube-path > .hint { padding-top: 6px; font-size: 12px; }
 .editor h3 { margin: 8px 0 4px; font-family: var(--display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }

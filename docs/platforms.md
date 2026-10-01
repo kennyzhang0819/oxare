@@ -12,6 +12,10 @@ Every platform edge has the same profile, top and bottom, so a platform looks th
 
 Seen from above, outside corners are rounded. Inside corners (a hole's corners, or the corner of a notch) are rounded too, the other way.
 
+## Curves
+
+A curve is drawn as a straight strip laid along its centre line (`curveStrip` in `src/level.ts`): 2 straight (`CURVE_STRAIGHT`), the arc, then 2 straight again. The straights keep each end's rounded corners square to the end instead of leaning with the arc, and the strip's long edges break exactly where the straights meet the arc. The footprint, the physics floor and the fence rails follow the same layout.
+
 ## Holes
 
 A hole is a cutout. Each slab whose top is at the hole's `y` becomes its outline minus every hole on it. Everything left over gets the edge profile above, so:

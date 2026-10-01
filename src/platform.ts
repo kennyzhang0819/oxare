@@ -1,8 +1,16 @@
-import * as THREE from "three";
+import earcut from "earcut";
 import { cutRegion, edgeGaps, type XZ } from "./poly.ts";
 
+// A drawn platform's mesh as plain arrays, free of three so the physics can take a moving or tilted
+// platform's collider from the very same vertices. Groups are [start, count, material].
+export interface PlatformMesh { positions: number[]; uv: Float32Array; indices: number[]; groups: [number, number, number][] }
+
+// Lays the straight strip (x along its length L, z across it) out along a curve: `at(u, z)` is where the
+// point u = x + L/2 along it lands. Long edges also break at each `knots` u, where the curve kinks.
+export interface PlatformBend { at(u: number, z: number): XZ; knots: number[] }
+
 // See docs/platforms.md. Material groups: 0 top/bottom, 1 walls, 2 lips, 3 borders; scene.ts indexes materials by them.
-export function platformGeometry(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: { rmid: number }, warp?: (t: number) => number, cuts: XZ[][] = []): THREE.BufferGeometry {
+export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = []): PlatformMesh {
   const A = L / 2, B = W / 2;
   const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const K = 4, KB = 4;
@@ -58,8 +66,11 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
       const v = loop[i]!, w = loop[(i + 1) % n]!, segs = Math.max(1, Math.ceil(Math.hypot(w[0] - v[0], w[1] - v[1]) / step));
       const nx = corners[(i + 1) % n]!, s0 = pts[pts.length - 1]!;
       const s1: XZ = [nx.C[0] + nx.rho * Math.cos(nx.t1), nx.C[1] + nx.rho * Math.sin(nx.t1)];
-      for (let k = 1; k < segs; k++) {
-        pts.push([s0[0] + ((s1[0] - s0[0]) * k) / segs, s0[1] + ((s1[1] - s0[1]) * k) / segs]);
+      const ts = Array.from({ length: segs - 1 }, (_, k) => (k + 1) / segs);
+      // Every ring gets the same knots, clamped onto its edge, or the strips between rings misalign.
+      if (bend && Math.abs(w[1] - v[1]) < 1e-9) for (const u of bend.knots) if ((u - A - v[0]) * (u - A - w[0]) < 0) ts.push(Math.max(0, Math.min(1, (u - A - s0[0]) / (s1[0] - s0[0] || 1))));
+      for (const t of ts.sort((a, b) => a - b)) {
+        pts.push([s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t]);
         nrm.push([-n2[0], -n2[1]]);
       }
     }
@@ -151,9 +162,11 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
         continue;
       }
       const base = pos.length / 3;
-      const contours = part.map(({ loop, sc, fc }) => ringAt(loop, o, sz, sc, fc).pts.map(([x, z]) => { addPoint(x, y, z); return new THREE.Vector2(x, z); }));
-      const t = THREE.ShapeUtils.triangulateShape(contours[0]!, contours.slice(1));
-      for (const [a, c, d] of t) tri(base + a!, base + c!, base + d!, 0, dir, 0);
+      const contours = part.map(({ loop, sc, fc }) => ringAt(loop, o, sz, sc, fc).pts.map(([x, z]) => { addPoint(x, y, z); return [x, z] as XZ; }));
+      const flat: number[] = [], holes: number[] = [];
+      contours.forEach((c, k) => { if (k) holes.push(flat.length / 2); for (const [x, z] of c) flat.push(x, z); });
+      const t = earcut(flat, holes);
+      for (let k = 0; k < t.length; k += 3) tri(base + t[k]!, base + t[k + 1]!, base + t[k + 2]!, 0, dir, 0);
     }
   };
 
@@ -181,10 +194,9 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
   }
   if (bend) {
     for (let i = 0; i < pos.length; i += 3) {
-      const x = pos[i]!, z = pos[i + 2]!;
-      const a = (x + A) / bend.rmid, r = bend.rmid + z;
-      pos[i] = r * Math.cos(a);
-      pos[i + 2] = -r * Math.sin(a);
+      const [x, z] = bend.at(pos[i]! + A, pos[i + 2]!);
+      pos[i] = x;
+      pos[i + 2] = z;
     }
   }
   const uv = new Float32Array((pos.length / 3) * 2);
@@ -192,17 +204,9 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
     if (uvKind[i] === 0) { uv[i * 2] = P(i, 0) / tile; uv[i * 2 + 1] = P(i, 2) / tile; }
     else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (P(i, 1) - (lift[i] ?? 0) - y0) / thick; }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  geo.setIndex(idx);
-  geo.addGroup(0, topLipTo, 2);
-  geo.addGroup(topLipTo, topBorderTo - topLipTo, 3);
-  geo.addGroup(topBorderTo, botLipFrom - topBorderTo, 0);
-  geo.addGroup(botLipFrom, botLipTo - botLipFrom, 2);
-  geo.addGroup(botLipTo, botBorderTo - botLipTo, 3);
-  geo.addGroup(botBorderTo, wallsFrom - botBorderTo, 0);
-  geo.addGroup(wallsFrom, wallsTo - wallsFrom, 1);
-  geo.computeVertexNormals();
-  return geo;
+  return {
+    positions: pos, uv, indices: idx,
+    groups: [[0, topLipTo, 2], [topLipTo, topBorderTo - topLipTo, 3], [topBorderTo, botLipFrom - topBorderTo, 0], [botLipFrom, botLipTo - botLipFrom, 2],
+      [botLipTo, botBorderTo - botLipTo, 3], [botBorderTo, wallsFrom - botBorderTo, 0], [wallsFrom, wallsTo - wallsFrom, 1]],
+  };
 }

@@ -76,6 +76,16 @@ export function sectorMesh(inner: number, outer: number, y0: number, y1: number,
 type V3 = [number, number, number];
 export interface SweepRing { c: V3; d: V3; m: V3 }
 
+// Each ring's level sideways direction. A ring running straight up or down (a top end's drop into
+// the platform) has none of its own and takes its neighbour's, so the rails' feet stay side by side.
+function railSides(rings: SweepRing[]): V3[] {
+  const own = rings.map((q): V3 | null => { const f = Math.hypot(q.d[0], q.d[2]); return f > 1e-3 ? [-q.d[2] / f, 0, q.d[0] / f] : null; });
+  const out = own.slice();
+  for (let i = 1; i < out.length; i++) out[i] ??= out[i - 1]!;
+  for (let i = out.length - 2; i >= 0; i--) out[i] ??= out[i + 1]!;
+  return out.map((v) => v ?? [1, 0, 0]);
+}
+
 // One rail of radius `r` running `offset` to the side of `rings` (sideways stays level), as a
 // `sides`-gon whose flat facets touch the true circle. A facet's middle faces `face` radians from
 // straight up toward the rails' centre: Rapier bumps a ball rolling along a vertex, never a facet.
@@ -83,10 +93,9 @@ export function railSweep(rings: SweepRing[], offset: number, r: number, sides: 
   const pos: number[] = [], idx: number[] = [];
   const rr = r / Math.cos(Math.PI / sides);
   const inward = offset > 0 ? -1 : 1;
-  for (const ring of rings) {
-    const d = ring.d;
-    const flat = Math.hypot(d[0], d[2]);
-    const s: V3 = flat > 1e-6 ? [-d[2] / flat, 0, d[0] / flat] : [1, 0, 0];
+  const sides3 = railSides(rings);
+  rings.forEach((ring, i) => {
+    const d = ring.d, s = sides3[i]!;
     const n: V3 = [s[1] * d[2] - s[2] * d[1], s[2] * d[0] - s[0] * d[2], s[0] * d[1] - s[1] * d[0]];
     const c: V3 = [ring.c[0] + s[0] * offset, ring.c[1], ring.c[2] + s[2] * offset];
     const md = ring.m[0] * d[0] + ring.m[1] * d[1] + ring.m[2] * d[2];
@@ -96,7 +105,7 @@ export function railSweep(rings: SweepRing[], offset: number, r: number, sides: 
       const t = -(ring.m[0] * off[0] + ring.m[1] * off[1] + ring.m[2] * off[2]) / md;
       pos.push(c[0] + off[0] + d[0] * t, c[1] + off[1] + d[1] * t, c[2] + off[2] + d[2] * t);
     }
-  }
+  });
   for (let i = 0; i + 1 < rings.length; i++) {
     for (let j = 0; j < sides; j++) {
       const a = i * sides + j, b = i * sides + ((j + 1) % sides), c = a + sides, e = b + sides;
@@ -109,8 +118,7 @@ export function railSweep(rings: SweepRing[], offset: number, r: number, sides: 
     const [A, B, C] = [P(idx[0]!), P(idx[1]!), P(idx[2]!)];
     const u: V3 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], v: V3 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
     const nrm: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const ring = rings[0]!, d = ring.d, flat = Math.hypot(d[0], d[2]);
-    const s: V3 = flat > 1e-6 ? [-d[2] / flat, 0, d[0] / flat] : [1, 0, 0];
+    const ring = rings[0]!, s = sides3[0]!;
     const out: V3 = [A[0] - (ring.c[0] + s[0] * offset), A[1] - ring.c[1], A[2] - (ring.c[2] + s[2] * offset)];
     if (nrm[0] * out[0] + nrm[1] * out[1] + nrm[2] * out[2] < 0) for (let k = 0; k < idx.length; k += 3) { const t = idx[k + 1]!; idx[k + 1] = idx[k + 2]!; idx[k + 2] = t; }
   }
@@ -132,6 +140,29 @@ export function tubeWallBlocks(rings: SweepRing[], rIn: number, rOut: number, si
       out.push(new Float32Array(pts));
     }
   }
+  return out;
+}
+
+// A torus lying flat (axis up) about the origin: ring radius R, tube radius r. Drawn by the scene and
+// used as-is for the physics, so the two match vertex for vertex.
+export function torusMesh(R: number, r: number, tubeSides = 10, segments = 48): { positions: number[]; indices: number[] } {
+  const pos: number[] = [], idx: number[] = [];
+  for (let j = 0; j <= tubeSides; j++) for (let i = 0; i <= segments; i++) {
+    const u = (i / segments) * Math.PI * 2, v = (j / tubeSides) * Math.PI * 2, c = R + r * Math.cos(v);
+    pos.push(c * Math.cos(u), r * Math.sin(v), c * Math.sin(u));
+  }
+  for (let j = 0; j < tubeSides; j++) for (let i = 0; i < segments; i++) {
+    const a = j * (segments + 1) + i, b = a + segments + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  return { positions: pos, indices: idx };
+}
+
+// Points of a surface of revolution about y: `profile` is [radius, y] pairs, swept round in
+// `sides` steps from angle 0, the way three's CylinderGeometry and SphereGeometry place theirs.
+export function revolvePoints(profile: [number, number][], sides: number): number[] {
+  const out: number[] = [];
+  for (const [r, y] of profile) for (let i = 0; i < sides; i++) { const a = (i / sides) * Math.PI * 2; out.push(r * Math.sin(a), y, r * Math.cos(a)); }
   return out;
 }
 

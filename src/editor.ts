@@ -1,13 +1,16 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
+import { createSim } from "./sim.ts";
 import { pieceThumbs } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 import type { PlayFrom } from "./game.ts";
 
 export const DRAFT_KEY = "balling.draft";
+const HITBOX_KEY = "balling.hitboxes";
+const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.8, depthTest: false });
 export function loadDraft(): Level | null {
   try { const s = localStorage.getItem(DRAFT_KEY); return s ? validateLevel(JSON.parse(s)) : null; } catch { return null; }
 }
@@ -75,6 +78,10 @@ const layerSnap = (v: number) => Math.round(v / LAYER_H) * LAYER_H;
 const SIZE_GRID = 4;
 const FINE_KEY = "balling.fineSizes";
 let fineSizes = false;
+// Height of the white ground grid, chosen in the toolbar and remembered; new pieces land on it.
+const GRID_Y_KEY = "balling.gridY";
+let gridY = 0;
+try { gridY = Number(localStorage.getItem(GRID_Y_KEY)) || 0; } catch { /* on the ground */ }
 try { fineSizes = localStorage.getItem(FINE_KEY) === "1"; } catch { /* coarse */ }
 const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
   slab: ["y", "w", "d"], mover: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
@@ -101,6 +108,8 @@ function setTubeWorld(p: PathPiece, nodes: WorldNode[]) {
 const midOf = (ns: WorldNode[], k: number): P3 => ns[k]!.mid ?? { x: (ns[k - 1]!.x + ns[k]!.x) / 2, y: (ns[k - 1]!.y + ns[k]!.y) / 2, z: (ns[k - 1]!.z + ns[k]!.z) / 2 };
 // Curve points snap finer than nodes, so a curve can be shaped by hand.
 const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
+// Pull every curve point back inside its segment's box (see fitMid), after any path edit.
+const fitMids = (p: PathPiece) => p.path.forEach((n, k) => { if (n.mid) n.mid = fitMid(p, k, n.mid); });
 
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
@@ -230,6 +239,15 @@ export class Editor implements Mode {
   private ghost = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true }));
   private hereBtn!: HTMLButtonElement;
   private grid: THREE.LineSegments | null = null;
+  private ground = new THREE.GridHelper(200, 100, 0x9fb4cc, 0xc7d6e6);
+  // Hitbox view (H): every collider of a fresh physics world for the level, drawn as lines. It is
+  // rebuilt a moment after each change; `hitboxGen` drops a rebuild that a newer change overtook.
+  private hitboxes = false;
+  private hitboxLines: THREE.LineSegments | null = null;
+  private hitboxJson = "";
+  private hitboxGen = 0;
+  private hitboxTimer = 0;
+  private hitboxBtn!: HTMLButtonElement;
   // The selected tube's node handles and segment midpoint dots; `node` is the picked node and
   // `mid` the picked segment (by the node it arrives at), -1 for none; at most one is picked.
   private handles = new THREE.Group();
@@ -264,7 +282,8 @@ export class Editor implements Mode {
     this.opts = opts;
     this.env = createScene();
     this.scene = this.env.scene;
-    this.scene.add(new THREE.GridHelper(200, 100, 0x9fb4cc, 0xc7d6e6));
+    this.ground.position.y = gridY;
+    this.scene.add(this.ground);
     this.built = buildLevel(level, true);
     this.scene.add(this.built.group);
     this.ghost.visible = false;
@@ -287,14 +306,17 @@ export class Editor implements Mode {
         h("button", { class: "ghost", onclick: () => this.undo() }, "Undo"),
         h("button", { onclick: () => void this.save() }, "Save"),
         h("button", { class: "ghost", onclick: () => this.newLevel() }, "New"),
+        this.hitboxBtn = h("button", { class: "ghost", title: "Show every collider exactly as the physics has it (H)", onclick: () => this.toggleHitboxes() }, "Hitboxes") as HTMLButtonElement,
       ),
-      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle()),
+      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle(), this.gridLevel()),
       h("div", { class: "bar add" }, ...PIECE_TYPES.filter((t) => t !== "spinner").map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
       this.problems,
       this.notice,
       this.body,
     );
     ctx.overlay.append(this.panel);
+    try { this.hitboxes = localStorage.getItem(HITBOX_KEY) === "1"; } catch { /* off */ }
+    this.hitboxBtn.className = this.hitboxes ? "" : "ghost";
     ctx.canvas.addEventListener("pointerdown", this.down);
     ctx.canvas.addEventListener("pointermove", this.move);
     ctx.canvas.addEventListener("pointerup", this.up);
@@ -374,6 +396,7 @@ export class Editor implements Mode {
         this.helpers.push(box);
       } else if (g) { const hl = new THREE.BoxHelper(g, 0xffd23f); this.helpers.push(hl); this.scene.add(hl); }
     }
+    this.drawHitboxes();
     this.grid?.removeFromParent();
     this.grid?.geometry.dispose();
     this.grid = null;
@@ -557,7 +580,8 @@ export class Editor implements Mode {
     for (const side of fenceSides(p)) {
       fenceSpans(fenceOf(p, side.key), side.len).forEach((span, k) => {
         for (const end of [0, 1] as const) {
-          const mid = side.at((span[0] + span[1]) / 2, FENCE_RAIL_INSET), unit = side.arc ? 180 / Math.PI / Math.max(1, Math.hypot(mid.x, mid.z)) : 1;
+          const mid = (span[0] + span[1]) / 2, m0 = side.at(mid - 0.5, FENCE_RAIL_INSET), m1 = side.at(mid + 0.5, FENCE_RAIL_INSET);
+          const unit = side.arc ? 1 / Math.max(0.05, Math.hypot(m1.x - m0.x, m1.z - m0.z)) : 1;
           const off = Math.min(0.6 * unit, (span[1] - span[0]) / 3) * (end ? -1 : 1);
           const q = side.at(span[end] + off, FENCE_RAIL_INSET), o = rotXZ(q.x, q.z, pieceRot(p));
           const m = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 8), new THREE.MeshBasicMaterial({ color: 0x2ee8ff, depthTest: false, transparent: true, opacity: 0.95 }));
@@ -578,6 +602,24 @@ export class Editor implements Mode {
     fn(nodes, p);
     setTubeWorld(p, nodes);
     settle(this.level, p);
+    fitMids(p);
+    this.commit(before);
+  }
+
+  // The picked node's end of the selected rails, if it is one.
+  private railsEnd(): "a" | "b" | null {
+    const p = this.selectedTube();
+    if (!p || p.type !== "rails") return null;
+    return this.node === 0 ? "a" : this.node === p.path.length ? "b" : null;
+  }
+
+  // Turns the picked rails end by `deg` from its current heading, onto the nearest 15 degrees.
+  private turnEnd(deg: number) {
+    const p = this.selectedTube(), end = this.railsEnd();
+    if (!p || p.type !== "rails" || !end) return;
+    const before = JSON.stringify(this.level);
+    const yaw = Math.round((railsEndYaw(p, end, this.level) + deg) / 15) * 15;
+    p[end === "a" ? "aYaw" : "bYaw"] = ((yaw + 540) % 360) - 180;
     this.commit(before);
   }
 
@@ -587,8 +629,30 @@ export class Editor implements Mode {
     const turns = tubeTurns(p);
     const wrap = h("div", { class: "tube-path" }, h("h3", {}, "path"));
     const num = (n: Record<string, number>, key: string, step: number) => {
-      const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); this.commit(before); } });
+      const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
       return h("label", {}, key, input);
+    };
+    // The curve of the segment arriving at node k: its point's x y z, each held between the
+    // segment's two nodes on that axis (shown beside it), and the curve kept inside that box.
+    const curveRow = (k: number) => {
+      const n = p.path[k - 1]!, { lo, hi } = midBounds(p, k - 1);
+      const cur = n.mid ?? { x: r3((lo[0] + hi[0]) / 2), y: r3((lo[1] + hi[1]) / 2), z: r3((lo[2] + hi[2]) / 2) };
+      const field = (axis: "x" | "y" | "z", i: number) => {
+        const range = `${r3(lo[i]!)} … ${r3(hi[i]!)}`;
+        const input = h("input", { type: "number", step: 0.5, min: lo[i]!, max: hi[i]!, value: cur[axis], disabled: hi[i]! - lo[i]! < 1e-6,
+          title: `${axis} must be between ${range} (the two nodes' ${axis})`,
+          onchange: () => {
+            const before = JSON.stringify(this.level), want = { ...cur, [axis]: Number(input.value) };
+            n.mid = fitMid(p, k - 1, want);
+            if ((["x", "y", "z"] as const).some((a) => Math.abs(n.mid![a] - want[a]) > 1e-3)) this.flash(`Curve kept inside its segment: x ${n.mid.x}, y ${n.mid.y}, z ${n.mid.z}`);
+            this.commit(before);
+          } }) as HTMLInputElement;
+        return h("label", {}, axis, input, h("span", { class: "range" }, range));
+      };
+      const row = h("div", { class: `node curve${k === this.mid ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.mid = k; this.node = -1; this.refresh(); } } },
+        h("span", { class: "tag", title: `Curve of the segment into node ${k === p.path.length ? "end" : k}` }, "curve"), field("x", 0), field("y", 1), field("z", 2));
+      if (n.mid) row.append(h("button", { class: "ghost", title: "Make this segment straight again", onclick: () => { const before = JSON.stringify(this.level); delete n.mid; this.commit(before); } }, "straighten"));
+      return row;
     };
     const rows = [{ x: 0, y: 0, z: 0, bend: 0 }, ...p.path].map((n, k) => {
       const last = k === p.path.length, end = k === 0 || last;
@@ -604,11 +668,14 @@ export class Editor implements Mode {
         );
         if (smooth) row.append(num(n as unknown as Record<string, number>, "bend", 0.5));
       }
-      if (k > 0 && "mid" in n && n.mid) {
-        row.append(h("button", { class: "ghost", title: "Make the segment into this node straight again", onclick: () => { const before = JSON.stringify(this.level); delete (n as { mid?: unknown }).mid; this.commit(before); } }, "straighten"));
+      if (end && p.type === "rails") {
+        const which = k === 0 ? "a" : "b", key = k === 0 ? "aYaw" : "bYaw";
+        const input = h("input", { type: "number", step: 15, value: railsEndYaw(p, which, this.level), onchange: () => { const before = JSON.stringify(this.level); p[key] = Number(input.value); this.commit(before); } }) as HTMLInputElement;
+        row.append(h("label", { title: "Heading of the rails out of this end, in degrees (R / Shift+R turn it 15)" }, "turn", input));
+        if (p[key] !== undefined) row.append(h("button", { class: "ghost", title: "Back to the worked-out heading", onclick: () => { const before = JSON.stringify(this.level); delete p[key]; this.commit(before); } }, "auto"));
       }
-      return row;
-    });
+      return k > 0 ? [curveRow(k), row] : [row];
+    }).flat();
     wrap.append(...rows, h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" },
       h("button", { class: "ghost", title: "Insert a node halfway along the segment after the picked node", onclick: () => this.splitNode() }, "Split"),
       h("button", { class: "ghost", title: "Remove the picked node (Delete)", onclick: () => this.removeNode() }, "Remove node"),
@@ -619,9 +686,15 @@ export class Editor implements Mode {
         ns.reverse();
         ns.forEach((n, k) => { const m = mids[ns.length - k]; if (m) n.mid = m; else delete n.mid; });
         ns[0]!.bend = 0;
-        if (q.type === "rails") [q.a, q.b] = [q.b, q.a];
+        if (q.type === "rails") {
+          [q.a, q.b] = [q.b, q.a];
+          const [ya, yb] = [q.aYaw, q.bYaw];
+          delete q.aYaw; delete q.bYaw;
+          if (yb !== undefined) q.aYaw = yb;
+          if (ya !== undefined) q.bYaw = ya;
+        }
       }) }, "Reverse"),
-    ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
+    ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth, R / Shift+R turn a rails end. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
     return wrap;
   }
 
@@ -728,6 +801,17 @@ export class Editor implements Mode {
     return h("label", {}, label, sel);
   }
 
+  // The white grid's height, in whole layers.
+  private gridLevel(): HTMLElement {
+    const input = h("input", { type: "number", step: LAYER_H, value: gridY, title: "Height of the white grid; new pieces are placed on it",
+      oninput: () => {
+        gridY = layerSnap(Number(input.value) || 0);
+        this.ground.position.y = gridY;
+        try { localStorage.setItem(GRID_Y_KEY, String(gridY)); } catch { /* not remembered */ }
+      } }) as HTMLInputElement;
+    return h("label", { class: "grid-y" }, "Grid y", input);
+  }
+
   private fineToggle(): HTMLElement {
     const cb = h("input", { type: "checkbox", checked: fineSizes, title: "Let platform sizes and heights leave the grid of 4",
       onchange: () => {
@@ -754,7 +838,7 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     const t = this.controls.target;
     const sel = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    const base = sel ?? { x: snap(t.x), y: snap(t.y), z: snap(t.z) };
+    const base = sel ?? { x: snap(t.x), y: gridY, z: snap(t.z) };
     const piece = newPiece(type, base.x + (sel ? 2 : 0), base.y, base.z);
     this.placeFree(piece);
     settle(this.level, piece);
@@ -833,6 +917,7 @@ export class Editor implements Mode {
     if (!mod && ["KeyW", "KeyA", "KeyS", "KeyD"].includes(e.code)) { this.held.add(e.code); return; }
     if (e.code === "Escape") { if (this.dropping) { this.armDrop(false); return; } if (this.node >= 0 || this.mid >= 0) { this.node = -1; this.mid = -1; this.refresh(); return; } this.sel.clear(); this.refresh(); return; }
     if (!mod && e.code === "KeyP") { this.armDrop(!this.dropping); return; }
+    if (!mod && e.code === "KeyH") { this.toggleHitboxes(); return; }
     if (mod && e.code === "KeyZ") { e.preventDefault(); this.undo(); return; }
     if (mod && e.code === "KeyD") { e.preventDefault(); this.duplicate(); return; }
     if (mod && e.code === "KeyC") { e.preventDefault(); this.copy(); return; }
@@ -850,6 +935,7 @@ export class Editor implements Mode {
         KeyB: () => this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : TUBE_BEND; }),
         Delete: () => this.removeNode(), Backspace: () => this.removeNode(),
       };
+      if (this.railsEnd()) ops.KeyR = () => this.turnEnd(e.shiftKey ? -15 : 15);
       const op = ops[e.code];
       if (op) { e.preventDefault(); op(); return; }
     }
@@ -1128,7 +1214,48 @@ export class Editor implements Mode {
     this.refresh();
   }
 
+  private toggleHitboxes(on = !this.hitboxes) {
+    this.hitboxes = on;
+    try { localStorage.setItem(HITBOX_KEY, on ? "1" : "0"); } catch { /* per session only */ }
+    this.hitboxBtn.className = on ? "" : "ghost";
+    this.hitboxJson = "";
+    this.drawHitboxes();
+  }
+
+  // Build the level's physics as play would and draw its colliders, unless nothing has changed.
+  private drawHitboxes() {
+    clearTimeout(this.hitboxTimer);
+    if (!this.hitboxes) {
+      this.hitboxGen++;
+      this.hitboxLines?.removeFromParent();
+      this.hitboxLines?.geometry.dispose();
+      this.hitboxLines = null;
+      return;
+    }
+    const json = JSON.stringify(this.level);
+    if (json === this.hitboxJson && this.hitboxLines) return;
+    const gen = ++this.hitboxGen;
+    this.hitboxTimer = window.setTimeout(async () => {
+      let sim: Awaited<ReturnType<typeof createSim>> | null = null;
+      try {
+        sim = await createSim(cloneLevel(this.level));
+        if (gen !== this.hitboxGen) return;
+        const { vertices } = sim.world.debugRender();
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        this.hitboxLines?.removeFromParent();
+        this.hitboxLines?.geometry.dispose();
+        this.hitboxLines = new THREE.LineSegments(geo, HITBOX_MAT);
+        this.hitboxLines.renderOrder = 8;
+        this.scene.add(this.hitboxLines);
+        this.hitboxJson = json;
+      } catch { /* a level the physics cannot build draws no hitboxes */ } finally { sim?.free(); }
+    }, 150);
+  }
+
   dispose() {
+    clearTimeout(this.hitboxTimer);
+    this.hitboxGen++;
     this.ctx.canvas.style.cursor = "";
     cancelAnimationFrame(this.raf);
     this.controls.dispose();

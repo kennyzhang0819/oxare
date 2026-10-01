@@ -1,4 +1,4 @@
-import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, holesOn, isTilted, pieceRot, rampHeight, rotXZ, type Level } from "./level.ts";
+import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isTilted, pieceRot, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -41,15 +41,10 @@ function topPolys(level: Level): Poly[] {
         }
       }
     } else if (p.type === "curve") {
-      const n = 12;
-      const inner: XZ[] = [], outer: XZ[] = [];
-      for (let i = 0; i <= n; i++) {
-        const a = (i / n) * (Math.PI / 2);
-        inner.push(W(p.inner * Math.cos(a), -p.inner * Math.sin(a)));
-        outer.push(W(p.outer * Math.cos(a), -p.outer * Math.sin(a)));
-      }
+      const c = curveStrip(p), us = curveStations(p, 12);
+      const inner = us.map((u) => W(...c.at(u, p.inner))), outer = us.map((u) => W(...c.at(u, p.outer)));
       const outline = [...outer, ...inner.slice().reverse()];
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < us.length - 1; i++) {
         const q = [inner[i]!, outer[i]!, outer[i + 1]!, inner[i + 1]!].map((v) => ({ v, y: p.y }));
         out.push({ loops: [oriented(q)], rim: (m) => onOutline(outline, m), narrow: false });
       }

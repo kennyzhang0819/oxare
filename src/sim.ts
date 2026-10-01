@@ -1,7 +1,8 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
-import { railSweep, sectorMesh, sweepTube, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { platformMesh } from "./platform.ts";
+import { railSweep, revolvePoints, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
+import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfiles, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -22,6 +23,9 @@ const STOOL_MASS = 1, STOOL_DAMPING = 2, STOOL_LIFT = 0.02;
 // Facets round a rail in the physics; a flat one faces the ball (see railSweep).
 const RAILS_SIDES = 24;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
+// The platforms' own colliders, and a bridge plank's hinge barrel, which never meets them: the end
+// barrels sit on the hinges at the platform walls, half inside them.
+const FLOOR_GROUPS = (0x0004 << 16) | 0xffff, BARREL_GROUPS = (0x0002 << 16) | 0xfff9;
 
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
@@ -59,6 +63,11 @@ const qrot = (q: Quat, v: { x: number; y: number; z: number }) => {
   const ix = q.w * v.x + q.y * v.z - q.z * v.y, iy = q.w * v.y + q.z * v.x - q.x * v.z, iz = q.w * v.z + q.x * v.y - q.y * v.x, iw = -q.x * v.x - q.y * v.y - q.z * v.z;
   return { x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x };
 };
+// A moving or tilted slab's collider: the convex hull of its drawn mesh, rounded lip and all.
+const platformHull = (w: number, d: number): RAPIER.ColliderDesc =>
+  RAPIER.ColliderDesc.convexHull(new Float32Array(platformMesh(w, d, PLATFORM_THICKNESS, PLATFORM_LIP, 1).positions))!;
+// A quarter turn about z: a cylinder's axis from y onto x.
+const Z90 = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
 // The rotation taking +y onto the unit vector (x, y, z).
 const yTo = (x: number, y: number, z: number): Quat => {
   if (y < -0.999999) return { x: 1, y: 0, z: 0, w: 0 };
@@ -86,15 +95,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
 
   const floor = floorMesh(level);
   world.createCollider(
-    RAPIER.ColliderDesc.trimesh(floor.positions, floor.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(1),
+    RAPIER.ColliderDesc.trimesh(floor.positions, floor.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(1).setCollisionGroups(FLOOR_GROUPS),
   );
   // Platform sides and undersides, so nothing clips through a slab from the side or below.
   world.createCollider(
-    RAPIER.ColliderDesc.trimesh(floor.body.positions, floor.body.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
+    RAPIER.ColliderDesc.trimesh(floor.body.positions, floor.body.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6).setCollisionGroups(FLOOR_GROUPS),
   );
   for (const pts of floor.solids) {
     const desc = RAPIER.ColliderDesc.convexHull(pts);
-    if (desc) world.createCollider(desc.setFriction(0.6));
+    if (desc) world.createCollider(desc.setFriction(0.6).setCollisionGroups(FLOOR_GROUPS));
   }
   // Fence rails are exactly the tube that is drawn: a capsule of the rail's radius along each
   // stretch of the same centre line, with nothing above or below it.
@@ -115,20 +124,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type === "slab" && isTilted(p)) {
       // Tilt about local x, then yaw: the slab body and its fence rails as one rigid arrangement.
       const q = qmul(yQuat(rot), xQuat(p.tilt));
-      for (const b of pieceBoxes(p)) {
-        const o = qrot(q, { x: b.x, y: b.y, z: b.z });
-        world.createCollider(
-          RAPIER.ColliderDesc.cuboid(b.w / 2, b.h / 2, b.d / 2).setTranslation(p.x + o.x, p.y + o.y, p.z + o.z).setRotation(q).setFriction(1),
-        );
-      }
+      world.createCollider(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1));
       railColliders(p, (v) => { const o = qrot(q, { x: v[0], y: v[1], z: v[2] }); return { x: p.x + o.x, y: p.y + o.y, z: p.z + o.z }; });
       continue;
     }
     for (const b of pieceBoxes(p)) {
       if (b.kind === "platform") continue;
-      const o = rotXZ(b.x, b.z, rot);
+      const o = rotXZ(b.x, b.z, rot), r = Math.min(b.r ?? 0, b.w / 2, b.h / 2, b.d / 2) * 0.999;
       world.createCollider(
-        RAPIER.ColliderDesc.cuboid(b.w / 2, b.h / 2, b.d / 2)
+        (r > 0 ? RAPIER.ColliderDesc.roundCuboid(b.w / 2 - r, b.h / 2 - r, b.d / 2 - r, r) : RAPIER.ColliderDesc.cuboid(b.w / 2, b.h / 2, b.d / 2))
           .setTranslation(p.x + o.x, p.y + b.y, p.z + o.z)
           .setRotation(yQuat(rot))
           .setFriction(1),
@@ -146,7 +150,20 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       }
     }
     for (const c of pieceCylinders(p)) {
-      world.createCollider(RAPIER.ColliderDesc.cylinder(c.h / 2, c.r).setTranslation(p.x, p.y + c.h / 2, p.z).setFriction(1));
+      const o = rotXZ(c.x ?? 0, c.z ?? 0, rot);
+      world.createCollider(RAPIER.ColliderDesc.cylinder(c.h / 2, c.r).setTranslation(p.x + o.x, p.y + (c.y0 ?? 0) + c.h / 2, p.z + o.z).setFriction(1));
+    }
+    if (p.type === "pillar") {
+      // The dome is the hull of the drawn half-sphere's own points, squashed the same way.
+      const R = PILLAR_R + PILLAR_COLLAR.r, top = PILLAR_H - PILLAR_CAP + PILLAR_COLLAR.h, k = (PILLAR_CAP - PILLAR_COLLAR.h) / R;
+      const prof: [number, number][] = [];
+      for (let j = 0; j <= 12; j++) { const t = (j / 12) * (Math.PI / 2); prof.push([R * Math.sin(t), top + R * Math.cos(t) * k]); }
+      const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(revolvePoints(prof, 32)));
+      if (desc) world.createCollider(desc.setTranslation(p.x, p.y, p.z).setFriction(1));
+    }
+    if (p.type === "goal") {
+      const t = torusMesh(p.r + GOAL_RING.gap, GOAL_RING.tube);
+      world.createCollider(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setTranslation(p.x, p.y + GOAL_RING.y, p.z).setFriction(1));
     }
     for (const sec of pieceSectors(p)) {
       if (sec.kind === "platform") continue;
@@ -184,7 +201,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(yQuat(p.rot)).setCcdEnabled(true).setGravityScale(TUNING.propGravity).setCanSleep(false),
     );
-    world.createCollider(RAPIER.ColliderDesc.cuboid(p.w / 2, p.h / 2, p.d / 2).setMass(0.2).setFriction(0.35).setRestitution(0.1), body);
+    const cr = propRound(p.w, p.h, p.d);
+    world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - cr, p.h / 2 - cr, p.d / 2 - cr, cr).setMass(0.2).setFriction(0.35).setRestitution(0.1), body);
     crates.push({ index, body });
   });
 
@@ -212,8 +230,23 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           .setActiveCollisionTypes(RAPIER.ActiveCollisionTypes.DYNAMIC_DYNAMIC).setCollisionGroups(PLANK_GROUPS),
         body,
       );
+      // The hinge barrel across the plank's near end, drawn there and solid there.
+      world.createCollider(
+        RAPIER.ColliderDesc.cylinder(p.w / 2 - BRIDGE_BARREL.inset, BRIDGE_BARREL.r).setTranslation(0, 0, chain.seg / 2).setRotation(Z90).setMass(0.001).setFriction(1)
+          .setActiveCollisionTypes(RAPIER.ActiveCollisionTypes.DYNAMIC_DYNAMIC).setCollisionGroups(BARREL_GROUPS),
+        body,
+      );
       return body;
     });
+    // The anchors' barrel and lugs hold the end planks' hinges, so the bridge's planks pass through them.
+    const ANCHOR_GROUPS = (0xffff << 16) | 0xfffd;
+    world.createCollider(RAPIER.ColliderDesc.cylinder(p.w / 2 - BRIDGE_BARREL.inset, BRIDGE_BARREL.r).setRotation(Z90).setFriction(1).setCollisionGroups(ANCHOR_GROUPS), far);
+    for (const [anchor, dir] of [[near, 1], [far, -1]] as const) {
+      const L = BRIDGE_LUG;
+      for (const x of [p.w / 2 - L.x, -(p.w / 2 - L.x)]) {
+        world.createCollider(RAPIER.ColliderDesc.roundCuboid(L.w / 2 - L.r, L.h / 2 - L.r, L.d / 2 - L.r, L.r).setTranslation(x, 0, dir * L.z).setFriction(1).setCollisionGroups(ANCHOR_GROUPS), anchor);
+      }
+    }
     const axis = { x: 1, y: 0, z: 0 }, h = chain.seg / 2, O = { x: 0, y: 0, z: 0 };
     planks.forEach((b, k) => {
       const prev = k === 0 ? near : planks[k - 1]!;
@@ -267,12 +300,21 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     );
     const r = SEESAW_T / 2 - 0.01;
     const board = world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, SEESAW_T / 2 - r, p.d / 2 - r, r).setMass(SEESAW_MASS).setFriction(1).setRestitution(0.02), body);
-    world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, !p.freeze);
+    const hub = SEESAW_HUB, hw = (p.w - 2 * hub.inset) / 2;
+    world.createCollider(
+      RAPIER.ColliderDesc.roundCuboid(hw - hub.r, hub.h / 2 - hub.r, hub.d / 2 - hub.r, hub.r).setTranslation(0, -SEESAW_T / 2 - hub.drop, 0).setMass(0.01).setFriction(0.6), body,
+    );
+    // The stubs turn inside the board's edge, so the board and the pivot carrying them must not collide.
+    world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, !p.freeze).setContactsEnabled(false);
+    const stub = SEESAW_STUB, q = Math.SQRT1_2;
     for (const side of [1, -1]) {
-      const o = rotXZ(side * (p.w / 2 + SEESAW_POST_W / 2 + 0.05), 0, p.rot);
       world.createCollider(
-        RAPIER.ColliderDesc.cuboid(SEESAW_POST_W / 2, (SEESAW_PIVOT_H + 0.3) / 2, SEESAW_POST_D / 2)
-          .setTranslation(p.x + o.x, p.y + (SEESAW_PIVOT_H + 0.3) / 2, p.z + o.z).setRotation(yaw).setFriction(0.5),
+        RAPIER.ColliderDesc.cylinder(stub.l / 2, stub.r).setTranslation(side * (p.w / 2 + stub.l / 2 - stub.into), 0, 0).setRotation({ x: 0, y: 0, z: q, w: q }).setFriction(0.5), pivot,
+      );
+      const o = rotXZ(side * (p.w / 2 + SEESAW_POST_W / 2 + 0.05), 0, p.rot), R = SEESAW_POST_R;
+      world.createCollider(
+        RAPIER.ColliderDesc.roundCuboid(SEESAW_POST_W / 2 - R, SEESAW_POST_H / 2 - R, SEESAW_POST_D / 2 - R, R)
+          .setTranslation(p.x + o.x, p.y + SEESAW_POST_H / 2, p.z + o.z).setRotation(yaw).setFriction(0.5),
       );
     }
     planks.push({ index, body, frozen: p.freeze ? board : undefined });
@@ -288,7 +330,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x + c.x, y, p.z + c.z).setRotation(yaw).setLinearDamping(STOOL_DAMPING).setCcdEnabled(true).setCanSleep(false),
     );
-    const r = 0.06;
+    const r = propRound(p.w, p.h, p.d);
     world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, p.d / 2 - r, r).setMass(STOOL_MASS).setFriction(0.4).setRestitution(0.05), body);
     const joint = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
     joint.limitsEnabled = true;
@@ -301,9 +343,9 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   const movers: SimMover[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "mover") return;
-    const at = moverAt(p, 0), r = 0.12;
+    const at = moverAt(p, 0);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z).setRotation(yQuat(p.rot)));
-    world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, PLATFORM_THICKNESS / 2 - r, p.d / 2 - r, r).setTranslation(0, -PLATFORM_THICKNESS / 2, 0).setFriction(1), body);
+    world.createCollider(platformHull(p.w, p.d).setFriction(1), body);
     movers.push({ index, body, piece: p });
   });
   let time = 0;
@@ -336,16 +378,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type !== "tube") return;
     const rings = tubeRingsWorld(p);
     if (rings.length < 2) return;
-    const skin = sweepTube(rings, TUBE_R, true);
+    const skin = sweepTube(rings, TUBE_R, true, TUBE_SKIN_SIDES);
     world.createCollider(
       RAPIER.ColliderDesc.trimesh(new Float32Array(skin.positions), new Uint32Array(skin.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
     );
-    const SIDES = 20, rIn = TUBE_R / Math.cos(Math.PI / SIDES) + 0.005;
-    const blocks = tubeWallBlocks(rings, rIn, TUBE_R + TUBE_SOLID_WALL, SIDES);
+    const rIn = (n: number) => TUBE_R / Math.cos(Math.PI / n) + 0.005;
+    const blocks = tubeWallBlocks(rings, rIn(TUBE_WALL_SIDES), TUBE_R + TUBE_SOLID_WALL, TUBE_WALL_SIDES);
     for (const [ring, sign] of [[rings[0]!, -1], [rings[rings.length - 1]!, 1]] as const) {
       const out: [number, number, number] = [ring.d[0] * sign, ring.d[1] * sign, ring.d[2] * sign];
       const back: [number, number, number] = [ring.c[0] - out[0] * TUBE_COLLAR_L, ring.c[1] - out[1] * TUBE_COLLAR_L, ring.c[2] - out[2] * TUBE_COLLAR_L];
-      blocks.push(...tubeWallBlocks([{ c: back, d: out, m: out }, { c: ring.c, d: out, m: out }], rIn, TUBE_R + TUBE_COLLAR_T, SIDES));
+      blocks.push(...tubeWallBlocks([{ c: back, d: out, m: out }, { c: ring.c, d: out, m: out }], rIn(TUBE_COLLAR_SIDES), TUBE_R + TUBE_COLLAR_T, TUBE_COLLAR_SIDES));
     }
     for (const pts of blocks) {
       const desc = RAPIER.ColliderDesc.convexHull(pts);
@@ -374,7 +416,10 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   let propGravity = TUNING.propGravity;
 
   const start = startOf(level);
-  world.createCollider(RAPIER.ColliderDesc.cylinder(START_PAD_H / 2, START_PAD_R - 0.05).setTranslation(start.x, start.y + START_PAD_H / 2, start.z).setFriction(1));
+  for (const prof of startPadProfiles()) {
+    const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(revolvePoints(prof, 48)));
+    if (desc) world.createCollider(desc.setTranslation(start.x, start.y, start.z).setFriction(1));
+  }
   const spawn = from
     ? { x: from.x, y: from.y + BALL_RADIUS + 0.05, z: from.z }
     : { x: start.x, y: start.y + START_PAD_H + BALL_RADIUS + 0.3, z: start.z };

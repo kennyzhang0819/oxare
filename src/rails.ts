@@ -1,26 +1,24 @@
 import * as THREE from "three";
-import { railSweep, sectorMesh } from "./geometry.ts";
-import { FENCE_RAIL_INSET as INSET, FENCE_RAIL_Y as RAIL_Y, RAIL_R, RAILS_GAUGE, fenceRailPath, fenceRuns, fenceSides, railsRings, type FenceSpanRail, type Level, type Piece, type Rails } from "./level.ts";
+import { railSweep, type SweepRing } from "./geometry.ts";
+import { PAINT, FENCE_RAIL_INSET as INSET, FENCE_RAIL_Y as RAIL_Y, RAIL_R, RAILS_GAUGE, fenceRailPath, fenceRuns, fenceSamples, fenceSides, railsRings, type FenceSpanRail, type Level, type Piece, type Rails } from "./level.ts";
 
 
 type XZ = [number, number];
 type XYZ = [number, number, number];
-type Stripe = { kind: "line"; inward: XZ } | { kind: "arc"; r: number; a0: number; a1: number } | null;
+type Stripe = { kind: "line"; inward: XZ } | { kind: "path"; pts: XYZ[] } | null;
 
 const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.4, metalness: 0.2 });
+// A light strip's outer face sits this far in from the rail's centre: PAINT proud of the tube.
+const STRIPE_IN = RAIL_R + PAINT;
 const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0x2ee8ff, emissive: 0x2ee8ff, emissiveIntensity: 0.8, roughness: 0.4 });
 
-// A fenced span's light strip: straight along a straight side, an arc along a curve's arc side,
-// none on a ramp.
+// A fenced span's light strip: straight along a straight side, following the rail round a curve's
+// arc side, none on a ramp.
 function stripe(p: Piece, span: FenceSpanRail): Stripe {
   if (p.type !== "slab" && p.type !== "ramp" && p.type !== "curve") return null;
   const side = fenceSides(p)[span.side]!, { a, b } = span;
+  if (side.arc) return { kind: "path", pts: fenceSamples(p, side, a, b).map((s): XYZ => { const q = side.at(s, INSET + STRIPE_IN - 0.025); return [q.x, RAIL_Y + q.y, q.z]; }) };
   const m = side.at((a + b) / 2, INSET), m2 = side.at((a + b) / 2, INSET + 0.1);
-  if (side.arc) {
-    const ang = (s: number) => { const q = side.at(s, INSET); return Math.atan2(-q.z, q.x); };
-    const r = Math.hypot(m.x, m.z), inward = Math.hypot(m2.x, m2.z) > r ? 1 : -1;
-    return { kind: "arc", r: r + inward * RAIL_R, a0: Math.min(ang(a), ang(b)), a1: Math.max(ang(a), ang(b)) };
-  }
   if (p.type === "ramp") return null;
   const dx = m2.x - m.x, dz = m2.z - m.z, l = Math.hypot(dx, dz);
   return { kind: "line", inward: [dx / l, dz / l] };
@@ -45,19 +43,22 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
         const dx = b[0] - a[0], dz = b[2] - a[2], L = Math.hypot(dx, dz);
         if (L <= 0.5) continue;
         const stripe = new THREE.Mesh(new THREE.BoxGeometry(L - 0.5, 0.06, 0.04), STRIPE_MAT);
-        stripe.position.set((a[0] + b[0]) / 2 + inward[0] * RAIL_R, RAIL_Y, (a[2] + b[2]) / 2 + inward[1] * RAIL_R);
+        const k = STRIPE_IN - 0.02;
+        stripe.position.set((a[0] + b[0]) / 2 + inward[0] * k, RAIL_Y, (a[2] + b[2]) / 2 + inward[1] * k);
         stripe.rotation.y = Math.atan2(-dz, dx);
         into.add(stripe);
-      } else if (st?.kind === "arc") {
-        const { r, a0, a1 } = st;
-        const t = sectorMesh(r - 0.025, r + 0.025, RAIL_Y - 0.03, RAIL_Y + 0.03, { angle: a1 - a0, segments: Math.max(2, Math.ceil(((a1 - a0) / (Math.PI / 2)) * 24)) });
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute("position", new THREE.BufferAttribute(t.positions, 3));
-        geo.setIndex(new THREE.BufferAttribute(t.indices, 1));
+      } else if (st?.kind === "path" && st.pts.length > 1) {
+        const pts = st.pts, dir = (u: XYZ, v: XYZ): XYZ => { const l = Math.hypot(v[0] - u[0], v[2] - u[2]) || 1; return [(v[0] - u[0]) / l, 0, (v[2] - u[2]) / l]; };
+        const rings = pts.map((c, i): SweepRing => {
+          const da = i > 0 ? dir(pts[i - 1]!, c) : null, db = i < pts.length - 1 ? dir(c, pts[i + 1]!) : null;
+          const d: XYZ = da && db ? dir([0, 0, 0], [da[0] + db[0], 0, da[2] + db[2]]) : (da ?? db)!;
+          return { c, d, m: d };
+        });
+        const t = railSweep(rings, 0, 0.025, 6, 0), geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
+        geo.setIndex(t.indices);
         geo.computeVertexNormals();
-        const m = new THREE.Mesh(geo, STRIPE_MAT);
-        m.rotation.y = a0;
-        into.add(m);
+        into.add(new THREE.Mesh(geo, STRIPE_MAT));
       }
     }
   }

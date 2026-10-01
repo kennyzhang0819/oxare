@@ -15,7 +15,7 @@
     {"type": "curve", "x": 52, "y": 6, "z": -56, "inner": 8, "outer": 16, "rot": 270, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
     {"type": "tube", "x": 52, "y": 5, "z": -76, "rot": 0, "path": [{"x": 12, "y": 1, "z": 12, "bend": 0, "mid": {"x": 8.5, "y": 0.5, "z": 3}}]},
     {"type": "slab", "x": 44, "y": 6, "z": -44, "w": 8, "d": 16, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
-    {"type": "kicker", "x": 38, "y": 6, "z": -44, "w": 3, "d": 3, "h": 1, "rot": 90},
+    {"type": "kicker", "x": 38, "y": 6, "z": -44, "w": 2.5, "d": 3, "h": 1, "rot": 90},
     {"type": "slab", "x": 24, "y": 6, "z": -44, "w": 8, "d": 16, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "slab", "x": 14, "y": 6, "z": -44, "w": 4, "d": 4, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "slab", "x": 6, "y": 6, "z": -44, "w": 4, "d": 4, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
