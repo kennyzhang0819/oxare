@@ -25,7 +25,7 @@
     {"type": "slab", "x": -32, "y": 4, "z": -56, "w": 8, "d": 4, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "kicker", "x": -6, "y": 4, "z": -40, "w": 3, "d": 3, "h": 1, "rot": 270},
     {"type": "curve", "x": 20, "y": 4, "z": -28, "inner": 8, "outer": 16, "rot": 0, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
-    {"type": "plank", "x": 32, "y": 4, "z": -28.5, "w": 4, "h": 8, "rot": 0, "tilt": 0},
+    {"type": "plank", "x": 32, "y": 4, "z": -28.5, "w": 4, "h": 8, "rot": 0, "tilt": 0, "freeze": true},
     {"type": "slab", "x": 32, "y": 4, "z": -17, "w": 4, "d": 10, "rot": 180, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "curve", "x": 20, "y": 4, "z": -12, "inner": 8, "outer": 16, "rot": 270, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
     {"type": "kicker", "x": 6, "y": 4, "z": 0, "w": 3, "d": 3, "h": 1, "rot": 90},

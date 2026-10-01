@@ -13,7 +13,8 @@ const GLASS = {
   thickness: 0.3 * U, roughness: 0.01, ior: 1.28, chromaticAberration: 0.45, distortion: 0.4, distortionScale: 0.6 / U,
   temporalDistortion: 0.14, clearcoat: 1, clearcoatRoughness: 0.04, iridescence: 0.25, iridescenceIOR: 1.35, envMapIntensity: 0.9,
 };
-const SAMPLES = 8;
+// Each sample is three bicubic refraction reads per pixel; the title covers much of the screen.
+const SAMPLES = 2;
 const DIST = 10;
 const BASE_TILT_X = 0.1;
 const FLOAT_SPEED = 1.4, FLOAT_ROT = 0.25, FLOAT_LIFT = 0.8, FLOAT_RANGE = 0.2;
@@ -71,7 +72,7 @@ float snoise(vec3 p) {
   return dot(d * w, vec4(52.0));
 }
 float snoiseFractal(vec3 m) {
-  return 0.5333333 * snoise(m) + 0.2666667 * snoise(2.0 * m) + 0.1333333 * snoise(4.0 * m) + 0.0666667 * snoise(8.0 * m);
+  return 0.6666667 * snoise(m) + 0.3333333 * snoise(2.0 * m);
 }
 `;
 
@@ -118,7 +119,7 @@ function glassMaterial(env: THREE.Texture, time: { value: number }): THREE.MeshP
     color: 0xffffff, transmission: 1, thickness: GLASS.thickness, roughness: GLASS.roughness, ior: GLASS.ior,
     clearcoat: GLASS.clearcoat, clearcoatRoughness: GLASS.clearcoatRoughness,
     iridescence: GLASS.iridescence, iridescenceIOR: GLASS.iridescenceIOR,
-    envMap: env, envMapIntensity: GLASS.envMapIntensity, side: THREE.DoubleSide, fog: false,
+    envMap: env, envMapIntensity: GLASS.envMapIntensity, fog: false,
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = time;
@@ -162,6 +163,8 @@ export class GlassTitle {
   private time = { value: 0 };
   private width: number;
   private camera: THREE.PerspectiveCamera;
+  private renderer: THREE.WebGLRenderer;
+  private prevTransmissionScale: number;
   private slot: HTMLElement;
   private euler = new THREE.Euler();
   private quat = new THREE.Quaternion();
@@ -179,11 +182,16 @@ export class GlassTitle {
     this.pivot.add(this.float);
     this.pivot.rotation.x = BASE_TILT_X;
     camera.add(this.pivot);
+    // The glass re-renders everything behind it into this buffer every frame; half size is plenty.
+    this.renderer = renderer;
+    this.prevTransmissionScale = renderer.transmissionResolutionScale;
+    renderer.transmissionResolutionScale = 0.5;
   }
 
   update(t: number) {
     this.time.value = t;
     const r = this.slot.getBoundingClientRect();
+    this.pivot.visible = r.height > 0;
     const perPx = (2 * DIST * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / innerHeight;
     const s = Math.min(r.height * perPx * 0.72 / CAP_HEIGHT, innerWidth * 0.84 * perPx / this.width);
     this.mesh.scale.setScalar(s);
@@ -200,6 +208,7 @@ export class GlassTitle {
   }
 
   dispose() {
+    this.renderer.transmissionResolutionScale = this.prevTransmissionScale;
     this.camera.remove(this.pivot);
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();

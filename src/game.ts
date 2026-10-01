@@ -242,21 +242,10 @@ export class Game implements Mode {
   // The in-game menu pauses the run (the clock and physics stop) and holds the player's settings.
   private togglePause() {
     if (this.pauseMenu) { this.pauseMenu.remove(); this.pauseMenu = null; this.yawVel = 0; return; }
-    const slider = (label: string, key: "yawRate" | "mouseSens") => {
-      const [min, max, step] = TUNING_RANGES[key];
-      const pct = () => `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`;
-      const val = h("span", {}, pct());
-      const range = h("input", { type: "range", min, max, step, value: TUNING[key],
-        oninput: () => { TUNING[key] = Number(range.value); val.textContent = pct(); saveTuning(); } }) as HTMLInputElement;
-      return h("label", {}, h("span", {}, label), val, range);
-    };
     this.pauseMenu = h("div", { class: "banner" },
       h("div", { class: "card pause" },
         h("h2", {}, "Paused"),
-        h("div", { class: "settings" },
-          slider("Turn speed (keys)", "yawRate"),
-          slider("Mouse sensitivity", "mouseSens"),
-        ),
+        playerSettings(),
         h("div", { class: "row" },
           h("button", { onclick: () => this.togglePause() }, "Resume"),
           h("button", { class: "ghost", onclick: () => this.opts.onRetry() }, "Restart"),
@@ -300,4 +289,20 @@ export class Game implements Mode {
     removeEventListener("keydown", this.onKey);
     clear(this.ctx.overlay);
   }
+}
+
+// The player's own settings, shown in the pause menu and under Options on the home screen.
+export function playerSettings(): HTMLElement {
+  const slider = (label: string, key: "yawRate" | "mouseSens") => {
+    const [min, max, step] = TUNING_RANGES[key];
+    const pct = () => `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`;
+    const val = h("span", {}, pct());
+    const range = h("input", { type: "range", min, max, step, value: TUNING[key],
+      oninput: () => { TUNING[key] = Number(range.value); val.textContent = pct(); saveTuning(); } }) as HTMLInputElement;
+    return h("label", {}, h("span", {}, label), val, range);
+  };
+  return h("div", { class: "settings" },
+    slider("Turn speed (keys)", "yawRate"),
+    slider("Mouse sensitivity", "mouseSens"),
+  );
 }

@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
-import { buildRails } from "./rails.ts";
+import { buildRails, buildRailsPiece } from "./rails.ts";
 import { platformGeometry } from "./platform.ts";
 import { sweepTube, type SweepRing } from "./geometry.ts";
 
@@ -18,7 +18,7 @@ export const CLOUD_Y = 40, CLOUD_TOP = 75;
 
 let MAT: Record<"platform" | "block" | "edge" | "rim" | "border", THREE.MeshStandardMaterial> | null = null;
 const LIP = { inset: PLATFORM_EDGE_INSET, drop: PLATFORM_EDGE_DROP, border: 0.04 };
-let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge", THREE.MeshStandardMaterial> | null = null;
+let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop", THREE.MeshStandardMaterial> | null = null;
 let ENV: THREE.Texture | null = null;
 
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
@@ -48,7 +48,10 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     grille: new THREE.MeshStandardMaterial({ map: st.grille, roughness: 0.7 }),
     plank: new THREE.MeshStandardMaterial({ map: tiles, color: 0xbac3cb, roughness: 0.85 }),
     plankGlow: new THREE.MeshStandardMaterial({ color: 0x3fe87a, emissive: 0x3fe87a, emissiveIntensity: 0.8, roughness: 0.4 }),
+    stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, emissiveMap: st.stoolTopGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
     hinge: new THREE.MeshStandardMaterial({ color: 0x4a535d, roughness: 0.5, metalness: 0.3 }),
+    // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
+    tread: new THREE.MeshStandardMaterial({ color: 0x5f6975, roughness: 0.6, metalness: 0.15 }),
   };
   const pmrem = new THREE.PMREMGenerator(renderer);
   ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -138,14 +141,15 @@ function buildStartPad(g: THREE.Group) {
 function buildBridge(g: THREE.Group, p: Bridge): THREE.Group[] {
   const st = STRUCT!;
   const chain = bridgeChain(p);
-  const T = BRIDGE_PLANK_T, W = p.w, STRIP = 0.12, LIP = 0.03;
+  // STRIP matches the knock-down plank's rim width.
+  const T = BRIDGE_PLANK_T, W = p.w, STRIP = 0.1, LIP = 0.03;
   const barrel = () => {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, W - 0.5, 10), st.hinge);
     m.rotation.z = Math.PI / 2;
     m.castShadow = true;
     return m;
   };
-  const frameGeo = rimFrame(W + 0.04, chain.planks[0]!.len + 0.04, STRIP + 0.02, LIP);
+  const frameGeo = rimFrame(W + 0.04, chain.planks[0]!.len + 0.04, STRIP, LIP);
   frameGeo.rotateX(-Math.PI / 2);
   const out: THREE.Group[] = [];
   for (const pl of chain.planks) {
@@ -188,8 +192,9 @@ function rimFrame(w: number, h: number, strip: number, lip: number): THREE.Buffe
 }
 
 // Knock-down plank: a tall tiled panel with a green rim on both faces, on a hinge barrel
-// through its base that rests in a lit yoke at each side. The panel group is centred on the
-// physics body, like a crate, and is returned for the physics to pose; the yokes stay put.
+// through its base that rests in a lit yoke at each side, or a wall bracket for a side plank.
+// The panel group is centred on the physics body, like a crate, and is returned for the physics
+// to pose; the yokes stay put.
 // One support pillar's body in the column's local frame (centred on the stem, x across it): the
 // stem from the upper platform's underside `top` straight down, a quarter bend toward local -z,
 // and a short foot running into the lower platform's side wall at mid-thickness. Extruded across
@@ -293,7 +298,7 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
   tread.position.set(0, p.h / 2, 0);
   tread.rotation.x = Math.atan2(p.h, p.d);
   const tw = p.w - 0.5, tl = L - 0.5;
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.03, tl), st.hinge);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.03, tl), st.tread);
   plate.position.y = 0.012;
   tread.add(plate);
   const n = Math.max(3, Math.round(tl / 0.32));
@@ -328,20 +333,24 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
     if (side < 0) m.rotation.y = Math.PI;
     panel.add(m);
   }
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, w + 0.7, 12), st.hinge);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(PLANK_T / 2, PLANK_T / 2, w + 2 * PLANK_BARREL, 16), st.body);
   barrel.rotation.z = Math.PI / 2;
   barrel.position.y = -h / 2;
   barrel.castShadow = true;
   panel.add(barrel);
   g.add(panel);
-  const yokeH = PLANK_HINGE_H + 0.12;
-  for (const x of [w / 2 + 0.22, -(w / 2 + 0.22)]) {
-    const yoke = new THREE.Mesh(new RoundedBoxGeometry(0.34, yokeH, 0.5, 2, 0.05), st.hinge);
-    yoke.position.set(x, yokeH / 2, 0);
-    yoke.castShadow = true;
-    const light = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.16), st.plankGlow);
-    light.position.set(x, yokeH + 0.01, 0.1);
-    g.add(yoke, light);
+  // The mounts: white rounded blocks, a green band round a wall bracket near its top and bottom,
+  // round a yoke near its top. The bands stand 0.004 proud, a painted line rather than a ledge.
+  for (const m of plankMounts(p)) {
+    const block = new THREE.Mesh(new RoundedBoxGeometry(m.w, m.h, m.d, 2, PLANK_MOUNT_R), st.body);
+    block.position.set(m.x, m.y, m.z);
+    block.castShadow = block.receiveShadow = true;
+    g.add(block);
+    for (const dy of p.side ? [m.h / 2 - 0.08, -(m.h / 2 - 0.08)] : [m.h / 2 - 0.06]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(m.w + 0.008, 0.04, m.d + 0.008), st.plankGlow);
+      band.position.set(m.x, m.y + dy, m.z);
+      g.add(band);
+    }
   }
   return panel;
 }
@@ -461,6 +470,178 @@ function buildCrate(g: THREE.Group, w: number, h: number, d: number) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(0.08, w / 2, h / 2, d / 2) * 0.99), STRUCT!.crate);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
+}
+
+const STOOL_SCREEN = new THREE.MeshStandardMaterial({ color: 0x1b2128, roughness: 0.35, metalness: 0.2 });
+
+// Stool: a white block with a green ring round its base, a circuit board inset in its top, on both
+// long faces a dark screen with green < > chevrons between two dark slots and on both ends a screen
+// with ^ v chevrons. Its track is invisible in play; the editor outlines the block at both ends
+// of its slide, like a mover's stops. The block group is returned for the physics to pose.
+function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolean): THREE.Group {
+  const st = STRUCT!, { w, h, d } = p, slide = stoolSlide(p);
+  if (editor) {
+    const box = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));
+    for (const x of [slide.lo, slide.hi]) {
+      const o = new THREE.LineSegments(box, ROUTE_MAT);
+      o.position.set(x, h / 2 + 0.02, 0);
+      o.renderOrder = 9;
+      g.add(o);
+    }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(slide.lo, 0.05, 0), new THREE.Vector3(slide.hi, 0.05, 0)]), ROUTE_MAT);
+    line.renderOrder = 9;
+    g.add(line);
+  }
+  const block = new THREE.Group();
+  block.position.set(slide.at, h / 2 + 0.02, 0);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(0.08, w / 2, h / 2, d / 2) * 0.99), st.body);
+  body.castShadow = body.receiveShadow = true;
+  block.add(body);
+  const ring = new THREE.Mesh(new RoundedBoxGeometry(w + 0.04, 0.1, d + 0.04, 1, 0.03), st.plankGlow);
+  ring.position.y = -h / 2 + 0.08;
+  block.add(ring);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(w - 0.2, 0.02, d - 0.2), [st.top, st.top, st.stoolTop, st.top, st.top, st.top]);
+  board.position.y = h / 2;
+  block.add(board);
+  const a = 0.13;
+  // Two green chevrons pointing apart along the screen's x, `tip` from its centre.
+  const chevrons = (face: THREE.Object3D, tip: number) => {
+    for (const dir of [-1, 1]) for (const up of [1, -1]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(a * Math.SQRT2 + 0.03, 0.045, 0.02), st.plankGlow);
+      arm.position.set(dir * tip - (dir * a) / 2, (up * a) / 2, 0.03);
+      arm.rotation.z = (-dir * up * Math.PI) / 4;
+      face.add(arm);
+    }
+  };
+  const sw = Math.min(w * 0.36, 0.9), sh = Math.min(h * 0.4, 0.6);
+  // The ends: a tall screen whose chevrons, turned a quarter, read ^ over v.
+  const ew = Math.min(d * 0.5, 0.6), eh = Math.min(h * 0.6, 0.8);
+  for (const side of [1, -1]) {
+    const face = new THREE.Group();
+    face.position.set(side * (w / 2), h * 0.06, 0);
+    face.rotation.y = side * Math.PI / 2;
+    face.add(new THREE.Mesh(new RoundedBoxGeometry(ew, eh, 0.05, 1, 0.02), STOOL_SCREEN));
+    const marks = new THREE.Group();
+    marks.rotation.z = Math.PI / 2;
+    chevrons(marks, eh * 0.3);
+    face.add(marks);
+    block.add(face);
+  }
+  for (const side of [1, -1]) {
+    const face = new THREE.Group();
+    face.position.set(0, h * 0.06, side * (d / 2));
+    if (side < 0) face.rotation.y = Math.PI;
+    const screen = new THREE.Mesh(new RoundedBoxGeometry(sw, sh, 0.05, 1, 0.02), STOOL_SCREEN);
+    face.add(screen);
+    chevrons(face, sw * 0.36);
+    for (const x of [sw / 2 + 0.16, -(sw / 2 + 0.16)]) {
+      const slot = new THREE.Mesh(new RoundedBoxGeometry(0.12, sh * 0.85, 0.04, 1, 0.015), st.hinge);
+      slot.position.set(x, 0, 0.005);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.04, sh * 0.5, 0.02), st.top);
+      bar.position.set(x, 0, 0.03);
+      face.add(slot, bar);
+    }
+    block.add(face);
+  }
+  g.add(block);
+  return block;
+}
+
+// The jump pad shares the kicker's white (body), dark (tread), pale slats (top) and orange; the
+// hovering squares are unlit, in the kicker's orange.
+const JUMP_HOLO = new THREE.MeshBasicMaterial({ color: KICKER_ORANGE.color, transparent: true, opacity: 0.85, depthWrite: false });
+const JUMP_HOLO_FILL = new THREE.MeshBasicMaterial({ color: KICKER_ORANGE.color, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide });
+
+// A dark slatted vent lying flat.
+function vent(w: number, d: number): THREE.Group {
+  const g = new THREE.Group(), st = STRUCT!;
+  const base = new THREE.Mesh(new RoundedBoxGeometry(w, 0.04, d, 1, 0.015), st.tread);
+  base.position.y = 0.02;
+  g.add(base);
+  const n = Math.max(2, Math.round(d / 0.14));
+  for (let k = 0; k < n; k++) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(w - 0.12, 0.02, 0.05), st.top);
+    slat.position.set(0, 0.045, -d / 2 + ((k + 0.5) * d) / n);
+    g.add(slat);
+  }
+  return g;
+}
+
+// Jump pad: a low white platform with a grey ramp all round up to its flat top, the launch square
+// in the middle of the top, a dark grille with an orange rim, under three hovering orange squares.
+// The platform's collider is the hull of the same two outlines.
+function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
+  const st = STRUCT!, H = JUMP_H, { base, top } = jumpRings(p), n = base.length;
+  const tw = p.w - 2 * JUMP_RUN, td = p.d - 2 * JUMP_RUN, s = jumpPadSize(p), rt = Math.max(0.05, Math.min(p.w, p.d) * 0.28 - JUMP_RUN);
+  const pos: number[] = [], idx: number[] = [];
+  for (let i = 0; i < n; i++) pos.push(base[i]![0], 0, base[i]![1], top[i]![0], H, top[i]![1]);
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(2 * i, 2 * i + 1, 2 * j, 2 * j, 2 * i + 1, 2 * j + 1); }
+  const rampGeo = new THREE.BufferGeometry();
+  rampGeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  rampGeo.setIndex(idx);
+  rampGeo.computeVertexNormals();
+  const ramp = new THREE.Mesh(rampGeo, st.body);
+  ramp.receiveShadow = true;
+  g.add(ramp);
+  const cap = new THREE.Shape(top.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const capGeo = new THREE.ShapeGeometry(cap);
+  capGeo.rotateX(-Math.PI / 2);
+  const plate = new THREE.Mesh(capGeo, st.body);
+  plate.position.y = H;
+  plate.receiveShadow = true;
+  g.add(plate);
+  const deck = new THREE.Group();
+  deck.position.y = H;
+  g.add(deck);
+  // Launch square: a light frame, the dark grille, an orange rim.
+  const frame = new THREE.Mesh(new RoundedBoxGeometry(s + 0.3, 0.04, s + 0.3, 1, 0.015), st.body);
+  frame.position.y = 0.02;
+  deck.add(frame);
+  const grille = vent(s, s);
+  grille.position.y = 0.01;
+  deck.add(grille);
+  for (const [x, z, a, b] of [[0, -s / 2, s + 0.1, 0.05], [0, s / 2, s + 0.1, 0.05], [-s / 2, 0, 0.05, s + 0.1], [s / 2, 0, 0.05, s + 0.1]] as const) {
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(a, 0.03, b), KICKER_ORANGE);
+    rim.position.set(x, 0.055, z);
+    deck.add(rim);
+  }
+  // Three hovering squares, the jump's sign: orange frames with a faint fill.
+  const bar = 0.06;
+  for (let k = 1; k <= 3; k++) {
+    const sq = new THREE.Group();
+    sq.position.y = (k * JUMP_REACH) / 3;
+    for (const [x, z, a, b] of [[0, -s / 2, s, bar], [0, s / 2, s, bar], [-s / 2, 0, bar, s - bar], [s / 2, 0, bar, s - bar]] as const) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(a, bar, b), JUMP_HOLO);
+      m.position.set(x, 0, z);
+      sq.add(m);
+    }
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(s - bar, s - bar), JUMP_HOLO_FILL);
+    fill.rotation.x = -Math.PI / 2;
+    sq.add(fill);
+    deck.add(sq);
+  }
+  // The four ramp faces are alike: each gets a vent over most of its straight part, its group
+  // tilted to the slope with local +z pointing out and down it. Each corner gets an orange arc over
+  // the middle half of its curve.
+  const slope = Math.atan2(H, JUMP_RUN), slopeLen = Math.hypot(H, JUMP_RUN);
+  for (let k = 0; k < 4; k++) {
+    const o = new THREE.Group(), f = new THREE.Group(), along = k % 2 ? td : tw;
+    o.rotation.y = (k * Math.PI) / 2;
+    f.position.set(0, H / 2, (k % 2 ? tw : td) / 2 + JUMP_RUN / 2);
+    f.rotation.x = slope;
+    f.add(vent(Math.max(0.3, (along - 2 * rt) * 0.9), slopeLen * 0.72));
+    o.add(f);
+    g.add(o);
+  }
+  // Shape angle a lands at (cos(a + phi), -sin(a + phi)) in x / z, so phi centres the arc on the corner.
+  const arc = Math.PI / 4, rr = Math.max(0.1, rt + JUMP_RUN / 2);
+  for (const [sx, sz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]] as const) {
+    const light = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.035, 6, 16, arc), KICKER_ORANGE);
+    light.rotation.x = -Math.PI / 2;
+    light.rotation.z = Math.atan2(-sz, sx) - arc / 2;
+    light.position.set(sx * (tw / 2 - rt), H / 2 + 0.03, sz * (td / 2 - rt));
+    g.add(light);
+  }
 }
 
 const BEAM_MAT = new THREE.ShaderMaterial({
@@ -774,7 +955,7 @@ export interface Built {
   crates: Map<number, THREE.Group>;
   // Plank groups per bridge piece, in chain order, local to the piece group.
   bridges: Map<number, THREE.Group[]>;
-  // The swinging panel of each knock-down plank, local to the piece group.
+  // The moving part of each knock-down plank, seesaw and stool, local to the piece group, posed from its body.
   planks: Map<number, THREE.Group>;
   // Each moving platform's piece group, placed by its schedule every frame in play.
   movers: Map<number, THREE.Group>;
@@ -815,6 +996,8 @@ export function buildLevel(level: Level, editor: boolean): Built {
     if (p.type === "bridge") bridges.set(index, buildBridge(g, p));
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
+    if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
+    if (p.type === "jump") buildJump(g, p);
     if (p.type === "support") buildSupport(g, p);
     if (p.type === "kicker") buildKicker(g, p);
     if (p.type === "tube") buildTube(g, p);
@@ -854,6 +1037,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
       g.add(m);
     }
     buildRails(p, g, ENV);
+    if (p.type === "rails") buildRailsPiece(p, g, ENV, level);
     if (p.type === "spinner") {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
       bar.position.y = SPINNER_HEIGHT / 2;

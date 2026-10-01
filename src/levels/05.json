@@ -1,0 +1,20 @@
+{
+  "id": "05",
+  "name": "Rails",
+  "pieces": [
+    {"type": "start", "x": 0, "y": 0, "z": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -8, "w": 12, "d": 24, "rot": 0, "tilt": 0, "fences": {"n": false, "e": true, "s": false, "w": true}},
+    {"type": "goal", "x": -28, "y": 0, "z": 20, "r": 1.2},
+    {"type": "slab", "x": -28, "y": 0, "z": 20, "w": 8, "d": 8, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "barrier", "x": 0, "y": 0, "z": -4, "rot": 0},
+    {"type": "barrier", "x": -4, "y": 0, "z": -12, "rot": 0},
+    {"type": "barrier", "x": 4, "y": 0, "z": -12, "rot": 0},
+    {"type": "slab", "x": 0, "y": 2, "z": -34, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "plank", "x": 0, "y": 2, "z": -26, "w": 4, "h": 8, "rot": -180, "tilt": 100, "side": true},
+    {"type": "slab", "x": 0, "y": 4, "z": -62, "w": 16, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": true, "e": [[0, 8]], "s": false, "w": [[8, 16]]}},
+    {"type": "rails", "x": 0, "y": 2, "z": -42, "rot": 0, "path": [{"x": 0, "y": 2, "z": -13, "bend": 0}], "lines": 2, "a": "side", "b": "top"},
+    {"type": "stool", "x": 0, "y": 4, "z": -66.5, "w": 2, "h": 1.2, "d": 1, "rot": 0, "track": 12, "offset": 0},
+    {"type": "curve", "x": 12, "y": 6, "z": -74, "inner": 8, "outer": 16, "rot": 90, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
+    {"type": "plank", "x": 0, "y": 6, "z": -74, "w": 4, "h": 8, "rot": 180, "tilt": 90, "side": true}
+  ]
+}

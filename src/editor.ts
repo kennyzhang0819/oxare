@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, cloneLevel, rotXZ, tubeNodeWorld, tubeTurns, type Tube, isPlatform, isStructure, levelProblems, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type XZ } from "./level.ts";
+import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { pieceThumbs } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
@@ -12,12 +12,23 @@ export function loadDraft(): Level | null {
   try { const s = localStorage.getItem(DRAFT_KEY); return s ? validateLevel(JSON.parse(s)) : null; } catch { return null; }
 }
 
+export function blankLevel(): Level {
+  const open = { n: false, e: false, s: false, w: false };
+  return { id: "new-level", name: "New Level", pieces: [
+    newPiece("start", 0, 0, 0),
+    { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: open } as Piece,
+    newPiece("goal", 0, 0, -12),
+    { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { ...open } } as Piece,
+  ] };
+}
+
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
   slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15]],
   curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
+  rails: [["rot", 15]],
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
@@ -26,6 +37,8 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   blockade: [["rot", 15]],
   barrier: [["rot", 15]],
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15]],
+  stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
+  jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [],
   spinner: [["length", 0.5], ["speed", 0.1]],
@@ -37,6 +50,8 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
 const SNAP_KEY = "balling.snap.v2";
 const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
 const SNAP = { platform: 4, structure: STRUCT_GRID };
+// Fence ends on a curve's arcs snap to this many degrees.
+const ARC_SNAP = 5;
 try {
   const saved = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "{}") as Partial<typeof SNAP>;
   for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && v > 0) SNAP[k] = v; }
@@ -66,17 +81,17 @@ const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
 };
 const isCoarse = (t: PieceType, key: string) => !fineSizes && !!COARSE_FIELDS[t]?.includes(key);
 
-// A tube's nodes in world space, first mouth first, and the inverse: rebuild the piece from them.
+// A tube's or rails' nodes in world space, first end first, and the inverse: rebuild the piece from them.
 // `mid` is the curve point of the segment arriving at the node, if that segment is curved.
 interface P3 { x: number; y: number; z: number }
 interface WorldNode extends P3 { bend: number; mid?: P3 }
-const toWorld = (p: Tube, l: P3): P3 => { const o = rotXZ(l.x, l.z, p.rot); return { x: p.x + o.x, y: p.y + l.y, z: p.z + o.z }; };
-const tubeWorld = (p: Tube): WorldNode[] => [0, ...p.path.map((_, i) => i + 1)].map((k) => {
+const toWorld = (p: PathPiece, l: P3): P3 => { const o = rotXZ(l.x, l.z, p.rot); return { x: p.x + o.x, y: p.y + l.y, z: p.z + o.z }; };
+const tubeWorld = (p: PathPiece): WorldNode[] => [0, ...p.path.map((_, i) => i + 1)].map((k) => {
   const n = k ? p.path[k - 1]! : undefined;
   return { ...tubeNodeWorld(p, k), bend: n?.bend ?? 0, ...(n?.mid ? { mid: toWorld(p, n.mid) } : {}) };
 });
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
-function setTubeWorld(p: Tube, nodes: WorldNode[]) {
+function setTubeWorld(p: PathPiece, nodes: WorldNode[]) {
   const [o] = nodes;
   p.x = o!.x; p.y = o!.y; p.z = o!.z;
   const local = (w: P3) => { const l = rotXZ(w.x - p.x, w.z - p.z, -p.rot); return { x: r3(l.x), y: r3(w.y - p.y), z: r3(l.z) }; };
@@ -95,10 +110,61 @@ function settle(level: Level, p: Piece) {
     if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
     return;
   }
+  if (p.type === "plank" && p.side) { attachToEdge(level, p); return; }
+  if (p.type === "rails") { attachRailEnds(level, p); return; }
   if (!isStructure(p)) return;
   p.x = gridSnap(p.x); p.z = gridSnap(p.z);
   const y = surfaceAt(level, p.x, p.z);
   if (y !== null) p.y = y;
+}
+
+// Hang a side plank on the nearest open platform edge: on the edge line at the platform's top,
+// facing in, so it falls out over the gap.
+function attachToEdge(level: Level, p: Piece & { type: "plank" }) {
+  const e = nearestOpenEdge(level, p.x, p.z, p.y, gridSnap);
+  if (e) { p.x = e.x; p.z = e.z; p.y = e.y; p.rot = e.rot; }
+}
+
+// Snap each rails end onto its platform: a side end onto the nearest open edge's wall face, a top
+// end over the platform beneath it, and either one's y to that platform's top.
+function attachRailEnds(level: Level, p: Piece & { type: "rails" }) {
+  const ns = tubeWorld(p);
+  for (const [end, n] of [[p.a, ns[0]!], [p.b, ns[ns.length - 1]!]] as const) {
+    if (end === "side") {
+      const e = nearestOpenEdge(level, n.x, n.z, n.y, (v) => v);
+      if (e) { n.x = e.x; n.z = e.z; n.y = e.y; }
+    } else {
+      const top = surfaceAt(level, n.x, n.z);
+      if (top !== null) n.y = top;
+    }
+  }
+  setTubeWorld(p, ns);
+}
+
+// The point on an open platform edge (one with nothing level beyond it) nearest (x, z), preferring
+// edges whose top is near `y`; `snap` places it along the edge. `y` is that edge's top there.
+function nearestOpenEdge(level: Level, px: number, pz: number, py: number, snap: (v: number) => number): { x: number; z: number; y: number; rot: number } | null {
+  let best: { d: number; x: number; z: number; y: number; rot: number } | null = null;
+  for (const q of level.pieces) {
+    if (!isPlatform(q)) continue;
+    for (const poly of platformFootprint(q)) {
+      const cx = poly.reduce((s, v) => s + v[0], 0) / poly.length, cz = poly.reduce((s, v) => s + v[1], 0) / poly.length;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i]!, b = poly[(i + 1) % poly.length]!, ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez);
+        if (len < 1e-6) continue;
+        let nx = -ez / len, nz = ex / len;
+        const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+        if ((cx - mx) * nx + (cz - mz) * nz < 0) { nx = -nx; nz = -nz; }
+        const top = platformHeightAt(q, mx, mz), beyond = surfaceAt(level, mx - nx * 0.25, mz - nz * 0.25);
+        if (beyond !== null && beyond >= top - 0.01) continue;
+        const s = Math.max(0, Math.min(len, snap(((px - a[0]) * ex + (pz - a[1]) * ez) / len)));
+        const x = a[0] + (ex / len) * s, z = a[1] + (ez / len) * s;
+        const d = Math.hypot(px - x, pz - z) + Math.abs(top - py) * 0.5;
+        if (!best || d < best.d) best = { d, x: r3(x), z: r3(z), y: platformHeightAt(q, x, z), rot: r3((Math.atan2(nx, nz) * 180) / Math.PI) };
+      }
+    }
+  }
+  return best;
 }
 
 // Where the line {axis = v} crosses a convex polygon, as a [lo, hi] span on the other axis.
@@ -153,7 +219,7 @@ export class Editor implements Mode {
   private controls: OrbitControls;
   private built: Built;
   private sel = new Set<number>();
-  private helpers: THREE.BoxHelper[] = [];
+  private helpers: (THREE.Object3D & { update(): void })[] = [];
   private clipboard: Piece[] = [];
   private cursor: { x: number; y: number } | null = null;
   private marquee: { x0: number; y0: number; el: HTMLElement; add: boolean } | null = null;
@@ -170,6 +236,8 @@ export class Editor implements Mode {
   private node = -1;
   private mid = -1;
   private nodeDrag: { plane: THREE.Plane; off: THREE.Vector3; before: string } | null = null;
+  // Dragging one end of a fence span on the selected platform along its side.
+  private fenceDrag: { plane: THREE.Plane; key: string; span: number; end: 0 | 1; before: string } | null = null;
   private undoStack: string[] = [];
   private raf = 0;
   private panel: HTMLElement;
@@ -221,7 +289,7 @@ export class Editor implements Mode {
         h("button", { class: "ghost", onclick: () => this.newLevel() }, "New"),
       ),
       h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle()),
-      h("div", { class: "bar add" }, ...PIECE_TYPES.map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
+      h("div", { class: "bar add" }, ...PIECE_TYPES.filter((t) => t !== "spinner").map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
       this.problems,
       this.notice,
       this.body,
@@ -298,8 +366,13 @@ export class Editor implements Mode {
     this.helpers = [];
     for (const i of [...this.sel]) if (i >= this.level.pieces.length) this.sel.delete(i);
     for (const i of this.sel) {
-      const g = this.built.pieceGroups[i];
-      if (g) { const hl = new THREE.BoxHelper(g, 0xffd23f); this.helpers.push(hl); this.scene.add(hl); }
+      const g = this.built.pieceGroups[i], q = this.level.pieces[i], panel = this.built.planks.get(i);
+      // A plank's outline is the plank alone, turning with it; its hinge and yokes are not part of it.
+      if (q?.type === "plank" && panel) {
+        const box = Object.assign(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(q.w, q.h, PLANK_T)), new THREE.LineBasicMaterial({ color: 0xffd23f })), { update() {} });
+        panel.add(box);
+        this.helpers.push(box);
+      } else if (g) { const hl = new THREE.BoxHelper(g, 0xffd23f); this.helpers.push(hl); this.scene.add(hl); }
     }
     this.grid?.removeFromParent();
     this.grid?.geometry.dispose();
@@ -344,17 +417,38 @@ export class Editor implements Mode {
       const step = isStructure(p) ? SNAP.structure : SNAP.platform;
       props.append(field("x", step), field("y", LAYER_H), field("z", step));
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
-      if (p.type === "slab" || p.type === "curve" || p.type === "ramp") {
-        const f = p.fences as unknown as Record<string, boolean>;
-        const checks = h("div", { class: "checks" }, "fences:");
-        for (const k of Object.keys(f)) {
-          const cb = h("input", { type: "checkbox", checked: f[k], onchange: () => { const before = JSON.stringify(this.level); f[k] = cb.checked; this.commit(before); } });
-          checks.append(h("label", {}, cb, k));
-        }
-        props.append(checks);
+      if (isPlatform(p)) props.append(this.fencePanel(p));
+      if (p.type === "plank") {
+        const cb = h("input", { type: "checkbox", checked: !!p.side, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) { p.side = true; attachToEdge(this.level, p); } else delete p.side;
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "Hang it on the side wall of the nearest platform edge, so it falls out across the gap" }, h("label", {}, cb, "side")));
+      }
+      if (p.type === "plank" || p.type === "seesaw") {
+        const cb = h("input", { type: "checkbox", checked: !!p.freeze, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) p.freeze = true; else delete p.freeze;
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "Hold the start pose until something touches it; unticked, physics runs from the start" }, h("label", {}, cb, "freeze until touched")));
+      }
+      if (p.type === "rails") {
+        const pick = <T extends string | number>(label: string, value: T, options: [T, string][], set: (v: T) => void) => {
+          const sel = h("select", { onchange: () => { const before = JSON.stringify(this.level); set(options[sel.selectedIndex]![0]); this.commit(before); } },
+            ...options.map(([v, text]) => h("option", { selected: v === value }, text))) as HTMLSelectElement;
+          return h("label", {}, label, sel);
+        };
+        const ends: [RailEnd, string][] = [["top", "top: stands over it, turns down into it"], ["side", "side: goes into its wall"]];
+        props.append(
+          pick("lines", p.lines, [[2, "2 rails"], [1, "1 rail"]], (v) => { p.lines = v; settle(this.level, p); }),
+          pick("end a", p.a, ends, (v) => { p.a = v; settle(this.level, p); }),
+          pick("end b", p.b, ends, (v) => { p.b = v; settle(this.level, p); }),
+        );
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
-      if (p.type === "tube") this.body.append(this.tubePanel(p));
+      if (p.type === "tube" || p.type === "rails") this.body.append(this.tubePanel(p));
       if (p.type === "mover") this.body.append(this.moverPanel(p));
       this.body.append(
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
@@ -365,15 +459,72 @@ export class Editor implements Mode {
     }
   }
 
-  private selectedTube(): Tube | null {
+  // Per side: a tick to fence it end to end or clear it, each fenced span's from and to, and a
+  // split that cuts a gap in the longest span.
+  private fencePanel(p: Platform): HTMLElement {
+    const box = h("div", { class: "fences" }, h("div", { class: "title" }, "fences (from – to, clockwise; ° on arcs)"));
+    const f = p.fences as unknown as Record<string, Fence>;
+    for (const side of fenceSides(p)) {
+      const spans = fenceSpans(fenceOf(p, side.key), side.len), step = side.arc ? ARC_SNAP : SNAP.structure;
+      const set = (next: [number, number][]) => { const before = JSON.stringify(this.level); f[side.key] = fenceValue(next, side.len); this.commit(before); };
+      const cb = h("input", { type: "checkbox", checked: spans.length > 0, onchange: () => set(cb.checked ? [[0, side.len]] : []) });
+      const row = h("div", { class: "side" }, h("label", {}, cb, side.key));
+      spans.forEach((sp, k) => {
+        const num = (end: 0 | 1) => {
+          const input = h("input", { type: "number", step, value: r3(sp[end]), onchange: () => {
+            const next = spans.map((q) => [...q] as [number, number]);
+            next[k]![end] = Number(input.value);
+            set(next);
+          } });
+          return input;
+        };
+        row.append(h("span", { class: "span" }, num(0), "–", num(1), h("button", { class: "ghost", title: "Remove this span", onclick: () => set(spans.filter((_, j) => j !== k)) }, "✕")));
+      });
+      if (spans.length) {
+        row.append(h("button", { class: "ghost", title: "Cut a gap in the middle of the longest span", onclick: () => {
+          const k = spans.reduce((best, q, j) => (q[1] - q[0] > spans[best]![1] - spans[best]![0] ? j : best), 0), [a, b] = spans[k]!;
+          const gap = 2 * step, m = Math.round((a + b) / 2 / step) * step;
+          if (m - gap / 2 - a < step || b - m - gap / 2 < step) return;
+          set([...spans.slice(0, k), [a, m - gap / 2], [m + gap / 2, b], ...spans.slice(k + 1)]);
+        } }, "split"));
+      }
+      box.append(row);
+    }
+    return box;
+  }
+
+  // Move one end of a fence span on the selected platform to where the pointer is along its side,
+  // kept between its neighbours and at least one snap step long.
+  private dragFence(e: PointerEvent) {
+    const fd = this.fenceDrag!, p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
+    if (!p || !isPlatform(p)) return;
+    const side = fenceSides(p).find((q) => q.key === fd.key), pt = new THREE.Vector3();
+    this.castFrom(e.clientX, e.clientY);
+    if (!side || !this.ray.ray.intersectPlane(fd.plane, pt)) return;
+    const spans = fenceSpans(fenceOf(p, fd.key), side.len), span = spans[fd.span];
+    if (!span) return;
+    const step = side.arc ? ARC_SNAP : SNAP.structure, l = rotXZ(pt.x - p.x, pt.z - p.z, -pieceRot(p));
+    const lo = fd.end ? span[0] + step : spans[fd.span - 1]?.[1] ?? 0, hi = fd.end ? spans[fd.span + 1]?.[0] ?? side.len : span[1] - step;
+    if (lo > hi) return;
+    const v = r3(Math.max(lo, Math.min(hi, Math.round(side.param(l.x, l.z) / step) * step)));
+    if (Math.abs(v - span[fd.end]) < 1e-6) return;
+    span[fd.end] = v;
+    // Each step re-commits from the drag's start, so one undo takes back the whole drag.
+    const before = this.undoStack.length && this.undoStack[this.undoStack.length - 1] === fd.before ? this.undoStack.pop()! : fd.before;
+    (p.fences as unknown as Record<string, Fence>)[fd.key] = fenceValue(spans, side.len);
+    this.commit(before);
+  }
+
+  private selectedTube(): PathPiece | null {
     const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    return p?.type === "tube" ? p : null;
+    return p?.type === "tube" || p?.type === "rails" ? p : null;
   }
 
   // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
   // drawn through everything; the picked one is yellow.
   private drawHandles() {
     for (const c of [...this.handles.children]) { c.removeFromParent(); (c as THREE.Mesh).geometry.dispose(); }
+    this.drawFenceHandles();
     const p = this.selectedTube();
     if (!p) { this.node = -1; this.mid = -1; return; }
     if (this.node > p.path.length) this.node = -1;
@@ -398,8 +549,29 @@ export class Editor implements Mode {
     }
   }
 
+  // A cyan dot near each end of each fence span on the selected platform, set a little in from
+  // the end so the dots of two sides meeting at a corner sit apart.
+  private drawFenceHandles() {
+    const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
+    if (!p || !isPlatform(p) || isTilted(p)) return;
+    for (const side of fenceSides(p)) {
+      fenceSpans(fenceOf(p, side.key), side.len).forEach((span, k) => {
+        for (const end of [0, 1] as const) {
+          const mid = side.at((span[0] + span[1]) / 2, FENCE_RAIL_INSET), unit = side.arc ? 180 / Math.PI / Math.max(1, Math.hypot(mid.x, mid.z)) : 1;
+          const off = Math.min(0.6 * unit, (span[1] - span[0]) / 3) * (end ? -1 : 1);
+          const q = side.at(span[end] + off, FENCE_RAIL_INSET), o = rotXZ(q.x, q.z, pieceRot(p));
+          const m = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 8), new THREE.MeshBasicMaterial({ color: 0x2ee8ff, depthTest: false, transparent: true, opacity: 0.95 }));
+          m.position.set(p.x + o.x, p.y + q.y + FENCE_RAIL_Y, p.z + o.z);
+          m.renderOrder = 10;
+          m.userData.fence = { key: side.key, span: k, end };
+          this.handles.add(m);
+        }
+      });
+    }
+  }
+
   // Edit the selected tube's nodes in world space and commit.
-  private editTube(fn: (nodes: WorldNode[], p: Tube) => void, before = JSON.stringify(this.level)) {
+  private editTube(fn: (nodes: WorldNode[], p: PathPiece) => void, before = JSON.stringify(this.level)) {
     const p = this.selectedTube();
     if (!p) return;
     const nodes = tubeWorld(p);
@@ -411,7 +583,7 @@ export class Editor implements Mode {
 
   // Path editor: one row per node (relative to the entrance, before rot), the turn at each
   // interior node with its sharp / smooth switch and bend radius, and node operations.
-  private tubePanel(p: Tube): HTMLElement {
+  private tubePanel(p: PathPiece): HTMLElement {
     const turns = tubeTurns(p);
     const wrap = h("div", { class: "tube-path" }, h("h3", {}, "path"));
     const num = (n: Record<string, number>, key: string, step: number) => {
@@ -441,12 +613,13 @@ export class Editor implements Mode {
       h("button", { class: "ghost", title: "Insert a node halfway along the segment after the picked node", onclick: () => this.splitNode() }, "Split"),
       h("button", { class: "ghost", title: "Remove the picked node (Delete)", onclick: () => this.removeNode() }, "Remove node"),
       h("button", { class: "ghost", title: "Carry on 4 past the last node", onclick: () => this.extendTube() }, "Extend"),
-      h("button", { class: "ghost", title: "Number the nodes from the other end", onclick: () => this.editTube((ns) => {
+      h("button", { class: "ghost", title: "Number the nodes from the other end", onclick: () => this.editTube((ns, q) => {
         // Each curve point belongs to the segment arriving at its node, so it moves one node along.
         const mids = ns.map((n) => n.mid);
         ns.reverse();
         ns.forEach((n, k) => { const m = mids[ns.length - k]; if (m) n.mid = m; else delete n.mid; });
         ns[0]!.bend = 0;
+        if (q.type === "rails") [q.a, q.b] = [q.b, q.a];
       }) }, "Reverse"),
     ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
     return wrap;
@@ -762,6 +935,13 @@ export class Editor implements Mode {
     if (this.handles.children.length) {
       this.castFrom(e.clientX, e.clientY);
       const hit = this.ray.intersectObjects(this.handles.children, false)[0];
+      const fence = hit?.object.userData.fence as { key: string; span: number; end: 0 | 1 } | undefined;
+      if (hit && fence) {
+        this.fenceDrag = { plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -hit.object.position.y), ...fence, before: JSON.stringify(this.level) };
+        this.controls.enabled = false;
+        this.ctx.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       if (hit) {
         const isMid = hit.object.userData.tubeMid !== undefined;
         this.node = isMid ? -1 : hit.object.userData.tubeNode as number;
@@ -809,6 +989,7 @@ export class Editor implements Mode {
       m.el.style.cssText = `left:${x}px;top:${y}px;width:${Math.abs(e.clientX - m.x0)}px;height:${Math.abs(e.clientY - m.y0)}px`;
       return;
     }
+    if (this.fenceDrag) { this.dragFence(e); return; }
     if (this.nodeDrag) {
       const nd = this.nodeDrag;
       this.castFrom(e.clientX, e.clientY);
@@ -842,7 +1023,7 @@ export class Editor implements Mode {
       q.x = snapFor(q)(s0.x + dx); q.z = snapFor(q)(s0.z + dz);
       settle(this.level, q);
       const g = this.built.pieceGroups[k];
-      if (g) g.position.set(q.x, q.type === "crate" ? q.y + q.h / 2 + 0.02 : q.y, q.z);
+      if (g) { g.position.set(q.x, q.type === "crate" ? q.y + q.h / 2 + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
     }
     for (const hl of this.helpers) hl.update();
     d.moved = true;
@@ -872,6 +1053,7 @@ export class Editor implements Mode {
       return;
     }
     if (this.nodeDrag) { this.nodeDrag = null; this.controls.enabled = true; return; }
+    if (this.fenceDrag) { this.fenceDrag = null; this.controls.enabled = true; return; }
     if (!this.drag) return;
     const d = this.drag;
     this.drag = null;
@@ -940,12 +1122,7 @@ export class Editor implements Mode {
 
   private newLevel() {
     const before = JSON.stringify(this.level);
-    this.level = { id: "new-level", name: "New Level", pieces: [
-      newPiece("start", 0, 0, 0),
-      { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: { n: false, e: false, s: false, w: false } } as Piece,
-      newPiece("goal", 0, 0, -12),
-      { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { n: false, e: false, s: false, w: false } } as Piece,
-    ] };
+    this.level = blankLevel();
     this.sel.clear();
     this.undoStack.push(before);
     this.refresh();

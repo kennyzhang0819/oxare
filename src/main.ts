@@ -35,7 +35,7 @@ function show(next: () => Mode) {
 
 let admin = false;
 function menu() {
-  show(() => new Menu(ctx, { admin, onPlay: playLevel, onEdit: edit, onToggleAdmin: () => { admin = !admin; menu(); } }));
+  show(() => new Menu(ctx, { admin, onPlay: playLevel, onPlayLevel: playDraft, onEdit: edit, onChanged: menu, onToggleAdmin: () => { admin = !admin; menu(); } }));
 }
 
 function playLevel(i: number) {
@@ -47,6 +47,10 @@ function playLevel(i: number) {
     onRetry: () => playLevel(i),
     onNext: LEVELS[i + 1] ? () => playLevel(i + 1) : undefined,
   }));
+}
+
+function playDraft(level: Level) {
+  show(() => new Game(ctx, level, { admin: true, onExit: menu, onRetry: () => playDraft(level) }));
 }
 
 function edit(level: Level) {

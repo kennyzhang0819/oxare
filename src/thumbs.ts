@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PIECE_TYPES, newPiece, type PieceType } from "./level.ts";
+import { PIECE_TYPES, newPiece, type Level, type PieceType } from "./level.ts";
 import { SUN_OFFSET, buildLevel } from "./scene.ts";
 
 const W = 112, H = 84;
@@ -46,4 +46,48 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<PieceType, strin
   renderer.setRenderTarget(prevTarget);
   rt.dispose();
   return cache;
+}
+
+const LW = 360, LH = 225;
+const FEATURED: PieceType[] = ["tube", "rails", "mover", "seesaw", "bridge", "ramp", "plank", "kicker", "spinner", "crate", "curve", "goal"];
+const levelCache = new Map<string, string>();
+
+// Menu card picture: a close shot of the level's most telling piece, first match in FEATURED.
+export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string {
+  const key = JSON.stringify(level);
+  const hit = levelCache.get(key);
+  if (hit) return hit;
+  const rt = new THREE.WebGLRenderTarget(LW, LH, { samples: 4, colorSpace: THREE.SRGBColorSpace });
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9cc8f2);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 1.1));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.copy(SUN_OFFSET);
+  scene.add(sun);
+  const built = buildLevel(level, false);
+  scene.add(built.group);
+  const i = FEATURED.reduce((found, type) => found >= 0 ? found : level.pieces.findIndex((p) => p.type === type), -1);
+  const box = new THREE.Box3().setFromObject(i >= 0 ? built.pieceGroups[i]! : built.group);
+  box.max.y = Math.min(box.max.y, box.min.y + 6); // a goal's light beam would otherwise set the framing
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(3.5, box.getSize(new THREE.Vector3()).length() / 2);
+  const camera = new THREE.PerspectiveCamera(40, LW / LH, 0.1, 2000);
+  camera.position.copy(center).add(new THREE.Vector3(0.55, 0.75, 1).normalize().multiplyScalar(radius * 2.1));
+  camera.lookAt(center);
+  const prevTarget = renderer.getRenderTarget();
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, camera);
+  const pixels = new Uint8Array(LW * LH * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, LW, LH, pixels);
+  renderer.setRenderTarget(prevTarget);
+  rt.dispose();
+  const canvas = document.createElement("canvas");
+  canvas.width = LW; canvas.height = LH;
+  const ctx = canvas.getContext("2d")!;
+  const img = ctx.createImageData(LW, LH);
+  for (let y = 0; y < LH; y++) img.data.set(pixels.subarray((LH - 1 - y) * LW * 4, (LH - y) * LW * 4), y * LW * 4);
+  ctx.putImageData(img, 0, 0);
+  const url = canvas.toDataURL();
+  levelCache.set(key, url);
+  return url;
 }

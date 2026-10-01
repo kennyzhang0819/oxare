@@ -16,7 +16,7 @@ export const TUNING = {
   camBallGap: 0.9,
   respawnY: -12,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
-  propGravity: 0.7,
+  propGravity: 0.5,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;

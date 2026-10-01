@@ -76,6 +76,47 @@ export function sectorMesh(inner: number, outer: number, y0: number, y1: number,
 type V3 = [number, number, number];
 export interface SweepRing { c: V3; d: V3; m: V3 }
 
+// One rail of radius `r` running `offset` to the side of `rings` (sideways stays level), as a
+// `sides`-gon whose flat facets touch the true circle. A facet's middle faces `face` radians from
+// straight up toward the rails' centre: Rapier bumps a ball rolling along a vertex, never a facet.
+export function railSweep(rings: SweepRing[], offset: number, r: number, sides: number, face: number): { positions: number[]; indices: number[] } {
+  const pos: number[] = [], idx: number[] = [];
+  const rr = r / Math.cos(Math.PI / sides);
+  const inward = offset > 0 ? -1 : 1;
+  for (const ring of rings) {
+    const d = ring.d;
+    const flat = Math.hypot(d[0], d[2]);
+    const s: V3 = flat > 1e-6 ? [-d[2] / flat, 0, d[0] / flat] : [1, 0, 0];
+    const n: V3 = [s[1] * d[2] - s[2] * d[1], s[2] * d[0] - s[0] * d[2], s[0] * d[1] - s[1] * d[0]];
+    const c: V3 = [ring.c[0] + s[0] * offset, ring.c[1], ring.c[2] + s[2] * offset];
+    const md = ring.m[0] * d[0] + ring.m[1] * d[1] + ring.m[2] * d[2];
+    for (let j = 0; j < sides; j++) {
+      const a = face + Math.PI / sides + (j * 2 * Math.PI) / sides, ca = Math.cos(a) * rr, sa = Math.sin(a) * rr * inward;
+      const off: V3 = [n[0] * ca + s[0] * sa, n[1] * ca + s[1] * sa, n[2] * ca + s[2] * sa];
+      const t = -(ring.m[0] * off[0] + ring.m[1] * off[1] + ring.m[2] * off[2]) / md;
+      pos.push(c[0] + off[0] + d[0] * t, c[1] + off[1] + d[1] * t, c[2] + off[2] + d[2] * t);
+    }
+  }
+  for (let i = 0; i + 1 < rings.length; i++) {
+    for (let j = 0; j < sides; j++) {
+      const a = i * sides + j, b = i * sides + ((j + 1) % sides), c = a + sides, e = b + sides;
+      idx.push(a, b, c, b, e, c);
+    }
+  }
+  // Wind every face outward: test one against the direction out from the axis.
+  if (rings.length > 1) {
+    const P = (k: number): V3 => [pos[k * 3]!, pos[k * 3 + 1]!, pos[k * 3 + 2]!];
+    const [A, B, C] = [P(idx[0]!), P(idx[1]!), P(idx[2]!)];
+    const u: V3 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], v: V3 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+    const nrm: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const ring = rings[0]!, d = ring.d, flat = Math.hypot(d[0], d[2]);
+    const s: V3 = flat > 1e-6 ? [-d[2] / flat, 0, d[0] / flat] : [1, 0, 0];
+    const out: V3 = [A[0] - (ring.c[0] + s[0] * offset), A[1] - ring.c[1], A[2] - (ring.c[2] + s[2] * offset)];
+    if (nrm[0] * out[0] + nrm[1] * out[1] + nrm[2] * out[2] < 0) for (let k = 0; k < idx.length; k += 3) { const t = idx[k + 1]!; idx[k + 1] = idx[k + 2]!; idx[k + 2] = t; }
+  }
+  return { positions: pos, indices: idx };
+}
+
 // A thick-walled tube between radii `rIn` and `rOut` swept through `rings`, cut into one convex
 // block per ring pair per side, each as a point cloud for a convex hull. `rIn` must sit far enough
 // out that each block's flat inner face (a chord of the circle) clears the bore.

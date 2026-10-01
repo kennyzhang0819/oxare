@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, PLANK_HINGE_H, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import RAPIER_RT from "@dimforge/rapier3d-compat";
+import { BALL_RADIUS, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
 
@@ -81,28 +82,105 @@ for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [curveLev
   else console.log(`ok ${level.id}: floor deviation ${maxDy.toFixed(4)}, groove dip ${dip.toFixed(3)}`);
 }
 Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_TUNING.throttleForce, maxSpeed: DEFAULT_TUNING.maxSpeed });
-// Curve fences must hold the ball: push it straight at the outer rail and at the inner rail.
-for (const [name, fx, fz, ok] of [
-  ["outer", 1, 0, (r: number) => r < 20],
-  ["inner", -1, 0, (r: number) => r > 10],
+// A fence is exactly its drawn rail: straight down onto a fenced span's rail line the first hit is
+// the rail's top (FENCE_RAIL_Y + RAIL_R above the surface), across it at rail height the hit is the
+// tube's side, and just above the rail there is nothing; where a span stops there is no rail at all.
+// Nothing guarantees the ball stays in: it can roll over a rail.
+{
+  const deg = Math.PI / 180;
+  const cases: { name: string; piece: Record<string, unknown>; at: [number, number]; surface: number; out: [number, number]; fenced: boolean }[] = [
+    { name: "slab-n", piece: { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: { n: [[0, 5]] } }, at: [-2.5, -10 + FENCE_RAIL_INSET], surface: 0, out: [0, -1], fenced: true },
+    { name: "slab-n-gap", piece: { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: { n: [[0, 5]] } }, at: [2.5, -10 + FENCE_RAIL_INSET], surface: 0, out: [0, -1], fenced: false },
+    // Arc probes sit on a vertex of the rail's polyline (7.5 degree steps), where it meets the circle.
+    { name: "outer", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { outer: [[0, 45]] } }, at: [(20 - FENCE_RAIL_INSET) * Math.cos(22.5 * deg), -(20 - FENCE_RAIL_INSET) * Math.sin(22.5 * deg)], surface: 0, out: [Math.cos(22.5 * deg), -Math.sin(22.5 * deg)], fenced: true },
+    { name: "outer-gap", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { outer: [[0, 45]] } }, at: [(20 - FENCE_RAIL_INSET) * Math.cos(70 * deg), -(20 - FENCE_RAIL_INSET) * Math.sin(70 * deg)], surface: 0, out: [Math.cos(70 * deg), -Math.sin(70 * deg)], fenced: false },
+    { name: "inner", piece: { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { inner: [[0, 45]] } }, at: [(10 + FENCE_RAIL_INSET) * Math.cos(67.5 * deg), -(10 + FENCE_RAIL_INSET) * Math.sin(67.5 * deg)], surface: 0, out: [-Math.cos(67.5 * deg), Math.sin(67.5 * deg)], fenced: true },
+    { name: "ramp-e", piece: { type: "ramp", x: 0, y: 0, z: -12, w: 8, d: 24, rot: 0, rise: 4, fences: { e: [[0, 12]] } }, at: [4 - FENCE_RAIL_INSET, -18], surface: 4, out: [1, 0], fenced: true },
+    { name: "ramp-e-gap", piece: { type: "ramp", x: 0, y: 0, z: -12, w: 8, d: 24, rot: 0, rise: 4, fences: { e: [[0, 12]] } }, at: [4 - FENCE_RAIL_INSET, -6], surface: 0, out: [1, 0], fenced: false },
+  ];
+  for (const c of cases) {
+    const level = validateLevel({ id: `fence-${c.name}`, name: c.name, pieces: [
+      c.piece,
+      { type: "start", x: -40, y: 0, z: 40 },
+      { type: "slab", x: -40, y: 0, z: 40, w: 4, d: 4, rot: 0, fences: {} },
+      { type: "goal", x: -40, y: 0, z: 39, r: 1 },
+    ] });
+    const sim = await createSim(level, { x: -40, y: 0, z: 40 });
+    sim.step(0, 0, 0);
+    const ray = (o: [number, number, number], d: [number, number, number], len: number) =>
+      sim.world.castRay(new RAPIER_RT.Ray({ x: o[0], y: o[1], z: o[2] }, { x: d[0], y: d[1], z: d[2] }), len, true, undefined, undefined, undefined, sim.ball)?.timeOfImpact ?? null;
+    const [x, z] = c.at, top = c.surface + FENCE_RAIL_Y + RAIL_R;
+    const down = ray([x, c.surface + 3, z], [0, -1, 0], 6), hitY = down === null ? null : c.surface + 3 - down;
+    const across = ray([x - c.out[0], c.surface + FENCE_RAIL_Y, z - c.out[1]], [c.out[0], 0, c.out[1]], 2);
+    const above = ray([x - c.out[0], top + 0.02, z - c.out[1]], [c.out[0], 0, c.out[1]], 2);
+    sim.free();
+    const ok = c.fenced
+      ? hitY !== null && Math.abs(hitY - top) < 0.01 && across !== null && Math.abs(across - (1 - RAIL_R)) < 0.01 && above === null
+      : (hitY === null || hitY < c.surface + 0.01) && across === null;
+    if (!ok) { failed = true; console.error(`FAIL fence-${c.name}: top hit ${hitY?.toFixed(3)} (rail top ${top.toFixed(3)}), across ${across?.toFixed(3)}, above ${above?.toFixed(3)}`); }
+    else console.log(`ok fence-${c.name}: ${c.fenced ? `rail top at ${hitY!.toFixed(3)}, side at ${across!.toFixed(3)}, nothing above it` : "no rail where the fence stops"}`);
+  }
+}
+// A stool slides along its track when pushed that way and stops at the track's end; pushed from
+// the side it does not move at all and stops the ball like a wall.
+for (const [name, rot, from, dir, expect] of [
+  ["along", 0, [-6, -6], [1, 0], { x: 3, z: -6, slid: true }],
+  ["across", 0, [0, -2], [0, -1], { x: 0, z: -6, slid: false }],
+  ["rotated", 90, [0, -2], [0, -1], { x: 0, z: -9, slid: true }],
 ] as const) {
-  const level = validateLevel({ id: `fence-${name}`, name, pieces: [
-    { type: "start", x: 15, y: 0, z: -1.2 },
-    { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: { inner: true, outer: true } },
-    { type: "goal", x: 0, y: 0, z: -15, r: 2 },
+  const level = validateLevel({ id: `stool-${name}`, name, pieces: [
+    { type: "start", x: -6, y: 0, z: -14 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 16, d: 16, rot: 0, fences: {} },
+    { type: "stool", x: 0, y: 0, z: -6, w: 2, h: 1.2, d: 1, rot, track: 8, offset: 0 },
+    { type: "goal", x: 6, y: 0, z: -14, r: 1 },
   ] });
-  const sim = await createSim(level);
-  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
-  let held = true, minY = Infinity;
+  const sim = await createSim(level, { x: from[0], y: 0, z: from[1] });
+  const stool = sim.planks[0]!.body, y0 = stool.translation().y;
+  let ball = sim.ball.translation(), drift = 0;
   for (let i = 0; i < 120 * 4; i++) {
-    sim.step(1, fx, fz);
-    const p = sim.ball.translation();
-    minY = Math.min(minY, p.y);
-    if (!ok(Math.hypot(p.x, p.z))) held = false;
+    sim.step(1, dir[0], dir[1]);
+    ball = sim.ball.translation();
+    const t = stool.translation(), q = stool.rotation();
+    drift = Math.max(drift, Math.abs(t.y - y0), name === "across" ? Math.abs(t.z + 6) + Math.abs(t.x) : rot ? Math.abs(t.x) : Math.abs(t.z + 6), Math.hypot(q.x, q.z));
+  }
+  const t = stool.translation();
+  sim.free();
+  const atEnd = Math.abs(t.x - expect.x) < 0.05 && Math.abs(t.z - expect.z) < 0.05;
+  const blocked = name !== "across" || ball.z > -6 + 0.5 + BALL_RADIUS - 0.1;
+  if (!atEnd || drift > 0.01 || !blocked) { failed = true; console.error(`FAIL stool-${name}: stool at x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)}, ball z ${ball.z.toFixed(2)}`); }
+  else console.log(`ok stool-${name}: ${expect.slid ? "slid to the track end" : "held still and stopped the ball"} (x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)})`);
+}
+// A jump pad's launch square throws the ball its rise (4 layers) up from the pad's top, keeping its
+// speed and heading over the ground; rolling up the ramp and over the top beside the square does nothing.
+for (const [name, from, push] of [
+  ["rest", [0, -10], 0],
+  ["rolling", [0, -2], 1],
+  ["beside", [1, -2], 1],
+] as const) {
+  const level = validateLevel({ id: `jump-${name}`, name, pieces: [
+    { type: "start", x: -4, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -12, w: 12, d: 30, rot: 0, fences: {} },
+    { type: "jump", x: 0, y: 0, z: -10, w: 4, d: 4, rot: 0, rise: 4 },
+    { type: "goal", x: 4, y: 0, z: 0, r: 1 },
+  ] });
+  const sim = await createSim(level, { x: from[0], y: name === "rest" ? JUMP_H : 0, z: from[1] });
+  // The launch is the step with the biggest upward kick; bumping onto the ramp gives a smaller one.
+  let peak = -Infinity, before = { x: 0, z: 0 }, after = { x: 0, z: 0 }, kick = 0, prevY = 0;
+  for (let i = 0; i < 120 * 6; i++) {
+    const v0 = sim.ball.linvel();
+    sim.step(push, 0, -1);
+    const v = sim.ball.linvel(), y = sim.ball.translation().y - BALL_RADIUS - JUMP_H;
+    if (v.y - prevY > kick) { kick = v.y - prevY; before = { x: v0.x, z: v0.z }; after = { x: v.x, z: v.z }; }
+    prevY = v.y;
+    peak = Math.max(peak, y);
+    if (peak > 2 && v.y < 0) break;
   }
   sim.free();
-  if (!held || minY < BALL_RADIUS - 0.1) { failed = true; console.error(`FAIL fence-${name}: ball went through the curve's ${name} fence`); }
-  else console.log(`ok fence-${name}: curve fence holds`);
+  const launched = peak > 2, sb = Math.hypot(before.x, before.z), sa = Math.hypot(after.x, after.z);
+  const turn = sb > 0.1 ? Math.abs(Math.atan2(after.x, after.z) - Math.atan2(before.x, before.z)) : 0;
+  const ok = name === "beside" ? !launched && peak < 0.5 : launched && Math.abs(peak - 4) < 0.1 && (sb < 0.1 || (Math.abs(sa - sb) / sb < 0.03 && turn < 0.01));
+  if (!ok) { failed = true; console.error(`FAIL jump-${name}: peak ${peak.toFixed(3)}, launched ${launched}, ground speed ${sb.toFixed(2)} -> ${sa.toFixed(2)}, turn ${turn.toFixed(4)}`); }
+  else console.log(`ok jump-${name}: ${launched ? `peaked ${peak.toFixed(3)} above the pad, ground speed ${sb.toFixed(2)} -> ${sa.toFixed(2)}` : `not launched (peak ${peak.toFixed(3)})`}`);
 }
 // A blockade and a pillar in the lane must stop the ball, not let it through or pop it up.
 for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "pillar", x: 0, y: 0, z: -8 }]) {
@@ -259,13 +337,96 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
     console.error(`FAIL bridge: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, rest sag ${restSag.toFixed(3)}, lowest ball y ${minY.toFixed(2)}, worst hinge gap ${maxGap.toFixed(3)}`);
   } else console.log(`ok bridge: crossed (lowest ball y ${minY.toFixed(2)}), sag ${(-restSag).toFixed(3)} at rest, ${(-loadedSag).toFixed(3)} after, hinge gap ${maxGap.toFixed(4)}`);
 }
+// Rails down a gap: the ball rolls off a higher platform onto rails fixed into its wall (side end),
+// rides them down, and drops off their top end (standing at fence height over the lower platform)
+// onto that platform. At half throttle (full throttle flies it off the edge past the start of a
+// curve), on two rails or one, straight or round a curve (pushed along the rails' heading, as a
+// player steers), it never kicks upward while riding them.
+const railsRide = async (lines: 1 | 2, end: { x: number; z: number }, mid?: { x: number; z: number }) => {
+  const ya = 2, yb = 0;
+  const level = validateLevel({ id: "rails", name: "rails", pieces: [
+    { type: "start", x: 0, y: 2, z: -2 },
+    { type: "slab", x: 0, y: 2, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "rails", x: 0, y: ya, z: -10, rot: 0, lines, a: "side", b: "top",
+      path: [{ x: end.x, y: yb - ya, z: end.z + 10, bend: 0, ...(mid ? { mid: { x: mid.x, y: (yb - ya) / 2, z: mid.z + 10 } } : {}) }] },
+    { type: "slab", x: end.x, y: 0, z: -25, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "goal", x: end.x, y: 0, z: -28, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const rings = railsRingsWorld(level.pieces[2] as Rails, level);
+  let kick = 0, p = sim.ball.translation();
+  for (let i = 0; i < 120 * 12 && p.z > -23; i++) {
+    // Steer along the nearest ring's heading, or straight on (-z) off the rails.
+    let best = 9, dx = 0, dz = -1;
+    for (const r of rings) {
+      const dist = Math.hypot(r.c[0] - p.x, r.c[2] - p.z), l = Math.hypot(r.d[0], r.d[2]);
+      if (dist < best && l > 1e-3) { best = dist; dx = r.d[0] / l; dz = r.d[2] / l; }
+    }
+    if (best > 1.5) { dx = 0; dz = -1; }
+    sim.step(0.5, dx, dz);
+    p = sim.ball.translation();
+    if (p.z < -11 && p.z > end.z + 1) kick = Math.max(kick, sim.ball.linvel().y);
+  }
+  for (let i = 0; i < 60; i++) sim.step(0, 0, -1);
+  p = sim.ball.translation();
+  sim.free();
+  return { p, kick };
+};
+for (const [name, lines, end, mid] of [
+  ["straight, 2 rails", 2, { x: 0, z: -21 }, undefined],
+  ["straight, 1 rail", 1, { x: 0, z: -21 }, undefined],
+  ["curved, 2 rails", 2, { x: 3, z: -21 }, { x: 1, z: -15.6 }],
+] as const) {
+  const { p, kick } = await railsRide(lines, end, mid);
+  if (p.z > -22 || Math.abs(p.x - end.x) > 4 || Math.abs(p.y - BALL_RADIUS) > 0.05 || kick > 0.3) {
+    failed = true;
+    console.error(`FAIL rails (${name}): ball ended at x ${p.x.toFixed(2)} z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, biggest upward kick on the rails ${kick.toFixed(2)}`);
+  } else console.log(`ok rails (${name}): rode down onto the far platform (x ${p.x.toFixed(2)}), biggest upward kick ${kick.toFixed(2)}`);
+}
+// Rails meet platforms square, even sloping down a gap and coming in at an angle: a side end goes
+// level into the middle of the wall, square to it, and a top end turns straight down into the top;
+// next to each, a level stub at least 0.5 long points square away from the platform, and only past
+// it does the rail slope or turn.
+{
+  const level = validateLevel({ id: "ends", name: "ends", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: 0, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: -2, z: -20, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "rails", x: 1, y: 0, z: -4, rot: 0, path: [{ x: -1, y: -2, z: -13, bend: 0 }], lines: 2, a: "side", b: "top" },
+    { type: "goal", x: 0, y: 0, z: -20, r: 1 },
+  ] });
+  const rings = railsRingsWorld(level.pieces[3] as Rails, level);
+  const c = rings.map((r) => r.c);
+  // The longest level straight run (between consecutive rings) within `reach` of (x, z), heading `dir`.
+  const stub = (x: number, z: number, dir: [number, number], reach: number) => {
+    let best = 0;
+    for (let k = 1; k < c.length; k++) {
+      const [u, v] = [c[k - 1]!, c[k]!], dx = v[0] - u[0], dz = v[2] - u[2], len = Math.hypot(dx, dz);
+      const near = Math.hypot(u[0] - x, u[2] - z) < reach && Math.hypot(v[0] - x, v[2] - z) < reach;
+      if (near && len > 1e-6 && Math.abs(v[1] - u[1]) < 1e-6 && Math.abs(Math.abs(dx * dir[0] + dz * dir[1]) / len - 1) < 1e-6) best = Math.max(best, len);
+    }
+    return best;
+  };
+  // Side end a, on slab 1's south wall (z = -4): goes in along +z, level, at the wall's middle (y -0.5).
+  const inZ = c[0]![2] - c[1]![2], wallMid = Math.abs(c[1]![1] - (-0.5)) < 1e-6;
+  const square = Math.abs(c[0]![0] - c[1]![0]) < 1e-6 && Math.abs(c[0]![1] - c[1]![1]) < 1e-6 && inZ > 0.3 && wallMid;
+  const sideStub = stub(1, -4, [0, 1], 1.2);
+  // Top end b, over slab 2 at (0, -17): its last run goes straight down under the surface (y -2).
+  const [bl, l] = [c[c.length - 2]!, c[c.length - 1]!];
+  const down = Math.hypot(l[0] - bl[0], l[2] - bl[2]) < 1e-6 && l[1] < bl[1] && l[1] < -2;
+  const topStub = stub(0, -17, [1 / Math.hypot(1, 13), 13 / Math.hypot(1, 13)], 1.2);
+  if (!square || !down || sideStub < 0.5 || topStub < 0.5) {
+    failed = true;
+    console.error(`FAIL rails ends: side end square ${square} (axis y ${c[1]![1].toFixed(3)}), level stub ${sideStub.toFixed(2)}; top end down ${down}, level stub ${topStub.toFixed(2)}`);
+  } else console.log(`ok rails ends: side end level into the wall's middle, top end straight down, level stubs ${sideStub.toFixed(2)} and ${topStub.toFixed(2)} long`);
+}
 // A knock-down plank stands balanced on its hinge until the ball touches it, then falls across
 // the gap, and the ball can roll over it onto the far platform.
 {
   const level = validateLevel({ id: "plank", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 10, rot: 0 },
+    { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 10, rot: 0, freeze: true },
     { type: "slab", x: 0, y: 0, z: -24.5, w: 10, d: 10, rot: 0, fences: {} },
     { type: "goal", x: 0, y: 0, z: -27, r: 2 },
   ] });
@@ -284,12 +445,143 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
   else console.log(`ok plank: stood frozen until touched, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
 }
+// A point on a body, from its local frame to world.
+function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
+  const t = b.translation(), q = b.rotation();
+  const ix = q.w * x + q.y * z - q.z * y, iy = q.w * y + q.z * x - q.x * z, iz = q.w * z + q.x * y - q.y * x, iw = -q.x * x - q.y * y - q.z * z;
+  return { x: t.x + ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, y: t.y + iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, z: t.z + iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x };
+}
+// A side plank hinged to a platform's wall stands until touched, then swings freely and rests on
+// whatever it hits: down onto a lower platform, across onto a far one, or back onto its own.
+{
+  const level = validateLevel({ id: "plank-side-down", name: "plank", pieces: [
+    { type: "start", x: 0, y: 4, z: -2 },
+    { type: "slab", x: 0, y: 4, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 4, z: -10, w: 4, h: 8, rot: 0, side: true, freeze: true },
+    { type: "slab", x: 0, y: 0, z: -20.5, w: 10, d: 20, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -28, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  for (let i = 0; i < 120 * 2; i++) sim.step(0, 0, -1);
+  const standing = plank.translation();
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 12 && p.z > -24; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  const tip = Math.min(bodyPoint(plank, 0, 4, PLANK_T / 2).y, bodyPoint(plank, 0, 4, -PLANK_T / 2).y);
+  sim.free();
+  if (Math.abs(standing.y - (4 - PLATFORM_EDGE_DROP - PLANK_T / 2 + 4)) > 0.05) { failed = true; console.error(`FAIL plank-side-down: did not stand on the wall (centre y ${standing.y.toFixed(2)})`); }
+  else if (tip < -0.05 || tip > 0.3) { failed = true; console.error(`FAIL plank-side-down: tip did not come to rest on the lower platform (tip y ${tip.toFixed(3)})`); }
+  else if (p.z > -24 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank-side-down: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
+  else console.log(`ok plank-side-down: swung down onto the lower platform (tip y ${tip.toFixed(3)}), ball rolled down it to z ${p.z.toFixed(2)}`);
+}
+{
+  const level = validateLevel({ id: "plank-side", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 10, rot: 0, side: true, freeze: true },
+    { type: "slab", x: 0, y: 0, z: -24.5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -27, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 12 && p.z > -24; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  p = sim.ball.translation();
+  const tip = Math.min(bodyPoint(plank, 0, 5, PLANK_T / 2).y, bodyPoint(plank, 0, 5, -PLANK_T / 2).y);
+  sim.free();
+  if (tip < -0.05 || tip > 0.1) { failed = true; console.error(`FAIL plank-side: tip did not rest on the far platform (tip y ${tip.toFixed(3)})`); }
+  else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank-side: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
+  else console.log(`ok plank-side: rested across on the far platform (tip y ${tip.toFixed(3)}), ball crossed to z ${p.z.toFixed(2)}`);
+}
+{
+  const level = validateLevel({ id: "plank-side-in", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 6, rot: 0, side: true, freeze: true },
+    { type: "goal", x: 0, y: 0, z: -4, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const pl = sim.planks[0]!;
+  pl.body.setBodyType(0 as RAPIER.RigidBodyType, true);
+  pl.frozen = undefined;
+  pl.body.setAngvel({ x: 2, y: 0, z: 0 }, true);
+  for (let i = 0; i < 120 * 10; i++) sim.step(0, 0, 0);
+  const top = bodyPoint(pl.body, 0, 3, 0), spin = Math.abs(pl.body.angvel().x);
+  sim.free();
+  if (top.z < -9.9 || top.y < 0.2 || spin > 0.05) { failed = true; console.error(`FAIL plank-side-in: pushed inward it did not come to rest leaning on its platform (top y ${top.y.toFixed(2)} z ${top.z.toFixed(2)}, spin ${spin.toFixed(3)})`); }
+  else console.log(`ok plank-side-in: pushed inward it rests leaning over its platform (top y ${top.y.toFixed(2)} z ${top.z.toFixed(2)})`);
+}
+// A side plank can start past level, down to hanging straight down: frozen at 135° it holds there,
+// and a tilt past 180° clamps to hanging straight down.
+for (const [tilt, want] of [[135, 135], [200, 180]] as const) {
+  const level = validateLevel({ id: "plank-side-tilt", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -10, w: 4, h: 6, rot: 0, tilt, side: true, freeze: true },
+    { type: "goal", x: 0, y: 0, z: -4, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, 0);
+  const body = sim.planks[0]!.body, t = body.translation(), q = body.rotation();
+  sim.free();
+  const a = (want * Math.PI) / 180, hy = -(PLATFORM_EDGE_DROP + PLANK_T / 2), hz = -10 + SIDE_PLANK_HINGE_Z;
+  const ey = hy + 3 * Math.cos(a), ez = hz - 3 * Math.sin(a), got = (2 * Math.atan2(-q.x, q.w) * 180) / Math.PI;
+  if (Math.abs(t.y - ey) > 0.01 || Math.abs(t.z - ez) > 0.01 || Math.abs(((got - want + 540) % 360) - 180) > 0.5) { failed = true; console.error(`FAIL plank-side-tilt ${tilt}: centre y ${t.y.toFixed(3)} z ${t.z.toFixed(3)} (want ${ey.toFixed(3)} ${ez.toFixed(3)}), angle ${got.toFixed(1)} (want ${want})`); }
+  else console.log(`ok plank-side-tilt ${tilt}: held at ${got.toFixed(1)} degrees, centre y ${t.y.toFixed(3)} z ${t.z.toFixed(3)}`);
+}
+// Level 5's setup: a side plank lying level on a stool, over a fenced platform below. Pushed away,
+// the stool takes the plank's support with it; the plank must wake and swing down until its tip is
+// on the floor, clear of the fence's low rail.
+{
+  const level = validateLevel({ id: "plank-stool", name: "plank", pieces: [
+    { type: "start", x: -3.5, y: 4, z: -60 },
+    { type: "slab", x: 0, y: 4, z: -62, w: 16, d: 16, rot: 0, fences: { n: true } },
+    { type: "stool", x: 0, y: 4, z: -66.5, w: 2, h: 1.2, d: 1, rot: 0, track: 12, offset: 0 },
+    { type: "slab", x: 0, y: 6, z: -78, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 6, z: -74, w: 4, h: 8, rot: 180, tilt: 90, side: true },
+    { type: "goal", x: 6, y: 4, z: -56, r: 1 },
+  ] });
+  const sim = await createSim(level, { x: -3.5, y: 4, z: -66.5 });
+  const plank = sim.planks.find((p) => level.pieces[p.index]!.type === "plank")!.body;
+  const tip = () => Math.min(bodyPoint(plank, 0, 4, PLANK_T / 2).y, bodyPoint(plank, 0, 4, -PLANK_T / 2).y);
+  for (let i = 0; i < 240; i++) sim.step(0, 0, 0);
+  const onStool = tip();
+  for (let i = 0; i < 600; i++) sim.step(1, 1, 0);
+  for (let i = 0; i < 600; i++) sim.step(0, 0, 0);
+  const down = tip();
+  sim.free();
+  if (onStool < 5 || down < 3.95 || down > 4.05) { failed = true; console.error(`FAIL plank-stool: tip at ${onStool.toFixed(3)} on the stool, ${down.toFixed(3)} after it was pushed away (floor at 4)`); }
+  else console.log(`ok plank-stool: tip rested on the stool at ${onStool.toFixed(3)}, then fell to the floor at ${down.toFixed(3)}`);
+}
+// A plank's mounts are solid exactly as drawn: straight down onto a top plank's yoke the first hit
+// is the yoke's top, and level into a side plank's wall bracket from outside it is the bracket's face.
+for (const side of [false, true]) {
+  const plank = { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0, tilt: 0, side, freeze: true } as const;
+  const level = validateLevel({ id: "plank-mounts", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: side ? -4 : -5, w: 10, d: side ? 8 : 10, rot: 0, fences: {} },
+    plank,
+    { type: "goal", x: 3, y: 0, z: -3, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  sim.step(0, 0, 0);
+  const m = plankMounts(level.pieces[2] as Piece & { type: "plank" })[0]!, z0 = -8;
+  const cast = (o: [number, number, number], d: [number, number, number]) =>
+    sim.world.castRay(new RAPIER_RT.Ray({ x: o[0], y: o[1], z: o[2] }, { x: d[0], y: d[1], z: d[2] }), 5, true, undefined, undefined, undefined, sim.ball)?.timeOfImpact ?? null;
+  // A top yoke from above; a side bracket from out beyond the wall (local -z), level with its middle.
+  const hit = side ? cast([m.x, m.y, z0 - 3], [0, 0, 1]) : cast([m.x, 3, z0 + m.z], [0, -1, 0]);
+  const want = side ? 3 + (m.z - m.d / 2) : 3 - (m.y + m.h / 2);
+  sim.free();
+  if (hit === null || Math.abs(hit - want) > 0.005) { failed = true; console.error(`FAIL plank-mounts ${side ? "side" : "top"}: hit at ${hit?.toFixed(4)}, drawn surface at ${want.toFixed(4)}`); }
+  else console.log(`ok plank-mounts ${side ? "side" : "top"}: the ${side ? "bracket's face" : "yoke's top"} is solid where it is drawn (${hit.toFixed(4)} vs ${want.toFixed(4)})`);
+}
 // A plank standing in the middle of a platform, with floor in front of it, must still topple.
 {
   const level = validateLevel({ id: "plank-mid", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
-    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0 },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, freeze: true },
     { type: "goal", x: 0, y: 0, z: -18, r: 2 },
   ] });
   const sim = await createSim(level);
@@ -307,7 +599,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
   const level = validateLevel({ id: "plank-back", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -14 },
     { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
-    { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0 },
+    { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0, freeze: true },
     { type: "goal", x: 0, y: 0, z: -1, r: 2 },
   ] });
   const sim = await createSim(level);
@@ -382,12 +674,32 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
   if (Math.abs(start - 10) > 0.5 || end > -5 || p.z > -20 || Math.abs(p.y - BALL_RADIUS) > 0.1 || peak < 1.5) { failed = true; console.error(`FAIL seesaw: start ${start.toFixed(1)} deg, end ${end.toFixed(1)} deg, ball z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak ${peak.toFixed(2)}`); }
   else console.log(`ok seesaw: held ${start.toFixed(1)} deg, tipped to ${end.toFixed(1)} deg, ball rode over (peak y ${peak.toFixed(2)}) to z ${p.z.toFixed(2)}`);
 }
+// Freeze: a frozen seesaw or plank holds its start pose untouched; without freeze both are live
+// from the start, and a leaning plank falls on its own.
+for (const freeze of [true, false]) {
+  const level = validateLevel({ id: "freeze", name: "freeze", pieces: [
+    { type: "start", x: 0, y: 0, z: 6 },
+    { type: "slab", x: 0, y: 0, z: -4, w: 24, d: 24, rot: 0, fences: {} },
+    { type: "seesaw", x: -6, y: 0, z: -8, w: 4, d: 8, rot: 0, tilt: 10, freeze },
+    { type: "plank", x: 6, y: 0, z: -8, w: 4, h: 6, rot: 0, tilt: 30, freeze },
+    { type: "goal", x: 0, y: 0, z: -14, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const [seesaw, plank] = [sim.planks.find((q) => q.index === 2)!, sim.planks.find((q) => q.index === 3)!];
+  const angle = (b: RAPIER.RigidBody) => { const q = b.rotation(); return Math.abs((2 * Math.atan2(q.x, q.w) * 180) / Math.PI); };
+  for (let i = 0; i < 120 * 2; i++) sim.step(0, 0, 0);
+  const board = angle(seesaw.body), lean = angle(plank.body), live = seesaw.body.isDynamic() && plank.body.isDynamic();
+  sim.free();
+  const ok = freeze ? !live && Math.abs(board - 10) < 0.1 && Math.abs(lean - 30) < 0.1 : live && lean > 60;
+  if (!ok) { failed = true; console.error(`FAIL freeze ${freeze}: seesaw at ${board.toFixed(1)} deg, plank at ${lean.toFixed(1)} deg, live ${live}`); }
+  else console.log(`ok freeze ${freeze}: seesaw at ${board.toFixed(1)} deg, plank at ${lean.toFixed(1)} deg after 2 s untouched`);
+}
 // A plank set to start lying flat (tilt 90) stays flat and the ball rolls straight over it.
 {
   const level = validateLevel({ id: "plank-flat", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
-    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 90 },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 90, freeze: true },
     { type: "goal", x: 0, y: 0, z: -20, r: 2 },
   ] });
   const sim = await createSim(level);
@@ -407,7 +719,7 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
   const level = validateLevel({ id: "plank-lean", name: "plank", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
-    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 45 },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 45, freeze: true },
     { type: "goal", x: 0, y: 0, z: -20, r: 2 },
   ] });
   const sim = await createSim(level);
