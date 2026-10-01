@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { sectorMesh } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_HINGE_H, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, bridgeChain, isTilted, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
+import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_HINGE_H, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, bridgeChain, isTilted, plankPose, seesawTilt, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -14,12 +14,15 @@ const PLANK_DAMPING = 0.4;
 // Knock-down plank: a light panel, since the ball pushes it over right at the hinge where it
 // has almost no leverage; a heavy panel would just stop the ball.
 const KNOCK_PLANK_MASS = 0.1;
+// Seesaw board: half the ball's mass, so the ball tips it decisively but it still swings with weight.
+const SEESAW_MASS = 0.5;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
 
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
 export interface SimBridge { index: number; planks: RAPIER.RigidBody[] }
-export interface SimPlank { index: number; body: RAPIER.RigidBody }
+// `frozen` is set while a knock-down plank waits to be touched: its collider, checked each step.
+export interface SimPlank { index: number; body: RAPIER.RigidBody; frozen?: RAPIER.Collider }
 export interface Sim {
   world: RAPIER.World;
   ball: RAPIER.RigidBody;
@@ -193,21 +196,46 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
 
   // A knock-down plank is a free body like a crate, except its base is pinned: a revolute hinge
   // through the middle of the base, raised off the surface so the base corners clear the floor
-  // whichever way it goes. It is created asleep standing dead upright: Rapier leaves a sleeping
-  // body untouched until an awake body contacts it, so it stays balanced until the ball (or a
-  // crate) pushes it, then follows the push over and lies flat.
+  // whichever way it goes. It starts frozen at its start angle as a kinematic body, solid but
+  // unmoved by anything, and becomes dynamic the first step a moving body (the ball, a crate,
+  // another plank) touches it; from then it follows the push over and lies flat. Sleep can't do
+  // this: Rapier wakes a jointed body on the first step, and a tilted plank would just fall.
   const planks: SimPlank[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "plank") return;
-    const yaw = yQuat(p.rot);
+    const yaw = yQuat(p.rot), pose = plankPose(p), c = rotXZ(0, pose.z, p.rot);
     const pivot = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y + PLANK_HINGE_H, p.z).setRotation(yaw));
     const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, p.y + PLANK_HINGE_H + p.h / 2, p.z).setRotation(yaw).setSleeping(true).setAngularDamping(0.02).setGravityScale(TUNING.propGravity),
+      RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + c.x, p.y + pose.y, p.z + c.z).setRotation(qmul(yaw, xQuat(-pose.tilt)))
+        .setAngularDamping(0.02).setGravityScale(TUNING.propGravity),
     );
     const r = 0.06;
-    world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, PLANK_T / 2 - r, r).setMass(KNOCK_PLANK_MASS).setFriction(0.6).setRestitution(0.05), body);
+    const collider = world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, PLANK_T / 2 - r, r).setMass(KNOCK_PLANK_MASS).setFriction(0.6).setRestitution(0.05), body);
     world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: -p.h / 2, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, false);
-    body.sleep();
+    planks.push({ index, body, frozen: collider });
+  });
+
+  // A seesaw is a board pinned at its middle on a revolute axle, awake from the start at its
+  // start angle. Its centre of mass is on the axle, so it stays put until something rolls onto
+  // it and the weight tips it. Its two posts are solid, the board passes between them.
+  level.pieces.forEach((p, index) => {
+    if (p.type !== "seesaw") return;
+    const yaw = yQuat(p.rot), H = p.y + SEESAW_PIVOT_H;
+    const pivot = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, H, p.z).setRotation(yaw));
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, H, p.z).setRotation(qmul(yaw, xQuat(seesawTilt(p))))
+        .setAngularDamping(0.3).setGravityScale(TUNING.propGravity),
+    );
+    const r = 0.06;
+    world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, SEESAW_T / 2 - r, p.d / 2 - r, r).setMass(SEESAW_MASS).setFriction(1).setRestitution(0.02), body);
+    world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, true);
+    for (const side of [1, -1]) {
+      const o = rotXZ(side * (p.w / 2 + SEESAW_POST_W / 2 + 0.05), 0, p.rot);
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(SEESAW_POST_W / 2, (SEESAW_PIVOT_H + 0.3) / 2, SEESAW_POST_D / 2)
+          .setTranslation(p.x + o.x, p.y + (SEESAW_PIVOT_H + 0.3) / 2, p.z + o.z).setRotation(yaw).setFriction(0.5),
+      );
+    }
     planks.push({ index, body });
   });
 
@@ -264,6 +292,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         body_rot(s.body, s.angle);
       }
       world.step();
+      for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
       ball.resetForces(true);
       const v = ball.linvel();
       const h = Math.hypot(v.x, v.z);
@@ -281,6 +310,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       world.free();
     },
   };
+}
+
+// Whether a moving body (anything not fixed) is actually in contact with `c`, not just near it.
+function touchedByMover(world: RAPIER.World, c: RAPIER.Collider): boolean {
+  let hit = false;
+  world.contactPairsWith(c, (other) => {
+    if (hit || other.parent()?.isFixed() !== false) return;
+    world.contactPair(c, other, (m) => { for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) < 0.02) hit = true; });
+  });
+  return hit;
 }
 
 function body_rot(body: RAPIER.RigidBody, angle: number) {

@@ -18,7 +18,8 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
-  plank: [["w", 0.5], ["h", 0.5], ["rot", 15]],
+  plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
+  seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
@@ -229,7 +230,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "support") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "support") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.undoStack.push(before);
     if (this.undoStack.length > 100) this.undoStack.shift();
     this.refresh();

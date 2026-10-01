@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, rampHeight, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
 import { buildRails } from "./rails.ts";
 import { platformGeometry } from "./platform.ts";
@@ -325,9 +325,10 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
 }
 
 function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
-  const st = STRUCT!, w = p.w, h = p.h;
+  const st = STRUCT!, w = p.w, h = p.h, pose = plankPose(p);
   const panel = new THREE.Group();
-  panel.position.y = PLANK_HINGE_H + h / 2;
+  panel.position.set(0, pose.y, pose.z);
+  panel.rotation.x = (-pose.tilt * Math.PI) / 180;
   const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, 0.06), st.plank);
   body.castShadow = body.receiveShadow = true;
   panel.add(body);
@@ -354,6 +355,52 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
     g.add(yoke, light);
   }
   return panel;
+}
+
+// Seesaw: a tiled board with a green rim on both faces and a dark hub under its middle, on an
+// axle between two rounded white posts that carry a dark slotted face and a lit cap. The board
+// group is centred on the physics body and returned for the physics to pose; the posts stay.
+function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group {
+  const st = STRUCT!, W = p.w, D = p.d, T = SEESAW_T, H = SEESAW_PIVOT_H;
+  const board = new THREE.Group();
+  board.position.y = H;
+  board.rotation.x = (seesawTilt(p) * Math.PI) / 180;
+  const body = new THREE.Mesh(roundedBox(W, T, D, 0.06), st.plank);
+  body.castShadow = body.receiveShadow = true;
+  board.add(body);
+  const rim = rimFrame(W - 0.2, D - 0.2, 0.1, 0.02);
+  for (const side of [1, -1]) {
+    const m = new THREE.Mesh(rim, st.plankGlow);
+    m.rotation.x = -side * Math.PI / 2;
+    m.position.y = side * T / 2;
+    board.add(m);
+  }
+  const hub = new THREE.Mesh(new RoundedBoxGeometry(W - 0.6, 0.22, 0.6, 2, 0.06), st.hinge);
+  hub.position.y = -T / 2 - 0.09;
+  board.add(hub);
+  g.add(board);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, W + 2 * SEESAW_POST_W + 0.2, 12), st.hinge);
+  axle.rotation.z = Math.PI / 2;
+  axle.position.y = H;
+  g.add(axle);
+  const postH = H + 0.3;
+  for (const side of [1, -1]) {
+    const x = side * (W / 2 + SEESAW_POST_W / 2 + 0.05);
+    const post = new THREE.Mesh(new RoundedBoxGeometry(SEESAW_POST_W, postH, SEESAW_POST_D, 4, 0.16), st.body);
+    post.position.set(x, postH / 2, 0);
+    post.castShadow = post.receiveShadow = true;
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.06, postH - 0.6, SEESAW_POST_D * 0.5), st.hinge);
+    slot.position.set(x + side * (SEESAW_POST_W / 2), postH / 2 - 0.05, 0);
+    for (const z of [-0.08, 0.08]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.07, postH - 0.8, 0.06), st.top);
+      bar.position.set(x + side * (SEESAW_POST_W / 2 + 0.01), postH / 2 - 0.05, z);
+      g.add(bar);
+    }
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(SEESAW_POST_W * 0.6, 0.03, SEESAW_POST_D * 0.5), st.glow);
+    cap.position.set(x, postH + 0.005, 0);
+    g.add(post, slot, cap);
+  }
+  return board;
 }
 
 // Pushable crate: one textured cube, placed by the physics body each frame.
@@ -711,6 +758,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
     if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += p.h / 2 + 0.02; crates.set(index, g); }
     if (p.type === "bridge") bridges.set(index, buildBridge(g, p));
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
+    if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
     if (p.type === "support") buildSupport(g, p);
     if (p.type === "kicker") buildKicker(g, p);
     for (const b of pieceBoxes(p)) {

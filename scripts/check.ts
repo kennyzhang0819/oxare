@@ -271,17 +271,17 @@ for (const [name, x, falls] of [["through", 0, true], ["beside", 4, false]] as c
   const sim = await createSim(level);
   const plank = sim.planks[0]!.body;
   for (let i = 0; i < 120 * 3; i++) sim.step(0, 0, -1);
-  const standing = plank.translation(), asleep = plank.isSleeping();
+  const standing = plank.translation(), frozen = sim.planks[0]!.frozen !== undefined;
   let p = sim.ball.translation();
   for (let i = 0; i < 120 * 12 && p.z > -24; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
   p = sim.ball.translation();
   const fallen = plank.translation();
   sim.free();
-  if (!asleep || Math.abs(standing.y - 5.16) > 0.05 || Math.abs(standing.z + 10) > 0.05) { failed = true; console.error(`FAIL plank: did not hold still (asleep ${asleep}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
+  if (!frozen || Math.abs(standing.y - 5.16) > 0.05 || Math.abs(standing.z + 10) > 0.05) { failed = true; console.error(`FAIL plank: did not hold still (frozen ${frozen}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
   else if (fallen.y > 0.6 || fallen.z > -14) { failed = true; console.error(`FAIL plank: did not fall (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
-  else console.log(`ok plank: stood asleep, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
+  else console.log(`ok plank: stood frozen until touched, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
 }
 // A plank standing in the middle of a platform, with floor in front of it, must still topple.
 {
@@ -357,4 +357,69 @@ for (const cap of [2.5, 6.5]) {
   else console.log(`ok kicker at ${cap} m/s: rolled over (peak y ${maxY.toFixed(2)}) and landed at z ${p.z.toFixed(2)}`);
 }
 TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
+// A seesaw starts at its set angle, near end down; the ball rolls up it, tips it past level so
+// the far end comes down, and rolls off onto the platform beyond.
+{
+  const level = validateLevel({ id: "seesaw", name: "seesaw", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -14, w: 8, d: 32, rot: 0, fences: {} },
+    { type: "seesaw", x: 0, y: 0, z: -12, w: 4, d: 8, rot: 0, tilt: 10 },
+    { type: "goal", x: 0, y: 0, z: -28, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const board = sim.planks[0]!.body;
+  // Board tilt about local x in degrees, positive when the -z end is up.
+  const tilt = () => { const q = board.rotation(); return (2 * Math.atan2(q.x, q.w) * 180) / Math.PI; };
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  const start = tilt();
+  let p = sim.ball.translation(), peak = 0;
+  for (let i = 0; i < 120 * 10 && p.z > -22; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); peak = Math.max(peak, p.y); }
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  p = sim.ball.translation();
+  const end = tilt();
+  sim.free();
+  if (Math.abs(start - 10) > 0.5 || end > -5 || p.z > -20 || Math.abs(p.y - BALL_RADIUS) > 0.1 || peak < 1.5) { failed = true; console.error(`FAIL seesaw: start ${start.toFixed(1)} deg, end ${end.toFixed(1)} deg, ball z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak ${peak.toFixed(2)}`); }
+  else console.log(`ok seesaw: held ${start.toFixed(1)} deg, tipped to ${end.toFixed(1)} deg, ball rode over (peak y ${peak.toFixed(2)}) to z ${p.z.toFixed(2)}`);
+}
+// A plank set to start lying flat (tilt 90) stays flat and the ball rolls straight over it.
+{
+  const level = validateLevel({ id: "plank-flat", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 90 },
+    { type: "goal", x: 0, y: 0, z: -20, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  const lying = plank.translation();
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 8 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  const after = plank.translation();
+  sim.free();
+  if (Math.abs(lying.y - 0.16) > 0.03 || Math.abs(lying.z + 10) > 0.05 || after.y > 0.3 || p.z > -16) { failed = true; console.error(`FAIL plank-flat: started at y ${lying.y.toFixed(2)} z ${lying.z.toFixed(2)}, after y ${after.y.toFixed(2)}, ball z ${p.z.toFixed(2)}`); }
+  else console.log(`ok plank-flat: started flat at z ${lying.z.toFixed(2)}, ball rolled over to z ${p.z.toFixed(2)}`);
+}
+// A plank set to start leaning at 45 degrees holds that angle untouched, then falls flat once the
+// ball reaches it.
+{
+  const level = validateLevel({ id: "plank-lean", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 8, d: 24, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0, tilt: 45 },
+    { type: "goal", x: 0, y: 0, z: -20, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  const lean = () => { const q = plank.rotation(); return (-2 * Math.atan2(q.x, q.w) * 180) / Math.PI; };
+  for (let i = 0; i < 120 * 3; i++) sim.step(0, 0, -1);
+  const held = lean();
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 8 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  const fell = lean();
+  sim.free();
+  if (Math.abs(held - 45) > 0.5 || Math.abs(fell - 90) > 3) { failed = true; console.error(`FAIL plank-lean: held ${held.toFixed(1)} deg (want 45), after the ball ${fell.toFixed(1)} deg (want 90)`); }
+  else console.log(`ok plank-lean: held ${held.toFixed(1)} deg untouched, fell to ${fell.toFixed(1)} deg once hit`);
+}
 if (failed) process.exit(1);
