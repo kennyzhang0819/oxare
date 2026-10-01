@@ -26,7 +26,7 @@ export class Input {
     const down = (e: PointerEvent) => {
       if (!this.drag) { this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" }; el.setPointerCapture(e.pointerId); }
     };
-    // A mouse drag (any button) orbits the camera and only becomes the heading on release; a touch drag is a
+    // A mouse drag (any button) turns the camera, and so the heading, by the distance moved; a touch drag is a
     // virtual stick that keeps steering and throttling while held off centre.
     const move = (e: PointerEvent) => {
       if (this.drag?.id !== e.pointerId) return;
@@ -76,11 +76,7 @@ export class Input {
     addEventListener("deviceorientation", once, { once: true });
   }
 
-  get looking(): boolean {
-    return this.drag?.mouse === true;
-  }
-
-  // Mouse drag since the last call, in pixels; the caller turns it into a camera look offset.
+  // Mouse drag since the last call, in pixels; the caller turns it into yaw.
   takeLookPx(): number {
     const px = this.lookPx;
     this.lookPx = 0;

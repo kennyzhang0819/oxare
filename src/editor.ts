@@ -817,6 +817,8 @@ export class Editor implements Mode {
 
   // Writes src/levels/<id>.json through the dev server, replacing that level outright.
   private async save() {
+    // Level files are only written by `npm run dev`; a deployed build never sends a save.
+    if (!import.meta.env.DEV) { this.flash("Saving levels only works in local dev (npm run dev). Your draft is kept in this browser.", true); return; }
     const probs = levelProblems(this.level);
     if (probs.length) { alert(`Fix these before saving:\n${probs.join("\n")}`); return; }
     if (!this.level.id) { alert("Give the level an id first."); return; }

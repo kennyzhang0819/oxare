@@ -3,7 +3,7 @@ import { Input } from "./input.ts";
 import { BALL_RADIUS, GOAL_BEAM_H, type Level } from "./level.ts";
 import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
-import { TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
+import { DEFAULT_TUNING, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -35,7 +35,6 @@ export class Game implements Mode {
   private anchor = new THREE.Vector3(); // eased ball position the camera orbits
   private yaw = 0;
   private yawVel = 0;
-  private look = 0; // mouse-drag orbit on top of the heading; becomes the heading on release
   private acc = 0;
   private last = 0;
   private raf = 0;
@@ -45,9 +44,10 @@ export class Game implements Mode {
   private frames = 0;
   private hud: HTMLElement;
   private tunePanel: HTMLElement | null = null;
+  private pauseMenu: HTMLElement | null = null;
   private onResize = () => this.resize();
   private onKey = (e: KeyboardEvent) => {
-    if (e.code === "Escape") this.opts.onExit();
+    if (e.code === "Escape" && !this.done) this.togglePause();
     if (e.code === "KeyT" && !(e.target instanceof HTMLInputElement)) this.toggleTune();
     if (e.code === "KeyR" && !(e.target instanceof HTMLInputElement)) this.fall();
   };
@@ -66,8 +66,7 @@ export class Game implements Mode {
     this.scene.add(this.built.group, this.ball.mesh);
     this.hud = h("div", { class: "hud" },
       h("span", { class: "spacer" }),
-      h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)"),
-      h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
+      h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
     );
     ctx.overlay.append(this.hud);
     this.input.attach(ctx.canvas);
@@ -104,9 +103,11 @@ export class Game implements Mode {
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
     this.input.update();
-    if (!this.done) {
-      // Turn rate chases the input with a short time constant: a brief tail after a key release.
-      const want = -this.input.steer * TUNING.yawRate;
+    const lookPx = this.input.takeLookPx();
+    if (!this.done && !this.pauseMenu) {
+      // Turn rate chases the input with a short time constant: a brief tail after a key release or
+      // drag, while the total rotation of a drag stays exactly its distance times mouseSens.
+      const want = -this.input.steer * TUNING.yawRate - (lookPx * TUNING.mouseSens) / Math.max(dt, 1e-3);
       this.yawVel += (want - this.yawVel) * (TUNING.yawEase > 0 ? 1 - Math.exp(-dt / TUNING.yawEase) : 1);
       this.yaw += this.yawVel * dt;
       this.acc += dt;
@@ -155,8 +156,6 @@ export class Game implements Mode {
         if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r * 0.7 + BALL_RADIUS && p.y > gp.y - BALL_RADIUS && p.y < gp.y + GOAL_BEAM_H) this.finish();
       }
     }
-    this.look -= this.input.takeLookPx() * TUNING.mouseSens;
-    if (!this.input.looking) { this.yaw += this.look; this.look = 0; }
     this.updateCamera(dt);
     // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
     // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
@@ -193,8 +192,7 @@ export class Game implements Mode {
     const p = this.shown;
     // Only the follow eases; the orbit angle is applied rigidly so the view stops the instant steering does.
     const o = this.anchor.lerp(p, 1 - Math.exp(-10 * dt));
-    const yaw = this.yaw + this.look;
-    this.camera.position.set(o.x + Math.sin(yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(yaw) * TUNING.camDist);
+    this.camera.position.set(o.x + Math.sin(this.yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(this.yaw) * TUNING.camDist);
     this.aim(p);
     // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
     const sc = this.sun.shadow.camera;
@@ -232,6 +230,34 @@ export class Game implements Mode {
         ),
       ),
     );
+  }
+
+  // The in-game menu pauses the run (the clock and physics stop) and holds the player's settings.
+  private togglePause() {
+    if (this.pauseMenu) { this.pauseMenu.remove(); this.pauseMenu = null; this.yawVel = 0; return; }
+    const slider = (label: string, key: "yawRate" | "mouseSens") => {
+      const [min, max, step] = TUNING_RANGES[key];
+      const pct = () => `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`;
+      const val = h("span", {}, pct());
+      const range = h("input", { type: "range", min, max, step, value: TUNING[key],
+        oninput: () => { TUNING[key] = Number(range.value); val.textContent = pct(); saveTuning(); } }) as HTMLInputElement;
+      return h("label", {}, h("span", {}, label), val, range);
+    };
+    this.pauseMenu = h("div", { class: "banner" },
+      h("div", { class: "card pause" },
+        h("h2", {}, "Paused"),
+        h("div", { class: "settings" },
+          slider("Turn speed (keys)", "yawRate"),
+          slider("Mouse sensitivity", "mouseSens"),
+        ),
+        h("div", { class: "row" },
+          h("button", { onclick: () => this.togglePause() }, "Resume"),
+          h("button", { class: "ghost", onclick: () => this.opts.onRetry() }, "Restart"),
+          h("button", { class: "ghost", onclick: () => this.opts.onExit() }, "Quit"),
+        ),
+      ),
+    );
+    this.ctx.overlay.append(this.pauseMenu);
   }
 
   private toggleTune() {
