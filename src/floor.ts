@@ -1,4 +1,4 @@
-import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, holesOn, isTilted, pieceRot, rampHeight, rotXZ, type Level } from "./level.ts";
+import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, holesOn, isTilted, pieceRot, rampHeight, rotXZ, type Level } from "./level.ts";
 import { cutHole } from "./poly.ts";
 
 type XZ = [number, number];
@@ -71,8 +71,12 @@ function distToSegment(v: XZ, a: XZ, b: XZ): number {
 }
 const onOutline = (outline: XZ[], v: XZ) => outline.some((a, i) => distToSegment(v, a, outline[(i + 1) % outline.length]!) < 2 * EPS);
 
-// Depth of the rounded lip below the flat top, `s` in from the edge line (0 at the edge).
-const drop = (s: number) => BY - BY * Math.sqrt(Math.max(0, 1 - ((BX - s) / BX) * ((BX - s) / BX)));
+// Depth below the flat top, `s` in from the edge line (0 at the edge). An open edge's lip is a
+// quarter ellipse that rounds away; a seam's is a shallow cosine dip, level at the seam line and
+// at the inset, so the ball rolls through it instead of striking a steep face.
+const drop = (s: number, depth: number) => depth === BY
+  ? BY - BY * Math.sqrt(Math.max(0, 1 - ((BX - s) / BX) * ((BX - s) / BX)))
+  : (depth * (1 + Math.cos((Math.PI * s) / BX))) / 2;
 
 export interface Mesh { positions: Float32Array; indices: Uint32Array }
 // `top` is the rolling surface; `body` is the solid underneath it: side walls from just
@@ -81,8 +85,8 @@ export interface Floor extends Mesh { body: Mesh }
 
 type V = { v: XZ; y: number };
 
-// Edges on a piece's outline get the same rounded lip the visuals have, so where two
-// pieces meet the floor really dips into a groove, and an open edge rounds away.
+// Open edges on a piece's outline get the same rounded lip the visuals have, so they round
+// away; where two pieces meet the lip is only a faint dip, so the ball keeps its speed.
 export function floorMesh(level: Level): Floor {
   const polys = topPolys(level);
   const byY = new Map<number, XZ[]>();
@@ -110,10 +114,38 @@ export function floorMesh(level: Level): Floor {
   // Edges used by only one polygon are exposed sides: a piece's open edge or a hole's wall.
   const edgeKey = (a: V, b: V) => { const ka = `${a.v[0]},${a.y},${a.v[1]}`, kb = `${b.v[0]},${b.y},${b.v[1]}`; return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`; };
   const uses = new Map<string, number>();
-  for (const { poly } of split) for (let i = 0; i < poly.length; i++) {
-    const k = edgeKey(poly[i]!, poly[(i + 1) % poly.length]!);
-    uses.set(k, (uses.get(k) ?? 0) + 1);
+  const countUses = () => {
+    uses.clear();
+    for (const { poly } of split) for (let i = 0; i < poly.length; i++) {
+      const k = edgeKey(poly[i]!, poly[(i + 1) % poly.length]!);
+      uses.set(k, (uses.get(k) ?? 0) + 1);
+    }
+  };
+  countUses();
+  // A seam edge that meets an open rim edge at a corner gets an extra vertex one lip width in
+  // from that corner, so the seam is shallow along its length and only deepens into the corner.
+  // The piece on the other side of the seam inserts the same point, so the weld holds.
+  const isRim = (outline: XZ[], a: V, b: V) => onOutline(outline, [(a.v[0] + b.v[0]) / 2, (a.v[1] + b.v[1]) / 2]);
+  for (const q of split) {
+    const { poly, outline } = q, n = poly.length;
+    const kind = poly.map((a, i) => {
+      const b = poly[(i + 1) % n]!;
+      return !isRim(outline, a, b) ? "inner" : (uses.get(edgeKey(a, b)) ?? 0) > 1 ? "seam" : "open";
+    });
+    const out: V[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = poly[i]!, b = poly[(i + 1) % n]!;
+      out.push(a);
+      if (kind[i] !== "seam") continue;
+      const len = Math.hypot(b.v[0] - a.v[0], b.v[1] - a.v[1]);
+      if (len <= 2 * BX + EPS) continue;
+      const at = (t: number): V => ({ v: [snap(a.v[0] + (b.v[0] - a.v[0]) * t), snap(a.v[1] + (b.v[1] - a.v[1]) * t)], y: snap(a.y + (b.y - a.y) * t) });
+      if (kind[(i + n - 1) % n] === "open") out.push(at(BX / len));
+      if (kind[(i + 1) % n] === "open") out.push(at(1 - BX / len));
+    }
+    q.poly = out;
   }
+  countUses();
 
   const mesh = () => {
     const pos: number[] = [], idx: number[] = [];
@@ -140,8 +172,10 @@ export function floorMesh(level: Level): Floor {
       const mx = (w.v[0] + u.v[0]) / 2, mz = (w.v[1] + u.v[1]) / 2;
       if (nx * (cx - mx) + nz * (cz - mz) < 0) { nx = -nx; nz = -nz; }
       const rim = onOutline(outline, [mx, mz]);
+      // A rim edge another polygon also uses is a seam between two pieces: it gets the shallow lip.
+      const seam = rim && (uses.get(edgeKey(w, u)) ?? 0) > 1;
       const off = rim ? BX : 0;
-      return { rim, px: w.v[0] + nx * off, pz: w.v[1] + nz * off, dx: dx / len, dz: dz / len, nx, nz };
+      return { rim, seam, px: w.v[0] + nx * off, pz: w.v[1] + nz * off, dx: dx / len, dz: dz / len, nx, nz };
     });
     // The inset corner at each vertex, with its height read off the two edges that meet there.
     const inner: V[] = poly.map((w, i) => {
@@ -170,16 +204,24 @@ export function floorMesh(level: Level): Floor {
     top.pos.push(icx, icy, icz);
     for (let i = 0; i < n; i++) top.tri(c, ids[i]!, ids[(i + 1) % n]!);
 
-    // Rounded rim strips between each outline edge and its inset edge.
+    // Rounded rim strips between each outline edge and its inset edge. A seam strip is shallow,
+    // except at a corner it shares with an open rim edge: there both strips use the full depth so
+    // the corner diagonal they share is one line and the mesh stays welded.
+    const depthAt = (i: number) => {
+      const la = lines[(i + n - 1) % n]!, lb = lines[i]!;
+      return (la.rim && !la.seam) || (lb.rim && !lb.seam) ? BY : PLATFORM_SEAM_DROP;
+    };
     for (let i = 0; i < n; i++) {
       if (!lines[i]!.rim) continue;
       const o0 = poly[i]!, o1 = poly[(i + 1) % n]!, i0 = inner[i]!, i1 = inner[(i + 1) % n]!;
+      const deep = !lines[i]!.seam;
+      const d0 = deep ? BY : depthAt(i), d1 = deep ? BY : depthAt((i + 1) % n);
       const row = (j: number): [number, number] => {
-        const t = j / BEVEL_STEPS, d = drop(BX * t);
-        const at = (o: V, w: V) => j === 0 ? top.vertex(o.v[0], o.y - BY, o.v[1])
+        const t = j / BEVEL_STEPS;
+        const at = (o: V, w: V, depth: number) => j === 0 ? top.vertex(o.v[0], o.y - depth, o.v[1])
           : j === BEVEL_STEPS ? top.vertex(w.v[0], w.y, w.v[1])
-          : top.vertex(o.v[0] + (w.v[0] - o.v[0]) * t, o.y + (w.y - o.y) * t - d, o.v[1] + (w.v[1] - o.v[1]) * t);
-        return [at(o0, i0), at(o1, i1)];
+          : top.vertex(o.v[0] + (w.v[0] - o.v[0]) * t, o.y + (w.y - o.y) * t - drop(BX * t, depth), o.v[1] + (w.v[1] - o.v[1]) * t);
+        return [at(o0, i0, d0), at(o1, i1, d1)];
       };
       let [a, b] = row(0);
       for (let j = 1; j <= BEVEL_STEPS; j++) {

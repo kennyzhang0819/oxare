@@ -55,8 +55,8 @@ export class Loading implements Mode {
     env.tick(camera);
     renderer.compile(env.scene, camera);
     // A real frame plus one reflection pass hits the shadow and cube-camera variants compile() skips.
-    ball.reflect(renderer, env.scene);
-    renderer.render(env.scene, camera);
+    ball.reflect(renderer, env);
+    env.render(renderer, camera);
     ball.dispose();
     await this.step(3, n, "Building the first level");
     const sim = await createSim(level);

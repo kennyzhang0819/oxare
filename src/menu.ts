@@ -56,8 +56,7 @@ export class Menu implements Mode {
     const a = now / 1000 * 0.03;
     this.camera.position.set(0, 10, 0);
     this.camera.lookAt(Math.sin(a) * 40, 2, Math.cos(a) * 40);
-    this.env.tick(this.camera);
-    this.ctx.renderer.render(this.env.scene, this.camera);
+    this.env.render(this.ctx.renderer, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
 

@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { sectorMesh } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, bridgeChain, isTilted, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
+import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_HINGE_H, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, bridgeChain, isTilted, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -147,12 +147,12 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   const crateHome = new Map<number, { x: number; y: number; z: number; rot: number }>();
   level.pieces.forEach((p, index) => {
     if (p.type !== "crate") return;
-    const home = { x: p.x, y: p.y + p.s / 2 + 0.02, z: p.z, rot: p.rot };
+    const home = { x: p.x, y: p.y + p.h / 2 + 0.02, z: p.z, rot: p.rot };
     crateHome.set(index, home);
     const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(yQuat(p.rot)).setCcdEnabled(true),
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(yQuat(p.rot)).setCcdEnabled(true).setGravityScale(TUNING.propGravity),
     );
-    world.createCollider(RAPIER.ColliderDesc.cuboid(p.s / 2, p.s / 2, p.s / 2).setMass(0.2).setFriction(0.35).setRestitution(0.1), body);
+    world.createCollider(RAPIER.ColliderDesc.cuboid(p.w / 2, p.h / 2, p.d / 2).setMass(0.2).setFriction(0.35).setRestitution(0.1), body);
     crates.push({ index, body });
   });
 
@@ -172,7 +172,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const planks = chain.planks.map((pl) => {
       const w = at(pl.z, pl.y);
       const body = world.createRigidBody(
-        RAPIER.RigidBodyDesc.dynamic().setTranslation(w.x, w.y, w.z).setRotation(qmul(yaw, xQuat(pl.tilt)))
+        RAPIER.RigidBodyDesc.dynamic().setTranslation(w.x, w.y, w.z).setRotation(qmul(yaw, xQuat(pl.tilt))).setGravityScale(TUNING.propGravity)
           .setLinearDamping(PLANK_DAMPING).setAngularDamping(PLANK_DAMPING),
       );
       world.createCollider(
@@ -191,16 +191,18 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     bridges.push({ index, planks });
   });
 
-  // A knock-down plank is a dynamic panel hinged along its bottom edge, created asleep in its
-  // upright pose: Rapier leaves a sleeping body untouched until an awake body contacts it, so the
-  // plank stays balanced until the ball (or a crate) pushes it, then topples under gravity.
+  // A knock-down plank is a free body like a crate, except its base is pinned: a revolute hinge
+  // through the middle of the base, raised off the surface so the base corners clear the floor
+  // whichever way it goes. It is created asleep standing dead upright: Rapier leaves a sleeping
+  // body untouched until an awake body contacts it, so it stays balanced until the ball (or a
+  // crate) pushes it, then follows the push over and lies flat.
   const planks: SimPlank[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "plank") return;
     const yaw = yQuat(p.rot);
-    const pivot = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y, p.z).setRotation(yaw));
+    const pivot = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y + PLANK_HINGE_H, p.z).setRotation(yaw));
     const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, p.y + p.h / 2, p.z).setRotation(yaw).setSleeping(true).setAngularDamping(0.02),
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, p.y + PLANK_HINGE_H + p.h / 2, p.z).setRotation(yaw).setSleeping(true).setAngularDamping(0.02).setGravityScale(TUNING.propGravity),
     );
     const r = 0.06;
     world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, PLANK_T / 2 - r, r).setMass(KNOCK_PLANK_MASS).setFriction(0.6).setRestitution(0.05), body);
@@ -208,6 +210,17 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     body.sleep();
     planks.push({ index, body });
   });
+
+  // Kickers: a fixed convex wedge each, so the slope is one flat face with no seams to catch on.
+  for (const p of level.pieces) {
+    if (p.type !== "kicker") continue;
+    const pts = new Float32Array(kickerCorners(p).flatMap(([x, y, z]) => { const o = rotXZ(x, z, p.rot); return [p.x + o.x, p.y + y, p.z + o.z]; }));
+    const desc = RAPIER.ColliderDesc.convexHull(pts);
+    if (desc) world.createCollider(desc.setFriction(1));
+  }
+
+  let props: RAPIER.RigidBody[] | null = null;
+  let propGravity = TUNING.propGravity;
 
   const start = startOf(level);
   world.createCollider(RAPIER.ColliderDesc.cylinder(START_PAD_H / 2, START_PAD_R - 0.05).setTranslation(start.x, start.y + START_PAD_H / 2, start.z).setFriction(1));
@@ -227,6 +240,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     bridges,
     planks,
     step(throttle, fx, fz) {
+      props ??= [...crates.map((c) => c.body), ...bridges.flatMap((b) => b.planks), ...planks.map((p) => p.body)];
       for (const c of crates) {
         if (c.body.translation().y >= TUNING.respawnY) continue;
         const home = crateHome.get(c.index)!;
@@ -236,6 +250,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         c.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       }
       world.gravity = { x: 0, y: -TUNING.gravity, z: 0 };
+      // Movable props share one gravity scale, live-tunable; applying it never wakes a sleeping plank.
+      if (propGravity !== TUNING.propGravity) {
+        propGravity = TUNING.propGravity;
+        for (const b of props) b.setGravityScale(propGravity, false);
+      }
       ball.setLinearDamping(TUNING.linearDamping);
       ball.setAngularDamping(TUNING.angularDamping);
       const f = throttle * TUNING.throttleForce;

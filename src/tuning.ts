@@ -1,18 +1,20 @@
 export const TUNING = {
-  gravity: 5,
-  throttleForce: 9,
-  maxSpeed: 6.5,
-  linearDamping: 1.0,
+  gravity: 4,
+  throttleForce: 8,
+  maxSpeed: 10,
+  linearDamping: 0.8,
   angularDamping: 0.8,
   yawRate: 1.8,
   tiltRange: 10,
   tiltPitchRange: 10,
   mouseSens: 0.0025,
   yawEase: 0.08,
-  camDist: 4.5,
-  camHeight: 2.25,
+  camDist: 4,
+  camHeight: 2,
   camBallGap: 0.9,
   respawnY: -12,
+  // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
+  propGravity: 0.7,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -32,6 +34,7 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   camHeight: [1, 12, 0.25],
   camBallGap: [0, 3, 0.1],
   respawnY: [-40, -2, 1],
+  propGravity: [0.1, 2, 0.05],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

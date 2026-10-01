@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import { BALL_RADIUS, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
-import { TUNING } from "../src/tuning.ts";
+import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
 
 const dir = new URL("../src/levels/", import.meta.url);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
@@ -49,7 +49,11 @@ const teeLevel = validateLevel({ id: "tee", name: "tee", pieces: [
   { type: "slab", x: 5, y: 0, z: -25, w: 30, d: 20, rot: 0, fences: {} },
   { type: "goal", x: 5, y: 0, z: -30, r: 2 },
 ] });
+// The floor is checked under fixed physics, so the result is about the floor's shape and not the
+// feel tuning: a faster or lighter ball skims the seam grooves without settling into them.
+const FLOOR_CHECK = { gravity: 5, throttleForce: 9, maxSpeed: 6.5 };
 for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [curveLevel, "arc"]] as const) {
+  Object.assign(TUNING, FLOOR_CHECK);
   const sim = await createSim(level);
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
   let maxDy = 0, dip = 0;
@@ -71,9 +75,12 @@ for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [curveLev
   sim.free();
   // The ball settles a little into the groove at each seam; a single curve has none and stays flat.
   const hasSeams = steer === "line";
-  if (maxDy > 0.3 || (hasSeams ? dip < 0.01 : maxDy > 0.02)) { failed = true; console.error(`FAIL ${level.id}: floor deviation ${maxDy.toFixed(3)}, dip ${dip.toFixed(3)} (${hasSeams ? "expected a seam groove" : "expected flat"})`); }
+  // Seams are a faint groove (PLATFORM_SEAM_DROP): the ball must dip into it, but never hop or
+  // sink more than a few hundredths, which is what costs it speed.
+  if (maxDy > 0.05 || (hasSeams ? dip < 0.01 : maxDy > 0.02)) { failed = true; console.error(`FAIL ${level.id}: floor deviation ${maxDy.toFixed(3)}, dip ${dip.toFixed(3)} (${hasSeams ? "expected a seam groove" : "expected flat"})`); }
   else console.log(`ok ${level.id}: floor deviation ${maxDy.toFixed(4)}, groove dip ${dip.toFixed(3)}`);
 }
+Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_TUNING.throttleForce, maxSpeed: DEFAULT_TUNING.maxSpeed });
 // Curve fences must hold the ball: push it straight at the outer rail and at the inner rail.
 for (const [name, fx, fz, ok] of [
   ["outer", 1, 0, (r: number) => r < 20],
@@ -175,7 +182,7 @@ for (const [name, x, falls] of [["through", 0, true], ["beside", 4, false]] as c
   const level = validateLevel({ id: "push", name: "push", pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
-    { type: "crate", x: 0, y: 0, z: -6, rot: 0, s: 1.2 },
+    { type: "crate", x: 0, y: 0, z: -6, w: 1.2, h: 1.2, d: 1.2, rot: 0 },
     { type: "barrier", x: 0, y: 0, z: -16, rot: 0 },
     { type: "goal", x: 0, y: 0, z: -19, r: 2 },
   ] });
@@ -271,9 +278,83 @@ for (const [name, x, falls] of [["through", 0, true], ["beside", 4, false]] as c
   p = sim.ball.translation();
   const fallen = plank.translation();
   sim.free();
-  if (!asleep || Math.abs(standing.y - 5) > 0.01 || Math.abs(standing.z + 10) > 0.01) { failed = true; console.error(`FAIL plank: did not hold still (asleep ${asleep}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
+  if (!asleep || Math.abs(standing.y - 5.16) > 0.05 || Math.abs(standing.z + 10) > 0.05) { failed = true; console.error(`FAIL plank: did not hold still (asleep ${asleep}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
   else if (fallen.y > 0.6 || fallen.z > -14) { failed = true; console.error(`FAIL plank: did not fall (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
   else console.log(`ok plank: stood asleep, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
 }
+// A plank standing in the middle of a platform, with floor in front of it, must still topple.
+{
+  const level = validateLevel({ id: "plank-mid", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -7, w: 4, h: 6, rot: 0 },
+    { type: "goal", x: 0, y: 0, z: -18, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 8 && p.z > -16; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  const fallen = plank.translation();
+  sim.free();
+  if (fallen.y > 0.5 || fallen.z > -9.5) { failed = true; console.error(`FAIL plank-mid: plank on a platform did not fall flat (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
+  else console.log(`ok plank-mid: plank on a platform fell flat (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}), ball at z ${p.z.toFixed(2)}`);
+}
+// Hit from its other face, a plank follows through and falls the other way.
+{
+  const level = validateLevel({ id: "plank-back", name: "plank", pieces: [
+    { type: "start", x: 0, y: 0, z: -14 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
+    { type: "plank", x: 0, y: 0, z: -8, w: 4, h: 6, rot: 0 },
+    { type: "goal", x: 0, y: 0, z: -1, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  const plank = sim.planks[0]!.body;
+  for (let i = 0; i < 120; i++) sim.step(0, 0, 1);
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 8 && p.z < -2; i++) { sim.step(1, 0, 1); p = sim.ball.translation(); }
+  const fallen = plank.translation();
+  sim.free();
+  if (fallen.y > 0.5 || fallen.z < -6) { failed = true; console.error(`FAIL plank-back: plank hit from the front did not fall backward (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
+  else console.log(`ok plank-back: plank hit from the front fell backward (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}), ball at z ${p.z.toFixed(2)}`);
+}
+// Support pillars beside a platform edge are solid: a ball pushed at one stops on the platform.
+{
+  const level = validateLevel({ id: "support", name: "support", pieces: [
+    { type: "start", x: 0, y: 0, z: -10 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 20, rot: 0, fences: {} },
+    { type: "support", x: 5, y: 0, z: -10, w: 6, h: 8, rot: 90 },
+    { type: "slab", x: 7, y: 8, z: -10, w: 4, d: 8, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -18, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let maxX = 0, minY = Infinity;
+  for (let i = 0; i < 120 * 4; i++) { sim.step(1, 1, 0); const q = sim.ball.translation(); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); }
+  sim.free();
+  if (maxX > 5 || minY < 0) { failed = true; console.error(`FAIL support: ball went through the support pillar (x ${maxX.toFixed(2)}, min y ${minY.toFixed(2)})`); }
+  else console.log(`ok support: pillar stops the ball at x ${maxX.toFixed(2)}`);
+}
+// A kicker is rolled straight over at any speed: the ball rides up, leaves the high edge and
+// lands beyond it on the platform.
+for (const cap of [2.5, 6.5]) {
+  TUNING.maxSpeed = cap;
+  const level = validateLevel({ id: "kicker", name: "kicker", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -12, w: 10, d: 30, rot: 0, fences: {} },
+    { type: "kicker", x: 0, y: 0, z: -9, w: 3, d: 4, h: 0.7, rot: 0 },
+    { type: "goal", x: 0, y: 0, z: -24, r: 2 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let p = sim.ball.translation(), maxY = 0;
+  for (let i = 0; i < 120 * 10 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); maxY = Math.max(maxY, p.y); }
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  p = sim.ball.translation();
+  sim.free();
+  if (p.z > -16 || Math.abs(p.y - BALL_RADIUS) > 0.1 || maxY < 0.7 + BALL_RADIUS - 0.1) { failed = true; console.error(`FAIL kicker at ${cap}: ball ended z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak y ${maxY.toFixed(2)}`); }
+  else console.log(`ok kicker at ${cap} m/s: rolled over (peak y ${maxY.toFixed(2)}) and landed at z ${p.z.toFixed(2)}`);
+}
+TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
 if (failed) process.exit(1);

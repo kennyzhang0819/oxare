@@ -19,17 +19,38 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15]],
+  support: [["w", 0.5], ["h", 1], ["rot", 15]],
+  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["rot", 15]],
   barrier: [["rot", 15]],
-  crate: [["rot", 15], ["s", 0.1]],
+  crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [],
   spinner: [["length", 0.5], ["speed", 0.1]],
   goal: [["r", 0.5]],
 };
-const snap = (v: number) => Math.round(v * 2) / 2;
-const gridSnap = (v: number) => Math.round(v / STRUCT_GRID) * STRUCT_GRID;
+// Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
+const SNAP_KEY = "balling.snap";
+const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
+const SNAP = { platform: 0.5, structure: STRUCT_GRID };
+try {
+  const saved = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "{}") as Partial<typeof SNAP>;
+  for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && v > 0) SNAP[k] = v; }
+} catch { /* keep defaults */ }
+const to = (step: number) => (v: number) => Math.round(Math.round(v / step) * step * 1000) / 1000;
+const snap = (v: number) => to(SNAP.platform)(v);
+const gridSnap = (v: number) => to(SNAP.structure)(v);
+const snapFor = (p: Piece) => (isStructure(p) ? gridSnap : snap);
+// One arrow-key step of `n` grid lines in direction `dir`: an off-grid value first lands on the
+// next grid line that way, and the axis not being moved (dir 0) snaps to its nearest line, so a
+// nudge always corrects onto the grid.
+function step(v: number, dir: number, grid: number, n: number): number {
+  if (!dir) return to(grid)(v);
+  const k = v / grid, on = Math.abs(k - Math.round(k)) < 1e-6;
+  const first = on ? Math.round(k) + dir : dir > 0 ? Math.ceil(k) : Math.floor(k);
+  return to(grid)((first + dir * (n - 1)) * grid);
+}
 const layerSnap = (v: number) => Math.round(v / LAYER_H) * LAYER_H;
 
 // Structures snap to the placement grid and drop onto whatever platform is under them.
@@ -67,11 +88,12 @@ function placementGrid(level: Level): THREE.LineSegments {
     };
     for (const q of platformFootprint(p)) {
       const xs = q.map((v) => v[0]), zs = q.map((v) => v[1]);
-      for (let x = Math.ceil(Math.min(...xs) / STRUCT_GRID) * STRUCT_GRID; x <= Math.max(...xs); x += STRUCT_GRID) {
+      const G = SNAP.structure;
+      for (let x = Math.ceil(Math.min(...xs) / G) * G; x <= Math.max(...xs) + 1e-6; x += G) {
         const s = clip(q, 0, x);
         if (s) line(x, s[0], x, s[1]);
       }
-      for (let z = Math.ceil(Math.min(...zs) / STRUCT_GRID) * STRUCT_GRID; z <= Math.max(...zs); z += STRUCT_GRID) {
+      for (let z = Math.ceil(Math.min(...zs) / G) * G; z <= Math.max(...zs) + 1e-6; z += G) {
         const s = clip(q, 1, z);
         if (s) line(s[0], z, s[1], z);
       }
@@ -151,6 +173,7 @@ export class Editor implements Mode {
         h("button", { onclick: () => void this.save() }, "Save"),
         h("button", { class: "ghost", onclick: () => this.newLevel() }, "New"),
       ),
+      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap")),
       h("div", { class: "bar add" }, ...PIECE_TYPES.map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
       this.problems,
       this.notice,
@@ -176,8 +199,7 @@ export class Editor implements Mode {
     this.lastFrame = now;
     this.pan(dt);
     this.controls.update();
-    this.env.tick(this.camera);
-    this.ctx.renderer.render(this.scene, this.camera);
+    this.env.render(this.ctx.renderer, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -207,7 +229,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "support") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.undoStack.push(before);
     if (this.undoStack.length > 100) this.undoStack.shift();
     this.refresh();
@@ -266,7 +288,8 @@ export class Editor implements Mode {
           onchange: () => { const before = JSON.stringify(this.level); rec[key] = Number(input.value); this.commit(before); } });
         return h("label", {}, key, input);
       };
-      props.append(field("x", 0.5), field("y", LAYER_H), field("z", 0.5));
+      const step = isStructure(p) ? SNAP.structure : SNAP.platform;
+      props.append(field("x", step), field("y", LAYER_H), field("z", step));
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
       if (p.type === "slab" || p.type === "curve" || p.type === "ramp") {
         const f = p.fences as unknown as Record<string, boolean>;
@@ -285,6 +308,17 @@ export class Editor implements Mode {
         ),
       );
     }
+  }
+
+  // A labelled dropdown of snap increments; changing it redraws the grid and the panel.
+  private snapPicker(kind: keyof typeof SNAP, label: string): HTMLElement {
+    const sel = h("select", { title: `${label}: drag, arrow-key and paste increment` }, ...SNAP_STEPS.map((v) => h("option", { value: v, selected: v === SNAP[kind] }, String(v)))) as HTMLSelectElement;
+    sel.onchange = () => {
+      SNAP[kind] = Number(sel.value);
+      try { localStorage.setItem(SNAP_KEY, JSON.stringify(SNAP)); } catch { /* not remembered */ }
+      this.refresh();
+    };
+    return h("label", {}, label, sel);
   }
 
   private selectedPieces(): Piece[] {
@@ -315,7 +349,7 @@ export class Editor implements Mode {
     const added = new Set<number>();
     for (const p of pieces) {
       const c = JSON.parse(JSON.stringify(p)) as Piece;
-      c.x += dx; c.z += dz;
+      c.x = snapFor(c)(c.x + dx); c.z = snapFor(c)(c.z + dz);
       if (pieces.length === 1) this.placeFree(c);
       settle(this.level, c);
       this.level.pieces.push(c);
@@ -388,14 +422,20 @@ export class Editor implements Mode {
     const pieces = this.selectedPieces();
     if (!pieces.length) return;
     const before = JSON.stringify(this.level);
-    const d = pieces.some(isStructure) ? (e.shiftKey ? 4 : 1) * STRUCT_GRID : e.shiftKey ? 2 : 0.5;
-    const nudge = (dx: number, dz: number) => { for (const p of pieces) { p.x += dx; p.z += dz; settle(this.level, p); } };
+    const n = e.shiftKey ? 4 : 1;
+    const nudge = (dx: number, dz: number) => {
+      for (const p of pieces) {
+        const g = isStructure(p) ? SNAP.structure : SNAP.platform;
+        p.x = step(p.x, dx, g, n); p.z = step(p.z, dz, g, n);
+        settle(this.level, p);
+      }
+    };
     switch (e.code) {
       case "Delete": case "Backspace": this.remove(); return;
-      case "ArrowLeft": nudge(-d, 0); break;
-      case "ArrowRight": nudge(d, 0); break;
-      case "ArrowUp": nudge(0, -d); break;
-      case "ArrowDown": nudge(0, d); break;
+      case "ArrowLeft": nudge(-1, 0); break;
+      case "ArrowRight": nudge(1, 0); break;
+      case "ArrowUp": nudge(0, -1); break;
+      case "ArrowDown": nudge(0, 1); break;
       case "PageUp": case "KeyE": for (const p of pieces) p.y += LAYER_H; break;
       case "PageDown": case "KeyQ": for (const p of pieces) p.y -= LAYER_H; break;
       case "KeyR": for (const p of pieces) if ("rot" in p) p.rot = (p.rot + (e.shiftKey ? -90 : 90) + 360) % 360; break;
@@ -483,17 +523,17 @@ export class Editor implements Mode {
     this.castFrom(e.clientX, e.clientY);
     const pt = new THREE.Vector3();
     if (!this.ray.ray.intersectPlane(d.plane, pt)) return;
-    // The whole group moves by the anchor's snapped displacement, so relative layout is kept.
+    // The group moves by the anchor's snapped displacement, and each piece lands on its own grid.
     const unit = this.selectedPieces().some(isStructure) ? gridSnap : snap;
     const dx = unit(pt.x + d.off.x) - a0.x, dz = unit(pt.z + d.off.z) - a0.z;
     if (a.x === a0.x + dx && a.z === a0.z + dz) return;
     for (const [k, s0] of d.starts) {
       const q = this.level.pieces[k];
       if (!q) continue;
-      q.x = s0.x + dx; q.z = s0.z + dz;
+      q.x = snapFor(q)(s0.x + dx); q.z = snapFor(q)(s0.z + dz);
       settle(this.level, q);
       const g = this.built.pieceGroups[k];
-      if (g) g.position.set(q.x, q.type === "crate" ? q.y + q.s / 2 + 0.02 : q.y, q.z);
+      if (g) g.position.set(q.x, q.type === "crate" ? q.y + q.h / 2 + 0.02 : q.y, q.z);
     }
     for (const hl of this.helpers) hl.update();
     d.moved = true;
@@ -590,9 +630,9 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     this.level = { id: "new-level", name: "New Level", pieces: [
       newPiece("start", 0, 0, 0),
-      { ...newPiece("slab", 0, 0, 0), w: 6, d: 6, fences: { n: false, e: true, s: true, w: true } } as Piece,
+      { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: { n: false, e: true, s: true, w: true } } as Piece,
       newPiece("goal", 0, 0, -12),
-      { ...newPiece("slab", 0, 0, -12), w: 6, d: 6, fences: { n: true, e: true, s: false, w: true } } as Piece,
+      { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { n: true, e: true, s: false, w: true } } as Piece,
     ] };
     this.sel.clear();
     this.undoStack.push(before);

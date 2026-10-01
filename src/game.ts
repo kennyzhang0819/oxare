@@ -35,12 +35,14 @@ export class Game implements Mode {
   private anchor = new THREE.Vector3(); // eased ball position the camera orbits
   private yaw = 0;
   private yawVel = 0;
+  private look = 0; // mouse-drag orbit on top of the heading; becomes the heading on release
   private acc = 0;
   private last = 0;
   private raf = 0;
   private time = 0;
   private falls = 0;
   private done = false;
+  private frames = 0;
   private hud: HTMLElement;
   private tunePanel: HTMLElement | null = null;
   private onResize = () => this.resize();
@@ -103,9 +105,8 @@ export class Game implements Mode {
     this.last = now;
     this.input.update();
     if (!this.done) {
-      // Turn rate chases the input with a short time constant: a brief tail after a key release or
-      // drag, while the total rotation of a drag stays exactly its distance times mouseSens.
-      const want = -this.input.steer * TUNING.yawRate - (this.input.takeYawPx() * TUNING.mouseSens) / Math.max(dt, 1e-3);
+      // Turn rate chases the input with a short time constant: a brief tail after a key release.
+      const want = -this.input.steer * TUNING.yawRate;
       this.yawVel += (want - this.yawVel) * (TUNING.yawEase > 0 ? 1 - Math.exp(-dt / TUNING.yawEase) : 1);
       this.yaw += this.yawVel * dt;
       this.acc += dt;
@@ -154,10 +155,13 @@ export class Game implements Mode {
         if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r * 0.7 + BALL_RADIUS && p.y > gp.y - BALL_RADIUS && p.y < gp.y + GOAL_BEAM_H) this.finish();
       }
     }
+    this.look -= this.input.takeLookPx() * TUNING.mouseSens;
+    if (!this.input.looking) { this.yaw += this.look; this.look = 0; }
     this.updateCamera(dt);
-    this.env.tick(this.camera);
-    this.ball.reflect(this.ctx.renderer, this.scene);
-    this.ctx.renderer.render(this.scene, this.camera);
+    // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
+    // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
+    if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
+    this.env.render(this.ctx.renderer, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -189,7 +193,8 @@ export class Game implements Mode {
     const p = this.shown;
     // Only the follow eases; the orbit angle is applied rigidly so the view stops the instant steering does.
     const o = this.anchor.lerp(p, 1 - Math.exp(-10 * dt));
-    this.camera.position.set(o.x + Math.sin(this.yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(this.yaw) * TUNING.camDist);
+    const yaw = this.yaw + this.look;
+    this.camera.position.set(o.x + Math.sin(yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(yaw) * TUNING.camDist);
     this.aim(p);
     // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
     const sc = this.sun.shadow.camera;

@@ -9,7 +9,7 @@ export class Input {
   tiltOn = false;
   private keys = new Set<string>();
   private drag: { id: number; x: number; y: number; mouse: boolean } | null = null;
-  private yawPx = 0;
+  private lookPx = 0;
   private tiltSteer = 0;
   private tiltThrottle = 0;
   private neutralBeta = 40;
@@ -26,11 +26,11 @@ export class Input {
     const down = (e: PointerEvent) => {
       if (!this.drag) { this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" }; el.setPointerCapture(e.pointerId); }
     };
-    // A mouse drag turns the camera by the distance moved and nothing more; a touch drag is a
+    // A mouse drag (any button) orbits the camera and only becomes the heading on release; a touch drag is a
     // virtual stick that keeps steering and throttling while held off centre.
     const move = (e: PointerEvent) => {
       if (this.drag?.id !== e.pointerId) return;
-      if (this.drag.mouse) { this.yawPx += e.clientX - this.drag.x; this.drag.x = e.clientX; return; }
+      if (this.drag.mouse) { this.lookPx += e.clientX - this.drag.x; this.drag.x = e.clientX; return; }
       this.steerPtr = clamp((e.clientX - this.drag.x) / 70);
       this.throttlePtr = clamp(-(e.clientY - this.drag.y) / 70);
     };
@@ -39,7 +39,9 @@ export class Input {
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
-    this.cleanup.push(() => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); });
+    const menu = (e: Event) => e.preventDefault();
+    el.addEventListener("contextmenu", menu);
+    this.cleanup.push(() => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); el.removeEventListener("contextmenu", menu); });
     const orient = (e: DeviceOrientationEvent) => {
       if (!this.tiltOn || e.gamma == null || e.beta == null) return;
       // Degrees of roll / pitch for full steer and full throttle.
@@ -74,10 +76,14 @@ export class Input {
     addEventListener("deviceorientation", once, { once: true });
   }
 
-  // Mouse drag since the last call, in pixels; the caller turns it into yaw.
-  takeYawPx(): number {
-    const px = this.yawPx;
-    this.yawPx = 0;
+  get looking(): boolean {
+    return this.drag?.mouse === true;
+  }
+
+  // Mouse drag since the last call, in pixels; the caller turns it into a camera look offset.
+  takeLookPx(): number {
+    const px = this.lookPx;
+    this.lookPx = 0;
     return px;
   }
 

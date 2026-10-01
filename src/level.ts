@@ -6,6 +6,10 @@ export const PLATFORM_THICKNESS = 1;
 // a wide, shallow quarter-ellipse, `INSET` in from the edge and `DROP` down to the wall.
 export const PLATFORM_EDGE_INSET = 0.45;
 export const PLATFORM_EDGE_DROP = 0.28;
+// Where two platforms meet, the physics floor's lip only dips this far, so the seam is a
+// shallow groove the ball rolls through instead of a ledge it strikes; the visuals keep the
+// full lip. Open edges keep PLATFORM_EDGE_DROP so they still round away.
+export const PLATFORM_SEAM_DROP = 0.015;
 export const BALL_RADIUS = 0.55;
 export const FENCE_HEIGHT = 0.9;
 export const FENCE_THICKNESS = 0.4;
@@ -13,7 +17,7 @@ export const SPINNER_HEIGHT = 0.6;
 export const SPINNER_WIDTH = 0.4;
 export const BLOCKADE_W = 3, BLOCKADE_H = 1.5, BLOCKADE_D = 3;
 export const PILLAR_R = 0.7, PILLAR_H = 2.2;
-export const BARRIER_W = 4, BARRIER_H = 1.4, BARRIER_D = 0.5;
+export const BARRIER_W = 3, BARRIER_H = 1.4, BARRIER_D = 0.5;
 export const CRATE_S = 1.2;
 // The goal beam: touching it anywhere up to this height wins.
 export const GOAL_BEAM_H = 40;
@@ -36,7 +40,33 @@ export const BRIDGE_HINGE_DROP = PLATFORM_EDGE_DROP + BRIDGE_PLANK_T / 2;
 export const BRIDGE_SLACK = 0.025;
 // Knock-down plank: a tall panel standing on a platform edge, hinged along its bottom edge. It
 // holds still until anything touches it, then topples under physics and lies across the gap.
+// Place every plank 0.5 tiles back from the border of the platform it stands on (README).
 export const PLANK_T = 0.3;
+// The hinge runs through the middle of the panel's base, held this high above the surface in a
+// yoke at each end: just over half the panel's thickness, so whichever way it topples the base
+// corners swing past the floor instead of into it, and it lies flat either way.
+export const PLANK_HINGE_H = PLANK_T / 2 + 0.01;
+// Support: three pillars standing against a platform's side wall, carrying a platform `h` layers
+// above. The piece origin is on the lower platform's edge at its top surface; the pillars stand
+// just outside that edge on local +z, from the lower platform's side wall up to the upper one's
+// underside.
+// Kicker: a small solid wedge sitting on a platform, rising `h` toward local -z over its depth
+// `d`. The default 1 over 3 is an 18 degree slope.
+export const KICKER_W = 3, KICKER_D = 3, KICKER_H = 1;
+// A kicker's six corners in local space: the low front edge at local +z on the surface, the
+// high back edge `h` up at local -z.
+export function kickerCorners(p: Piece & { type: "kicker" }): [number, number, number][] {
+  const x = p.w / 2, z = p.d / 2;
+  return [[-x, 0, z], [x, 0, z], [x, 0, -z], [-x, 0, -z], [x, p.h, -z], [-x, p.h, -z]];
+}
+export const SUPPORT_W = 0.8, SUPPORT_D = 0.7, SUPPORT_RISE = 4;
+// Each pillar stands SUPPORT_GAP off the lower platform's side wall; its foot bends inward on
+// an arc of inner radius SUPPORT_BEND_R and runs straight into that wall at mid-thickness.
+export const SUPPORT_GAP = 0.5, SUPPORT_BEND_R = 0.3;
+export function supportPillars(p: Piece & { type: "support" }): { x: number; z: number; y0: number; y1: number }[] {
+  const e = p.w / 2 - SUPPORT_W / 2;
+  return [-e, 0, e].map((x) => ({ x, z: SUPPORT_GAP + SUPPORT_D / 2, y0: -PLATFORM_THICKNESS / 2 - SUPPORT_D / 2, y1: p.h * LAYER_H - PLATFORM_THICKNESS }));
+}
 
 export interface Fences4 { n: boolean; e: boolean; s: boolean; w: boolean }
 export interface CurveFences { inner: boolean; outer: boolean; a: boolean; b: boolean }
@@ -50,20 +80,22 @@ export type Piece =
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number; fences: RampFences })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "plank"; w: number; h: number; rot: number })
+  | (At & { type: "support"; w: number; h: number; rot: number })
+  | (At & { type: "kicker"; w: number; d: number; h: number; rot: number })
   | (At & { type: "block"; w: number; h: number; d: number; rot: number })
   | (At & { type: "blockade"; rot: number })
   | (At & { type: "pillar" })
   | (At & { type: "barrier"; rot: number })
-  | (At & { type: "crate"; rot: number; s: number })
+  | (At & { type: "crate"; w: number; h: number; d: number; rot: number })
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
   | (At & { type: "goal"; r: number });
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "plank", "hole", "blockade", "barrier", "pillar", "crate", "block", "spinner", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "plank", "support", "kicker", "hole", "blockade", "barrier", "pillar", "crate", "block", "spinner", "goal", "start"];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
-  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate";
+  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "kicker";
 export type Platform = Piece & { type: "slab" | "curve" | "ramp" };
 export const isPlatform = (p: Piece): p is Platform => p.type === "slab" || p.type === "curve" || p.type === "ramp";
 export type Ramp = Piece & { type: "ramp" };
@@ -94,7 +126,8 @@ export function platformHeightAt(p: Platform, x: number, z: number): number {
   const l = rotXZ(x - p.x, z - p.z, -pieceRot(p));
   return p.y + rampHeight(p, (p.d / 2 - l.z) / p.d);
 }
-export const LANE_WIDTH = 10;
+// New pieces are sized in multiples of 4, the unit that looks right; a lane is two of them.
+export const LANE_WIDTH = 8;
 
 export type Bridge = Piece & { type: "bridge" };
 export interface BridgePlank { y: number; z: number; tilt: number; len: number }
@@ -154,6 +187,7 @@ export function pieceBoxes(p: Piece): Box[] {
   if (p.type === "block") return [{ kind: "block", x: 0, y: p.h / 2, z: 0, w: p.w, h: p.h, d: p.d }];
   if (p.type === "blockade") return [{ kind: "block", x: 0, y: BLOCKADE_H / 2, z: 0, w: BLOCKADE_W, h: BLOCKADE_H, d: BLOCKADE_D }];
   if (p.type === "barrier") return [{ kind: "block", x: 0, y: BARRIER_H / 2, z: 0, w: BARRIER_W, h: BARRIER_H, d: BARRIER_D }];
+  if (p.type === "support") return supportPillars(p).map((c) => ({ kind: "block", x: c.x, y: (c.y0 + c.y1) / 2, z: c.z, w: SUPPORT_W, h: c.y1 - c.y0, d: SUPPORT_D }));
   return [];
 }
 
@@ -275,24 +309,26 @@ export function surfaceAt(level: Level, x: number, z: number): number | null {
 }
 
 export function pieceRot(p: Piece): number {
-  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "plank" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" ? p.rot : 0;
+  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "plank" || p.type === "support" || p.type === "kicker" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" ? p.rot : 0;
 }
 
 export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
   switch (type) {
     case "start": return { type, x, y, z };
-    case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 20, rot: 0, tilt: 0, fences: { n: false, e: false, s: false, w: false } };
-    case "curve": return { type, x, y, z, inner: 10, outer: 10 + LANE_WIDTH, rot: 0, fences: { inner: false, outer: false, a: false, b: false } };
-    case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 20, rot: 0, rise: RAMP_RISE, fences: { e: false, w: false } };
-    case "bridge": return { type, x, y, z, w: 4, d: 10, rot: 0 };
-    case "plank": return { type, x, y, z, w: 4, h: 10, rot: 0 };
-    case "hole": return { type, x, y, z, w: 4, d: 3, rot: 0 };
-    case "block": return { type, x, y, z, w: 3, h: 1.2, d: 4, rot: 0 };
+    case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, fences: { n: false, e: false, s: false, w: false } };
+    case "curve": return { type, x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, fences: { inner: false, outer: false, a: false, b: false } };
+    case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 24, rot: 0, rise: RAMP_RISE, fences: { e: false, w: false } };
+    case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
+    case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0 };
+    case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
+    case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
+    case "hole": return { type, x, y, z, w: 4, d: 4, rot: 0 };
+    case "block": return { type, x, y, z, w: 4, h: 1.2, d: 4, rot: 0 };
     case "blockade": return { type, x, y, z, rot: 0 };
     case "pillar": return { type, x, y, z };
     case "barrier": return { type, x, y, z, rot: 0 };
-    case "crate": return { type, x, y, z, rot: 0, s: CRATE_S };
-    case "spinner": return { type, x, y, z, length: 6, speed: 1.2 };
+    case "crate": return { type, x, y, z, w: CRATE_S, h: CRATE_S, d: CRATE_S, rot: 0 };
+    case "spinner": return { type, x, y, z, length: 8, speed: 1.2 };
     case "goal": return { type, x, y, z, r: 1.2 };
   }
 }
@@ -312,7 +348,8 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
-    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank") && Math.abs(p.y / LAYER_H - Math.round(p.y / LAYER_H)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${LAYER_H}`);
+    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "support") && Math.abs(p.y / LAYER_H - Math.round(p.y / LAYER_H)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${LAYER_H}`);
+    if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
   });
   for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
@@ -344,11 +381,17 @@ export function validateLevel(raw: unknown): Level {
         fences: { e: bool(f.e), w: bool(f.w) } };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot") };
+      case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot") };
+      case "support": return { type: "support", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot") };
       case "block": return { type: "block", ...at, w: num(p.w, "w"), h: num(p.h, "h"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "blockade": return { type: "blockade", ...at, rot: num(p.rot ?? 0, "rot") };
       case "pillar": return { type: "pillar", ...at };
       case "barrier": return { type: "barrier", ...at, rot: num(p.rot ?? 0, "rot") };
-      case "crate": return { type: "crate", ...at, rot: num(p.rot ?? 0, "rot"), s: num(p.s ?? CRATE_S, "s") };
+      case "crate": {
+        // Older levels give a cube's side as `s`.
+        const s = num(p.s ?? CRATE_S, "s");
+        return { type: "crate", ...at, w: num(p.w ?? s, "w"), h: num(p.h ?? s, "h"), d: num(p.d ?? s, "d"), rot: num(p.rot ?? 0, "rot") };
+      }
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: num(p.r, "r") };
