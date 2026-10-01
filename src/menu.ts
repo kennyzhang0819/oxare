@@ -1,8 +1,9 @@
-import { Input } from "./input.ts";
+import * as THREE from "three";
 import { cloneLevel, type Level } from "./level.ts";
 import { LEVELS } from "./levels/index.ts";
 import { loadDraft } from "./editor.ts";
 import { loadProgress } from "./game.ts";
+import { createScene, type SceneEnv } from "./scene.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -10,23 +11,23 @@ export interface MenuOpts { onPlay(index: number): void; onEdit(level: Level): v
 
 export class Menu implements Mode {
   private ctx: Ctx;
+  private env: SceneEnv;
+  private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+  private raf = 0;
+  private onResize = () => this.resize();
 
   constructor(ctx: Ctx, opts: MenuOpts) {
     this.ctx = ctx;
+    // Open sky and sea behind the menu, nothing else; the camera slowly turns over the water.
+    this.env = createScene();
+    addEventListener("resize", this.onResize);
+    this.resize();
+    this.raf = requestAnimationFrame(this.frame);
     const progress = loadProgress();
     const draft = loadDraft();
-    const tiltBtn = h("button", { class: "ghost" });
-    const setTilt = () => { tiltBtn.textContent = localStorage.getItem("balling.tilt") === "1" ? "Tilt: on" : "Tilt: off"; };
-    tiltBtn.onclick = async () => {
-      if (localStorage.getItem("balling.tilt") === "1") Input.disableTilt();
-      else if (!(await Input.requestTilt())) alert("Tilt not available on this device.");
-      setTilt();
-    };
-    setTilt();
     ctx.overlay.append(
       h("div", { class: "menu" },
-        h("h1", {}, "BALLING"),
-        h("div", { class: "sub" }, "roll through the sky"),
+        h("h1", {}, "OXARE"),
         h("div", { class: "levels" },
           ...LEVELS.map((l, i) => h("div", { class: "level-row" },
             h("span", { class: "name" }, `${i + 1}. ${l.name}`),
@@ -42,10 +43,27 @@ export class Menu implements Mode {
             h("button", { onclick: () => opts.onEdit(cloneLevel(LEVELS[0]!)) }, "Open editor"),
           ),
         ),
-        h("div", { class: "row" }, Input.tiltAvailable() ? tiltBtn : null),
-        h("div", { class: "hint" }, "Left / right steers the camera around the ball; up / down rolls it forward and back. Keyboard: arrows or WASD. Mouse: drag to look around. Touch: drag as a stick. Press T in a level to tune the feel, R to respawn."),
       ),
     );
   }
-  dispose() { clear(this.ctx.overlay); }
+  private resize() {
+    this.ctx.renderer.setSize(innerWidth, innerHeight, false);
+    this.camera.aspect = innerWidth / innerHeight;
+    this.camera.updateProjectionMatrix();
+  }
+
+  private frame = (now: number) => {
+    const a = now / 1000 * 0.03;
+    this.camera.position.set(0, 10, 0);
+    this.camera.lookAt(Math.sin(a) * 40, 2, Math.cos(a) * 40);
+    this.env.tick(this.camera);
+    this.ctx.renderer.render(this.env.scene, this.camera);
+    this.raf = requestAnimationFrame(this.frame);
+  };
+
+  dispose() {
+    cancelAnimationFrame(this.raf);
+    removeEventListener("resize", this.onResize);
+    clear(this.ctx.overlay);
+  }
 }

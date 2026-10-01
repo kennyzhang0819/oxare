@@ -1,0 +1,22 @@
+{
+  "id": "02",
+  "name": "Heights",
+  "pieces": [
+    {"type": "start", "x": 0, "y": 0, "z": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -6, "w": 8, "d": 20, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "goal", "x": 29.5, "y": 0, "z": -10.5, "r": 2},
+    {"type": "slab", "x": 29.5, "y": 0, "z": -10.5, "w": 6, "d": 6, "rot": 0, "tilt": 0, "fences": {"n": true, "e": true, "s": false, "w": true}},
+    {"type": "ramp", "x": -18.5, "y": 0, "z": -41.5, "w": 10, "d": 30, "rot": 0, "rise": 4, "fences": {"e": true, "w": true}},
+    {"type": "slab", "x": 0, "y": 0, "z": -26, "w": 4, "d": 20, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "barrier", "x": -3, "y": 0, "z": -15, "rot": 45},
+    {"type": "barrier", "x": 3, "y": 0, "z": -15, "rot": -45},
+    {"type": "curve", "x": 15, "y": 0, "z": -36, "inner": 11, "outer": 19, "rot": 90, "fences": {"inner": true, "outer": true, "a": false, "b": false}},
+    {"type": "slab", "x": 25, "y": 0, "z": -51, "w": 4, "d": 20, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "slab", "x": 45, "y": 0, "z": -51, "w": 8, "d": 20, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "curve", "x": 65, "y": 0, "z": -36, "inner": 11, "outer": 19, "rot": 0, "fences": {"inner": true, "outer": true, "a": false, "b": false}},
+    {"type": "slab", "x": 80, "y": 0, "z": -26, "w": 8, "d": 20, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "bridge", "x": 60, "y": 0, "z": -51, "w": 4, "d": 10, "rot": 90},
+    {"type": "plank", "x": 80, "y": 0, "z": -16.5, "w": 4, "h": 10, "rot": 0},
+    {"type": "slab", "x": 80, "y": 4, "z": -0.5, "w": 8, "d": 20, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}}
+  ]
+}

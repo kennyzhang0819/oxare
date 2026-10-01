@@ -1,5 +1,9 @@
 :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #8ec5ff; }
+/* A game, not a page: no text selection, image dragging, callouts or visible scrollbars. Panels still scroll. */
+* { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-user-drag: none; -webkit-tap-highlight-color: transparent; scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
+input, textarea { user-select: text; -webkit-user-select: text; }
 canvas#game { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #overlay { position: fixed; inset: 0; pointer-events: none; }
 #overlay > * { pointer-events: auto; }
@@ -11,9 +15,16 @@ input[type=number], input[type=text] { font: inherit; width: 5.5em; padding: 3px
 input[type=text] { width: 100%; box-sizing: border-box; }
 
 .menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: linear-gradient(rgba(255,255,255,0.05), rgba(255,255,255,0.3)); color: #10233a; }
+.menu h1 { text-shadow: 0 2px 12px rgba(255,255,255,0.7); }
+
+.loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
   background: linear-gradient(#5fa8ff, #dff1ff); color: #10233a; }
+.loading h1 { font-size: 56px; margin: 0; letter-spacing: 0.08em; font-weight: 800; }
+.loading .bar { width: 240px; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.5); overflow: hidden; }
+.loading .fill { height: 100%; width: 0; background: #1f2a3a; transition: width 0.2s; }
+.loading .status { font-size: 13px; opacity: 0.7; }
 .menu h1 { font-size: 56px; margin: 0; letter-spacing: 0.08em; font-weight: 800; }
-.menu .sub { opacity: 0.7; margin-top: -10px; }
 .levels { display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
 .level-row { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.55); padding: 10px 14px; border-radius: 12px; }
 .level-row .name { flex: 1; font-weight: 600; }
@@ -38,15 +49,16 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .editor { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; background: rgba(255,255,255,0.94); color: #10233a; display: flex; flex-direction: column; font-size: 13px; }
 .editor .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid #dde4ec; }
 .editor .bar button { padding: 6px 10px; font-size: 13px; }
-.editor .add button { background: #2d7d46; }
+.editor .add button.pick { padding: 2px; background: #eef3f8; border: 1px solid #c9d6e3; }
+.editor .add button.pick:hover { background: #dfeaf5; border-color: #2d7d46; }
+.editor .add img { display: block; width: 56px; height: 42px; border-radius: 6px; }
 .editor .body { flex: 1; overflow: auto; padding: 10px; }
 .editor .props label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin: 4px 0; }
 .editor .props .checks { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .editor .props .checks label { display: inline-flex; gap: 4px; }
-.editor .list { margin-top: 12px; }
-.editor .list div { padding: 4px 6px; border-radius: 6px; cursor: pointer; }
-.editor .list div:hover { background: #eef3f8; }
-.editor .list div.sel { background: #cfe3ff; }
 .editor .hint { padding: 10px; border-top: 1px solid #dde4ec; opacity: 0.7; line-height: 1.4; }
 .editor .problems { color: #b3261e; padding: 6px 10px; }
+.marquee { position: absolute; border: 1px solid #2ee8ff; background: rgba(46, 232, 255, 0.12); pointer-events: none; }
+.editor .notice { color: #1f6b3a; padding: 0 10px 6px; }
+.editor .notice.error { color: #b3261e; }
 .editor h3 { margin: 8px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }

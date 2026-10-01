@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { sectorMesh } from "./geometry.ts";
-import { type Piece } from "./level.ts";
+import { rampHeight, type Piece } from "./level.ts";
 
 const RAIL_Y = 0.39;
 const RAIL_R = 0.09;
@@ -9,9 +9,11 @@ const CORNER = 0.2;
 const COLLAR_EVERY = 4;
 
 type XZ = [number, number];
+type XYZ = [number, number, number];
 type Seg =
   | { kind: "line"; pts: XZ[]; inward: XZ }
-  | { kind: "arc"; pts: XZ[]; r: number; inward: 1 | -1 };
+  | { kind: "arc"; pts: XZ[]; r: number; inward: 1 | -1 }
+  | { kind: "poly"; pts: XYZ[] };
 
 const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.4, metalness: 0.2 });
 const COLLAR_MAT = new THREE.MeshStandardMaterial({ color: 0xb9c3cd, roughness: 0.45, metalness: 0.1 });
@@ -38,6 +40,20 @@ function segments(p: Piece): (Seg | null)[] {
       f.e ? { kind: "line", pts: [ne, se], inward: [-1, 0] } : null,
       f.s ? { kind: "line", pts: [se, sw], inward: [0, -1] } : null,
       f.w ? { kind: "line", pts: [sw, nw], inward: [1, 0] } : null,
+    ];
+  }
+  if (p.type === "ramp") {
+    const hx = p.w / 2 - INSET, n = Math.max(1, Math.ceil(p.d));
+    const side = (x: number): XYZ[] => {
+      const out: XYZ[] = [];
+      for (let i = 0; i <= n; i++) { const t = i / n; out.push([x, RAIL_Y + rampHeight(p, t), p.d / 2 - t * p.d]); }
+      return out;
+    };
+    return [
+      null,
+      p.fences.e ? { kind: "poly", pts: side(hx).reverse() } : null,
+      null,
+      p.fences.w ? { kind: "poly", pts: side(-hx) } : null,
     ];
   }
   if (p.type === "curve") {
@@ -97,14 +113,15 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
   COLLAR_MAT.envMapIntensity = 0.4;
   for (const run of runs(segments(p))) {
     const pts: THREE.Vector3[] = [];
-    for (const s of run.segs) for (const [x, z] of s.pts) {
-      const v = new THREE.Vector3(x, RAIL_Y, z);
+    for (const s of run.segs) for (const q of s.pts) {
+      const v = s.kind === "poly" ? new THREE.Vector3(q[0], q[1], q[2]) : new THREE.Vector3(q[0], RAIL_Y, q[1]);
       if (!pts.length || pts[pts.length - 1]!.distanceTo(v) > 1e-4) pts.push(v);
     }
     if (run.closed && pts.length > 1 && pts[0]!.distanceTo(pts[pts.length - 1]!) < 1e-4) pts.pop();
     if (!run.closed) {
-      pts.unshift(new THREE.Vector3(pts[0]!.x, -0.1, pts[0]!.z));
-      pts.push(new THREE.Vector3(pts[pts.length - 1]!.x, -0.1, pts[pts.length - 1]!.z));
+      const a = pts[0]!, b = pts[pts.length - 1]!;
+      pts.unshift(new THREE.Vector3(a.x, a.y - RAIL_Y - 0.1, a.z));
+      pts.push(new THREE.Vector3(b.x, b.y - RAIL_Y - 0.1, b.z));
     }
     const path = tubePath(pts, run.closed);
     const len = path.getLength();
@@ -127,7 +144,7 @@ export function buildRails(p: Piece, into: THREE.Group, env: THREE.Texture | nul
           c.quaternion.setFromUnitVectors(UP, new THREE.Vector3(dx / L, 0, dz / L));
           into.add(c);
         }
-      } else {
+      } else if (s.kind === "arc") {
         const rs = s.r + s.inward * RAIL_R;
         const t = sectorMesh(rs - 0.025, rs + 0.025, RAIL_Y - 0.03, RAIL_Y + 0.03, { segments: 24 });
         const geo = new THREE.BufferGeometry();

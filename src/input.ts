@@ -1,3 +1,5 @@
+import { TUNING } from "./tuning.ts";
+
 const TILT_KEY = "balling.tilt";
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 
@@ -40,8 +42,9 @@ export class Input {
     this.cleanup.push(() => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); });
     const orient = (e: DeviceOrientationEvent) => {
       if (!this.tiltOn || e.gamma == null || e.beta == null) return;
-      this.tiltSteer = clamp(e.gamma / 30);
-      this.tiltThrottle = clamp((this.neutralBeta - e.beta) / 25);
+      // Degrees of roll / pitch for full steer and full throttle.
+      this.tiltSteer = clamp(e.gamma / TUNING.tiltRange);
+      this.tiltThrottle = clamp((this.neutralBeta - e.beta) / TUNING.tiltPitchRange);
     };
     on("deviceorientation", orient);
     if (localStorage.getItem(TILT_KEY) === "1") this.tiltOn = true;

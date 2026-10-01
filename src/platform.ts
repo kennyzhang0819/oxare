@@ -1,11 +1,17 @@
 import * as THREE from "three";
+import { cutHole, type XZ } from "./poly.ts";
 
-// A slab with every top edge rounded, optionally bent into a 90-degree arc about
-// the origin (local x runs along the arc, local z across it, arc radius rmid + z).
-export function platformGeometry(L: number, W: number, thick: number, bevel: number, tile: number, bend?: { rmid: number }): THREE.BufferGeometry {
-  const b = Math.max(0.01, Math.min(bevel, W / 2 - 0.01, L / 2 - 0.01, thick - 0.01));
+// A slab rounded identically top and bottom, so it reads the same flipped, optionally bent into a 90-degree arc about
+// the origin (local x runs along the arc, local z across it, arc radius rmid + z),
+// or lifted by `warp(t)` with t running 0..1 along local x. `cuts` are convex holes in
+// local XZ removed from the flat top. The lip is a quarter-ellipse `bevel.inset` wide and
+// `bevel.drop` tall. Group 0 is the top and bottom, group 1 the outer walls (uv v runs
+// 0..1 from the bottom to the top of the slab), group 2 the two rounded lips.
+export function platformGeometry(L: number, W: number, thick: number, bevel: { inset: number; drop: number }, tile: number, bend?: { rmid: number }, warp?: (t: number) => number, cuts: XZ[][] = []): THREE.BufferGeometry {
+  const b = Math.max(0.01, Math.min(bevel.inset, W / 2 - 0.01, L / 2 - 0.01));
+  const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const A = L / 2, B = W / 2;
-  const ns = Math.max(1, Math.ceil(L / (bend ? 1 : 2)));
+  const ns = Math.max(1, Math.ceil(L / (bend || warp ? 1 : 2)));
   const nt = Math.max(1, Math.ceil(W / 2));
   const K = 4, KB = 4;
   const y1 = 0, y0 = -thick;
@@ -60,34 +66,61 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: num
   };
   const outward = (up: number) => (v: number): [number, number, number] => [P(v, 0), up, P(v, 2)];
 
-  // Bevel rings from the wall top up to the flat top, then the flat interior.
-  let prev = -1;
-  for (let k = 0; k <= KB; k++) {
-    const t = (k / KB) * (Math.PI / 2);
-    const o = b * (1 - Math.cos(t));
-    const ring = addRing(ringPts(A - o, B - o, b - o), y1 - b + b * Math.sin(t), 0);
-    if (prev >= 0) strip(prev, ring, outward(b));
-    prev = ring;
-  }
-  const gridBase = pos.length / 3;
-  for (let j = 0; j <= nt; j++) for (let i = 0; i <= ns; i++) {
-    pos.push(-(A - b) + ((2 * (A - b)) * i) / ns, y1, -(B - b) + ((2 * (B - b)) * j) / nt);
-    uvKind.push(0); perim.push(0);
-  }
-  for (let j = 0; j < nt; j++) for (let i = 0; i < ns; i++) {
-    const a = gridBase + j * (ns + 1) + i;
-    quad(a, a + 1, a + ns + 2, a + ns + 1, 0, 1, 0);
-  }
-  // Walls and bottom.
+  // Bevel rings from the wall edge out to a flat face; `dir` is +1 for the top, -1 for the bottom.
+  const bevelRings = (yEdge: number, dir: 1 | -1) => {
+    let prev = -1;
+    for (let k = 0; k <= KB; k++) {
+      const t = (k / KB) * (Math.PI / 2);
+      const o = b * (1 - Math.cos(t));
+      const ring = addRing(ringPts(A - o, B - o, b - o), yEdge + dir * by * Math.sin(t), 0);
+      if (prev >= 0) strip(prev, ring, outward(dir * by));
+      prev = ring;
+    }
+  };
+  // Flat face at `y` inside the bevels, as hole-cut fans or a grid (the grid gives the warp its shape).
+  const face = (y: number, dir: 1 | -1) => {
+    if (cuts.length) {
+      let polys: XZ[][] = [[[-(A - b), -(B - b)], [A - b, -(B - b)], [A - b, B - b], [-(A - b), B - b]]];
+      for (const c of cuts) polys = polys.flatMap((q) => cutHole(q, c));
+      for (const q of polys) {
+        const base = pos.length / 3;
+        for (const [x, z] of q) { pos.push(x, y, z); uvKind.push(0); perim.push(0); }
+        const c = pos.length / 3;
+        pos.push(q.reduce((s, v) => s + v[0], 0) / q.length, y, q.reduce((s, v) => s + v[1], 0) / q.length);
+        uvKind.push(0); perim.push(0);
+        for (let i = 0; i < q.length; i++) tri(c, base + i, base + ((i + 1) % q.length), 0, dir, 0);
+      }
+    } else {
+      const gridBase = pos.length / 3;
+      for (let j = 0; j <= nt; j++) for (let i = 0; i <= ns; i++) {
+        pos.push(-(A - b) + ((2 * (A - b)) * i) / ns, y, -(B - b) + ((2 * (B - b)) * j) / nt);
+        uvKind.push(0); perim.push(0);
+      }
+      for (let j = 0; j < nt; j++) for (let i = 0; i < ns; i++) {
+        const a = gridBase + j * (ns + 1) + i;
+        quad(a, a + 1, a + ns + 2, a + ns + 1, 0, dir, 0);
+      }
+    }
+  };
+  bevelRings(y1 - by, 1);
+  const topLipTo = idx.length;
+  face(y1, 1);
+  const botLipFrom = idx.length;
+  bevelRings(y0 + by, -1);
+  const botLipTo = idx.length;
+  face(y0, -1);
+  // Walls between the two lips.
   const outer = ringPts(A, B, b);
-  const wallTop = addRing(outer, y1 - b, 1);
-  const wallBot = addRing(outer, y0, 1);
+  const wallTop = addRing(outer, y1 - by, 1);
+  const wallBot = addRing(outer, y0 + by, 1);
+  const wallsFrom = idx.length;
   strip(wallTop, wallBot, outward(0));
-  const botRing = addRing(outer, y0, 0);
-  const center = pos.length / 3;
-  pos.push(0, y0, 0); uvKind.push(0); perim.push(0);
-  for (let i = 0; i < N; i++) tri(center, botRing + i, botRing + ((i + 1) % N), 0, -1, 0);
+  const wallsTo = idx.length;
 
+  const lift: number[] = [];
+  if (warp) {
+    for (let i = 0; i < pos.length; i += 3) { const w = warp((pos[i]! + A) / L); lift.push(w); pos[i + 1] = pos[i + 1]! + w; }
+  }
   if (bend) {
     for (let i = 0; i < pos.length; i += 3) {
       const x = pos[i]!, z = pos[i + 2]!;
@@ -99,12 +132,18 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: num
   const uv = new Float32Array((pos.length / 3) * 2);
   for (let i = 0; i < pos.length / 3; i++) {
     if (uvKind[i] === 0) { uv[i * 2] = P(i, 0) / tile; uv[i * 2 + 1] = P(i, 2) / tile; }
-    else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = P(i, 1) / tile; }
+    else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (P(i, 1) - (lift[i] ?? 0) - y0) / thick; }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   geo.setIndex(idx);
+  geo.addGroup(0, topLipTo, 2);
+  geo.addGroup(topLipTo, botLipFrom - topLipTo, 0);
+  geo.addGroup(botLipFrom, botLipTo - botLipFrom, 2);
+  geo.addGroup(botLipTo, wallsFrom - botLipTo, 0);
+  geo.addGroup(wallsFrom, wallsTo - wallsFrom, 1);
+  geo.addGroup(wallsTo, idx.length - wallsTo, 0);
   geo.computeVertexNormals();
   return geo;
 }

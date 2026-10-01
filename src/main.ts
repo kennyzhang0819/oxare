@@ -3,9 +3,8 @@ import "./style.css";
 import { Editor } from "./editor.ts";
 import { Game } from "./game.ts";
 import { LEVELS } from "./levels/index.ts";
+import { Loading } from "./loading.ts";
 import { Menu } from "./menu.ts";
-import { initMaterials } from "./scene.ts";
-import { initPhysics } from "./sim.ts";
 import { loadTuning } from "./tuning.ts";
 import type { Level } from "./level.ts";
 
@@ -19,10 +18,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const ctx: Ctx = { renderer, canvas, overlay };
-initMaterials(renderer);
 
 loadTuning();
-void initPhysics();
 
 let mode: Mode | null = null;
 function show(next: () => Mode) {
@@ -36,7 +33,7 @@ function menu() {
 
 function playLevel(i: number) {
   const level = LEVELS[i];
-  if (!level) return menu();
+  if (!level) return show(() => new Loading(ctx, menu));
   show(() => new Game(ctx, level, {
     onExit: menu,
     onRetry: () => playLevel(i),
@@ -47,8 +44,12 @@ function playLevel(i: number) {
 function edit(level: Level) {
   show(() => new Editor(ctx, level, {
     onExit: menu,
-    onPlay: (l) => show(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l) })),
+    onPlay: (l, from) => show(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l), from })),
   }));
 }
 
-menu();
+// No browser context menu ("Save image as..." on the canvas); text fields keep theirs.
+addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); });
+addEventListener("dragstart", (e) => e.preventDefault());
+
+show(() => new Loading(ctx, menu));

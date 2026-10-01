@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { BALL_RADIUS, type Level } from "./level.ts";
-import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, type Built, type SceneEnv } from "./scene.ts";
+import { BALL_RADIUS, GOAL_BEAM_H, type Level } from "./level.ts";
+import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
@@ -16,7 +16,8 @@ export function loadProgress(): Progress {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
 }
 
-export interface GameOpts { onExit(): void; onNext?: () => void; onRetry(): void }
+export interface PlayFrom { x: number; y: number; z: number; yaw: number }
+export interface GameOpts { onExit(): void; onNext?: () => void; onRetry(): void; from?: PlayFrom }
 
 export class Game implements Mode {
   private scene: THREE.Scene;
@@ -41,7 +42,6 @@ export class Game implements Mode {
   private falls = 0;
   private done = false;
   private hud: HTMLElement;
-  private timeEl = h("span", { class: "pill" }, "0:00.00");
   private tunePanel: HTMLElement | null = null;
   private onResize = () => this.resize();
   private onKey = (e: KeyboardEvent) => {
@@ -63,11 +63,9 @@ export class Game implements Mode {
     this.built = buildLevel(level, false);
     this.scene.add(this.built.group, this.ball.mesh);
     this.hud = h("div", { class: "hud" },
-      h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
-      h("span", { class: "pill" }, level.name),
-      this.timeEl,
       h("span", { class: "spacer" }),
       h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)"),
+      h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
     );
     ctx.overlay.append(this.hud);
     this.input.attach(ctx.canvas);
@@ -79,7 +77,8 @@ export class Game implements Mode {
   }
 
   private async boot() {
-    this.sim = await createSim(this.level);
+    if (this.opts.from) this.yaw = this.opts.from.yaw;
+    this.sim = await createSim(this.level, this.opts.from);
     if (this.raf === -1) { this.sim.free(); return; }
     this.savePrev();
     this.snapCamera();
@@ -130,15 +129,31 @@ export class Game implements Mode {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);
     }
+    for (const c of sim.crates) {
+      const g = this.built.crates.get(c.index);
+      if (!g) continue;
+      const t = c.body.translation(), q = c.body.rotation();
+      g.position.set(t.x, t.y, t.z);
+      g.quaternion.set(q.x, q.y, q.z, q.w);
+    }
+    for (const b of sim.bridges) {
+      const planks = this.built.bridges.get(b.index), piece = this.built.pieceGroups[b.index];
+      if (!planks || !piece) continue;
+      b.planks.forEach((body, k) => { const pg = planks[k]; if (pg) posePlank(piece, pg, body.translation(), body.rotation()); });
+    }
+    for (const pl of sim.planks) {
+      const panel = this.built.planks.get(pl.index), piece = this.built.pieceGroups[pl.index];
+      if (panel && piece) posePlank(piece, panel, pl.body.translation(), pl.body.rotation());
+    }
     if (!this.done) {
       if (p.y < TUNING.respawnY) this.fall();
       const goal = this.built.goal;
       if (goal) {
         const gp = this.level.pieces[goal.index]!;
-        if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r && Math.abs(p.y - (gp.y + BALL_RADIUS)) < 0.6) this.finish();
+        // Touching the beam anywhere along its height wins, airborne included.
+        if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r * 0.7 + BALL_RADIUS && p.y > gp.y - BALL_RADIUS && p.y < gp.y + GOAL_BEAM_H) this.finish();
       }
     }
-    this.timeEl.textContent = fmtTime(this.time);
     this.updateCamera(dt);
     this.env.tick(this.camera);
     this.ball.reflect(this.ctx.renderer, this.scene);
@@ -157,7 +172,17 @@ export class Game implements Mode {
     const p = this.shown.set(this.prevPos.x, this.prevPos.y, this.prevPos.z);
     this.anchor.copy(p);
     this.camera.position.set(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
-    this.camera.lookAt(p.x, p.y, p.z);
+    this.aim(p);
+  }
+
+  // Pitch the camera so the frame's bottom edge sits `camBallGap` ball heights below the
+  // ball: the ball rides low in the view and the rest of the frame is scene and sky.
+  private aim(p: THREE.Vector3) {
+    const c = this.camera.position;
+    const hx = p.x - c.x, hz = p.z - c.z, d = Math.hypot(hx, hz) || 1e-6;
+    const floorY = p.y - BALL_RADIUS - TUNING.camBallGap * 2 * BALL_RADIUS;
+    const pitch = Math.atan2(floorY - c.y, d) + (this.camera.fov * Math.PI) / 360;
+    this.camera.lookAt(c.x + (hx / d) * Math.cos(pitch), c.y + Math.sin(pitch), c.z + (hz / d) * Math.cos(pitch));
   }
 
   private updateCamera(dt: number) {
@@ -165,7 +190,7 @@ export class Game implements Mode {
     // Only the follow eases; the orbit angle is applied rigidly so the view stops the instant steering does.
     const o = this.anchor.lerp(p, 1 - Math.exp(-10 * dt));
     this.camera.position.set(o.x + Math.sin(this.yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(this.yaw) * TUNING.camDist);
-    this.camera.lookAt(p.x, p.y + 0.4, p.z);
+    this.aim(p);
     // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
     const sc = this.sun.shadow.camera;
     const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.width;
