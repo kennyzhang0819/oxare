@@ -1,5 +1,7 @@
 # Oxare
 
+![Rolling through a level](docs/images/gameplay.webp)
+
 Oxare is my personal reimagination of the classic iOS 3D puzzle platformer game: Aerox. Oxare is an anagram of the name. I loved how simple this game looks yet how deeply addictive and fun the puzzle solving process is. Unfortunately, the game stopped receiving new updates and the original 40 levels were not enough content for me. Thus, I rebuilt the game to the best of my ability on a new engine 10+ years later. Hope this is fun for someone.
 
 ## Features
@@ -9,6 +11,8 @@ In order of building:
 - All 40 original levels completely rebuilt in the new level editor (currently working on).
 - Brand new levels created by me, plus endless community created and voted levels.
 - An editor for anyone to create any level.
+
+![The level editor](docs/images/editor.webp)
 
 ## Run it yourself
 
