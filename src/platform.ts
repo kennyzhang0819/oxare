@@ -1,26 +1,17 @@
 import * as THREE from "three";
-import { cutHole, type XZ } from "./poly.ts";
+import { cutRegion, edgeGaps, type XZ } from "./poly.ts";
 
-// A slab rounded identically top and bottom, so it reads the same flipped, optionally bent into a 90-degree arc about
-// the origin (local x runs along the arc, local z across it, arc radius rmid + z),
-// or lifted by `warp(t)` with t running 0..1 along local x. `cuts` are convex holes in
-// local XZ removed from the flat top. The lip is a quarter-ellipse `bevel.inset` wide and
-// `bevel.drop` tall, and inside it a flat band `bevel.border` wide frames each face. Group 0 is
-// the top and bottom, group 1 the outer walls (uv v runs 0..1 from the bottom to the top of
-// the slab), group 2 the two rounded lips, group 3 the two border bands.
+// See docs/platforms.md. Material groups: 0 top/bottom, 1 walls, 2 lips, 3 borders; scene.ts indexes materials by them.
 export function platformGeometry(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: { rmid: number }, warp?: (t: number) => number, cuts: XZ[][] = []): THREE.BufferGeometry {
-  const b = Math.max(0.01, Math.min(bevel.inset, W / 2 - 0.01, L / 2 - 0.01));
-  const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
-  const g = Math.max(0, Math.min(bevel.border, W / 2 - b - 0.01, L / 2 - b - 0.01));
-  // Plan-view corner radius where the lip meets the border, and inside the border.
-  const re = b / 2, rf = Math.max(0, re - g);
   const A = L / 2, B = W / 2;
-  const ns = Math.max(1, Math.ceil(L / (bend || warp ? 1 : 2)));
-  const nt = Math.max(1, Math.ceil(W / 2));
+  const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const K = 4, KB = 4;
   const y1 = 0, y0 = -thick;
+  const step = bend || warp ? 1 : 2;
+  const rect: XZ[] = [[-A, -B], [-A, B], [A, B], [A, -B]];
+  const region = cuts.length ? cutRegion(rect, cuts) : [[rect]];
 
-  const pos: number[] = [], uvKind: number[] = [], perim: number[] = [], idx: number[] = [];
+  const pos: number[] = [], uvKind: number[] = [], perim: number[] = [], out: number[] = [], idx: number[] = [];
   const P = (i: number, k: number) => pos[i * 3 + k] ?? 0;
   const tri = (a: number, c: number, d: number, hx: number, hy: number, hz: number) => {
     const ux = P(c, 0) - P(a, 0), uy = P(c, 1) - P(a, 1), uz = P(c, 2) - P(a, 2);
@@ -33,110 +24,155 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
     tri(a, d, e, hx, hy, hz);
   };
 
-  const ringPts = (a: number, c: number, cr: number): [number, number][] => {
-    const pts: [number, number][] = [];
-    const seg = (x0: number, z0: number, x1: number, z1: number, n: number) => {
-      for (let i = 0; i < n; i++) pts.push([x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
-    };
-    const arc = (cx: number, cz: number, a0: number) => {
-      for (let i = 0; i < K; i++) { const t = a0 + (i / K) * (Math.PI / 2); pts.push([cx + cr * Math.cos(t), cz + cr * Math.sin(t)]); }
-    };
-    seg(-(a - cr), -c, a - cr, -c, ns);
-    arc(a - cr, -c + cr, -Math.PI / 2);
-    seg(a, -c + cr, a, c - cr, nt);
-    arc(a - cr, c - cr, 0);
-    seg(a - cr, c, -(a - cr), c, ns);
-    arc(-(a - cr), c - cr, Math.PI / 2);
-    seg(-a, c - cr, -a, -c + cr, nt);
-    arc(-(a - cr), -c + cr, Math.PI);
-    return pts;
+  type Size = { b: number; g: number; re: number };
+  const inward = (loop: XZ[], i: number): XZ => {
+    const a = loop[i]!, c = loop[(i + 1) % loop.length]!, len = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1;
+    return [(c[1] - a[1]) / len, -(c[0] - a[0]) / len];
   };
-  const addRing = (pts: [number, number][], y: number, kind: number) => {
+  const corner = (loop: XZ[], i: number, o: number, sz: Size, sc: number[], fc: number[], flat: boolean) => {
+    const n = loop.length, v = loop[i]!, n1 = inward(loop, (i + n - 1) % n), n2 = inward(loop, i);
+    const det = n1[0] * n2[1] - n1[1] * n2[0];
+    const s1 = sc[(i + n - 1) % n]!, s2 = sc[i]!, sm = Math.min(s1, s2), b = sz.b * sm, re = sz.re * sm, om = o * sm;
+    const rc = om <= b ? b - om + (re * om) / b : re - (om - b);
+    const rho = flat ? 0 : (det < 0 ? -rc : b + om) * fc[i]!;
+    const c1 = n1[0] * v[0] + n1[1] * v[1] + o * s1 - rho, c2 = n2[0] * v[0] + n2[1] * v[1] + o * s2 - rho;
+    const C: XZ = Math.abs(det) < 1e-9 ? [v[0] + n1[0] * (o * s1 - rho), v[1] + n1[1] * (o * s1 - rho)]
+      : [(c1 * n2[1] - c2 * n1[1]) / det, (n1[0] * c2 - n2[0] * c1) / det];
+    const t1 = Math.atan2(n1[1], n1[0]);
+    let dt = Math.atan2(n2[1], n2[0]) - t1;
+    if (dt > Math.PI) dt -= 2 * Math.PI;
+    if (dt < -Math.PI) dt += 2 * Math.PI;
+    return { C, rho, t1, dt, n2 };
+  };
+  type Ring = { pts: XZ[]; out: XZ[] };
+  const ringAt = (loop: XZ[], o: number, sz: Size, sc: number[], fc: number[], flat = false): Ring => {
+    const n = loop.length, pts: XZ[] = [], nrm: XZ[] = [];
+    const corners = loop.map((_, i) => corner(loop, i, o, sz, sc, fc, flat));
+    for (let i = 0; i < n; i++) {
+      const { C, rho, t1, dt, n2 } = corners[i]!;
+      for (let k = 0; k <= K; k++) {
+        const t = t1 + (dt * k) / K, u: XZ = [Math.cos(t), Math.sin(t)];
+        pts.push([C[0] + rho * u[0], C[1] + rho * u[1]]);
+        nrm.push([-u[0], -u[1]]);
+      }
+      const v = loop[i]!, w = loop[(i + 1) % n]!, segs = Math.max(1, Math.ceil(Math.hypot(w[0] - v[0], w[1] - v[1]) / step));
+      const nx = corners[(i + 1) % n]!, s0 = pts[pts.length - 1]!;
+      const s1: XZ = [nx.C[0] + nx.rho * Math.cos(nx.t1), nx.C[1] + nx.rho * Math.sin(nx.t1)];
+      for (let k = 1; k < segs; k++) {
+        pts.push([s0[0] + ((s1[0] - s0[0]) * k) / segs, s0[1] + ((s1[1] - s0[1]) * k) / segs]);
+        nrm.push([-n2[0], -n2[1]]);
+      }
+    }
+    return { pts, out: nrm };
+  };
+
+  const addRing = (r: Ring, y: number, kind: number) => {
     const base = pos.length / 3;
     let d = 0;
-    pts.forEach(([x, z], i) => {
-      if (i > 0) d += Math.hypot(x - pts[i - 1]![0], z - pts[i - 1]![1]);
-      pos.push(x, y, z); uvKind.push(kind); perim.push(d);
+    r.pts.forEach(([x, z], i) => {
+      if (i > 0) d += Math.hypot(x - r.pts[i - 1]![0], z - r.pts[i - 1]![1]);
+      pos.push(x, y, z); uvKind.push(kind); perim.push(d); out.push(r.out[i]![0], r.out[i]![1]);
     });
     return base;
   };
-  const N = 2 * ns + 2 * nt + 4 * K;
-  const strip = (ra: number, rb: number, hint: (i: number) => [number, number, number]) => {
+  const addPoint = (x: number, y: number, z: number) => { pos.push(x, y, z); uvKind.push(0); perim.push(0); out.push(0, 0); return pos.length / 3 - 1; };
+  const strip = (ra: number, rb: number, N: number, up: number) => {
     for (let i = 0; i < N; i++) {
       const j = (i + 1) % N;
-      const [hx, hy, hz] = hint(ra + i);
-      quad(ra + i, ra + j, rb + j, rb + i, hx, hy, hz);
+      quad(ra + i, ra + j, rb + j, rb + i, out[(ra + i) * 2]!, up, out[(ra + i) * 2 + 1]!);
     }
   };
-  const outward = (up: number) => (v: number): [number, number, number] => [P(v, 0), up, P(v, 2)];
 
-  // Bevel rings from the wall edge out to a flat face; `dir` is +1 for the top, -1 for the bottom.
-  const bevelRings = (yEdge: number, dir: 1 | -1) => {
-    let prev = -1;
-    for (let k = 0; k <= KB; k++) {
-      const t = (k / KB) * (Math.PI / 2);
-      const o = b * (1 - Math.cos(t));
-      const ring = addRing(ringPts(A - o, B - o, b - o + (re * o) / b), yEdge + dir * by * Math.sin(t), 0);
-      if (prev >= 0) strip(prev, ring, outward(dir * by));
-      prev = ring;
+  const b0 = Math.max(0.01, Math.min(bevel.inset, W / 2 - 0.01, L / 2 - 0.01));
+  const g0 = Math.max(0, Math.min(bevel.border, W / 2 - b0 - 0.01, L / 2 - b0 - 0.01));
+  const sz: Size = { b: b0, g: g0, re: b0 / 2 };
+  const fitCorners = (loop: XZ[], sc: number[]): number[] => {
+    const n = loop.length, fc = loop.map(() => 1);
+    const insets = [0, ...Array.from({ length: KB }, (_, k) => sz.b * (1 - Math.cos(((k + 1) / KB) * (Math.PI / 2)))), sz.b + sz.g];
+    for (let it = 0; it < 12; it++) {
+      const bad = new Set<number>();
+      for (const o of insets) {
+        const cs = loop.map((_, i) => corner(loop, i, o, sz, sc, fc, false));
+        for (let i = 0; i < n; i++) {
+          const a = cs[i]!, c = cs[(i + 1) % n]!, v = loop[i]!, w = loop[(i + 1) % n]!;
+          const dx = w[0] - v[0], dz = w[1] - v[1];
+          const along = (C: XZ, rho: number, u: XZ) => (C[0] + rho * u[0] - v[0]) * dx + (C[1] + rho * u[1] - v[1]) * dz;
+          if (along(a.C, a.rho, a.n2) > along(c.C, c.rho, a.n2) + 1e-9) { bad.add(i); bad.add((i + 1) % n); }
+        }
+      }
+      if (!bad.size) break;
+      for (const i of bad) fc[i]! *= 0.7;
+    }
+    return fc;
+  };
+
+  const parts = region.map((loops) => {
+    const gaps = cuts.length ? edgeGaps(loops) : loops.map((q) => q.map(() => Infinity));
+    return loops.map((loop, k) => {
+      const sc = gaps[k]!.map((w) => Math.max(0.05, Math.min(1, (w - 0.02) / (2 * (b0 + g0)))));
+      return { loop, sc, fc: fitCorners(loop, sc) };
+    });
+  });
+
+  const lips = (yEdge: number, dir: 1 | -1) => {
+    for (const { loop, sc, fc } of parts.flat()) {
+      let prev = -1, N = 0;
+      for (let k = 0; k <= KB; k++) {
+        const t = (k / KB) * (Math.PI / 2);
+        const r = ringAt(loop, sz.b * (1 - Math.cos(t)), sz, sc, fc);
+        N = r.pts.length;
+        const ring = addRing(r, yEdge + dir * by * Math.sin(t), 0);
+        if (prev >= 0) strip(prev, ring, N, dir);
+        prev = ring;
+      }
     }
   };
-  const fans = (y: number, dir: 1 | -1, polys: XZ[][]) => {
-    for (const c of cuts) polys = polys.flatMap((q) => cutHole(q, c));
-    for (const q of polys) {
+  const borders = (y: number, dir: 1 | -1) => {
+    if (sz.g <= 0) return;
+    for (const { loop, sc, fc } of parts.flat()) {
+      const a = ringAt(loop, sz.b, sz, sc, fc), c = ringAt(loop, sz.b + sz.g, sz, sc, fc);
+      strip(addRing(a, y, 0), addRing(c, y, 0), a.pts.length, dir);
+    }
+  };
+  const faces = (y: number, dir: 1 | -1) => {
+    for (const part of parts) {
+      const o = sz.b + sz.g, loops = part.map((l) => l.loop);
+      if (!cuts.length) {
+        const rf = sz.re - sz.g, ga = A - o - rf, gb = B - o - rf;
+        const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / 2));
+        const { sc, fc } = part[0]!;
+        if (rf > 0) { const a = ringAt(loops[0]!, o, sz, sc, fc), c = ringAt(loops[0]!, o + rf, sz, sc, fc, true); strip(addRing(a, y, 0), addRing(c, y, 0), a.pts.length, dir); }
+        const gridBase = pos.length / 3;
+        for (let j = 0; j <= nsz; j++) for (let i = 0; i <= nsx; i++) addPoint(-ga + ((2 * ga) * i) / nsx, y, -gb + ((2 * gb) * j) / nsz);
+        for (let j = 0; j < nsz; j++) for (let i = 0; i < nsx; i++) {
+          const a = gridBase + j * (nsx + 1) + i;
+          quad(a, a + 1, a + nsx + 2, a + nsx + 1, 0, dir, 0);
+        }
+        continue;
+      }
       const base = pos.length / 3;
-      for (const [x, z] of q) { pos.push(x, y, z); uvKind.push(0); perim.push(0); }
-      const c = pos.length / 3;
-      pos.push(q.reduce((s, v) => s + v[0], 0) / q.length, y, q.reduce((s, v) => s + v[1], 0) / q.length);
-      uvKind.push(0); perim.push(0);
-      for (let i = 0; i < q.length; i++) tri(c, base + i, base + ((i + 1) % q.length), 0, dir, 0);
+      const contours = part.map(({ loop, sc, fc }) => ringAt(loop, o, sz, sc, fc).pts.map(([x, z]) => { addPoint(x, y, z); return new THREE.Vector2(x, z); }));
+      const t = THREE.ShapeUtils.triangulateShape(contours[0]!, contours.slice(1));
+      for (const [a, c, d] of t) tri(base + a!, base + c!, base + d!, 0, dir, 0);
     }
   };
-  const rect = (x0: number, z0: number, x1: number, z1: number): XZ[] => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
-  // Band between two concentric rounded rings, subdivided like the lip so warp and bend follow
-  // it; with holes, each of its quads is cut separately.
-  const band = (y: number, dir: 1 | -1, outerR: XZ[], innerR: XZ[]) => {
-    if (cuts.length) fans(y, dir, outerR.map((v, i) => [v, outerR[(i + 1) % N]!, innerR[(i + 1) % N]!, innerR[i]!]));
-    else strip(addRing(outerR, y, 0), addRing(innerR, y, 0), () => [0, dir, 0]);
-  };
-  const ia = A - b, ib = B - b, fa = ia - g, fb = ib - g, ga = fa - rf, gb = fb - rf;
-  const border = (y: number, dir: 1 | -1) => {
-    if (g > 0) band(y, dir, ringPts(ia, ib, re), ringPts(fa, fb, rf));
-  };
-  // Flat face at `y` inside the border: rounded corners as a band round a rectangle that is
-  // hole-cut fans or a grid (the grid gives the warp its shape).
-  const face = (y: number, dir: 1 | -1) => {
-    if (rf > 0) band(y, dir, ringPts(fa, fb, rf), ringPts(ga, gb, 0));
-    if (cuts.length) fans(y, dir, [rect(-ga, -gb, ga, gb)]);
-    else {
-      const gridBase = pos.length / 3;
-      for (let j = 0; j <= nt; j++) for (let i = 0; i <= ns; i++) {
-        pos.push(-ga + ((2 * ga) * i) / ns, y, -gb + ((2 * gb) * j) / nt);
-        uvKind.push(0); perim.push(0);
-      }
-      for (let j = 0; j < nt; j++) for (let i = 0; i < ns; i++) {
-        const a = gridBase + j * (ns + 1) + i;
-        quad(a, a + 1, a + ns + 2, a + ns + 1, 0, dir, 0);
-      }
-    }
-  };
-  bevelRings(y1 - by, 1);
+
+  lips(y1 - by, 1);
   const topLipTo = idx.length;
-  border(y1, 1);
+  borders(y1, 1);
   const topBorderTo = idx.length;
-  face(y1, 1);
+  faces(y1, 1);
   const botLipFrom = idx.length;
-  bevelRings(y0 + by, -1);
+  lips(y0 + by, -1);
   const botLipTo = idx.length;
-  border(y0, -1);
+  borders(y0, -1);
   const botBorderTo = idx.length;
-  face(y0, -1);
-  // Walls between the two lips.
-  const outer = ringPts(A, B, b);
-  const wallTop = addRing(outer, y1 - by, 1);
-  const wallBot = addRing(outer, y0 + by, 1);
+  faces(y0, -1);
   const wallsFrom = idx.length;
-  strip(wallTop, wallBot, outward(0));
+  for (const { loop, sc, fc } of parts.flat()) {
+    const r = ringAt(loop, 0, sz, sc, fc);
+    strip(addRing(r, y1 - by, 1), addRing(r, y0 + by, 1), r.pts.length, 0);
+  }
   const wallsTo = idx.length;
 
   const lift: number[] = [];
@@ -167,7 +203,6 @@ export function platformGeometry(L: number, W: number, thick: number, bevel: { i
   geo.addGroup(botLipTo, botBorderTo - botLipTo, 3);
   geo.addGroup(botBorderTo, wallsFrom - botBorderTo, 0);
   geo.addGroup(wallsFrom, wallsTo - wallsFrom, 1);
-  geo.addGroup(wallsTo, idx.length - wallsTo, 0);
   geo.computeVertexNormals();
   return geo;
 }

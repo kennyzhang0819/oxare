@@ -8,7 +8,6 @@ import { platformGeometry } from "./platform.ts";
 import { sweepTube, type SweepRing } from "./geometry.ts";
 
 export const EDGE_RADIUS = 0.3;
-const HOLE_LIP = 0.35;
 
 export const SKY_TOP = 0x448fec;
 export const SKY_HORIZON = 0xafcde9;
@@ -76,26 +75,12 @@ function buildBlockade(g: THREE.Group) {
   }
 }
 
-// Four inward-facing walls carrying the edge strip, under a raised lip that straddles the rim.
-function buildHole(g: THREE.Group, w: number, d: number) {
-  const mat = MAT!, st = STRUCT!;
-  const sides: [x: number, z: number, yaw: number, len: number][] = [
-    [0, d / 2, Math.PI, w], [0, -d / 2, 0, w], [w / 2, 0, -Math.PI / 2, d], [-w / 2, 0, Math.PI / 2, d],
-  ];
-  for (const [x, z, yaw, len] of sides) {
-    const geo = new THREE.PlaneGeometry(len, PLATFORM_THICKNESS);
-    const uv = geo.getAttribute("uv");
-    for (let i = 0; i < uv.count; i++) uv.setX(i, (uv.getX(i) * len) / TILE);
-    const wall = new THREE.Mesh(geo, mat.edge);
-    wall.position.set(x, -PLATFORM_THICKNESS / 2, z);
-    wall.rotation.y = yaw;
-    g.add(wall);
-    const lip = new THREE.Mesh(new RoundedBoxGeometry(len + HOLE_LIP, 0.12, HOLE_LIP, 2, 0.05), st.body);
-    lip.position.set(x, 0.06, z);
-    lip.rotation.y = yaw;
-    lip.castShadow = true;
-    g.add(lip);
-  }
+// Editor only: in play a hole draws nothing itself, so this is what gets clicked.
+const HOLE_MAT = new THREE.MeshBasicMaterial({ color: 0x2fe6ff, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
+const HOLE_LINE = new THREE.LineBasicMaterial({ color: 0x2fe6ff });
+function buildHoleMarker(g: THREE.Group, w: number, d: number) {
+  const plane = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(0, 0.03, 0);
+  g.add(new THREE.Mesh(plane, HOLE_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), HOLE_LINE));
 }
 
 // Slatted column with a domed cap and a glowing base ring.
@@ -323,6 +308,9 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
     tread.add(strip);
   }
   g.add(tread);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(p.w - 0.4, Math.max(0.1, p.h - 0.3), 0.08), [st.top, st.top, st.top, st.top, st.barrierPanel, st.barrierPanel]);
+  back.position.set(0, p.h / 2, -(p.d / 2 - 0.01));
+  g.add(back);
 }
 
 function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
@@ -836,7 +824,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
       m.receiveShadow = true;
       g.add(m);
     }
-    if (p.type === "hole") buildHole(g, p.w, p.d);
+    if (p.type === "hole" && editor) buildHoleMarker(g, p.w, p.d);
     if (p.type === "ramp") {
       const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t));
       geo.rotateY(Math.PI / 2);

@@ -33,9 +33,9 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   tube: [["rot", 15], ["speed", 0.5]],
 };
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
-const SNAP_KEY = "balling.snap";
+const SNAP_KEY = "balling.snap.v2";
 const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
-const SNAP = { platform: 0.5, structure: STRUCT_GRID };
+const SNAP = { platform: 4, structure: STRUCT_GRID };
 try {
   const saved = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "{}") as Partial<typeof SNAP>;
   for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && v > 0) SNAP[k] = v; }
@@ -54,6 +54,16 @@ function step(v: number, dir: number, grid: number, n: number): number {
   return to(grid)((first + dir * (n - 1)) * grid);
 }
 const layerSnap = (v: number) => Math.round(v / LAYER_H) * LAYER_H;
+// Platform sizes and heights step in fours, the unit every level is laid out in, unless "Fine
+// sizes" is ticked. Zero is kept so a ramp can be flattened or a curve run from its centre.
+const SIZE_GRID = 4;
+const FINE_KEY = "balling.fineSizes";
+let fineSizes = false;
+try { fineSizes = localStorage.getItem(FINE_KEY) === "1"; } catch { /* coarse */ }
+const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
+  slab: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
+};
+const isCoarse = (t: PieceType, key: string) => !fineSizes && !!COARSE_FIELDS[t]?.includes(key);
 
 // A tube's nodes in world space, entrance first, and the inverse: rebuild the piece from them.
 interface WorldNode { x: number; y: number; z: number; bend: number }
@@ -196,7 +206,7 @@ export class Editor implements Mode {
         h("button", { onclick: () => void this.save() }, "Save"),
         h("button", { class: "ghost", onclick: () => this.newLevel() }, "New"),
       ),
-      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap")),
+      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle()),
       h("div", { class: "bar add" }, ...PIECE_TYPES.map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
       this.problems,
       this.notice,
@@ -308,8 +318,13 @@ export class Editor implements Mode {
       const props = h("div", { class: "props" });
       const rec = p as unknown as Record<string, number>;
       const field = (key: string, step: number) => {
-        const input = h("input", { type: "number", step, value: rec[key] ?? 0,
-          onchange: () => { const before = JSON.stringify(this.level); rec[key] = Number(input.value); this.commit(before); } });
+        const coarse = isCoarse(p.type, key);
+        const input = h("input", { type: "number", step: coarse ? SIZE_GRID : step, value: rec[key] ?? 0,
+          onchange: () => {
+            const before = JSON.stringify(this.level);
+            rec[key] = coarse ? Math.round(Number(input.value) / SIZE_GRID) * SIZE_GRID : Number(input.value);
+            this.commit(before);
+          } });
         return h("label", {}, key, input);
       };
       const step = isStructure(p) ? SNAP.structure : SNAP.platform;
@@ -451,6 +466,16 @@ export class Editor implements Mode {
       this.refresh();
     };
     return h("label", {}, label, sel);
+  }
+
+  private fineToggle(): HTMLElement {
+    const cb = h("input", { type: "checkbox", checked: fineSizes, title: "Let platform sizes and heights leave the grid of 4",
+      onchange: () => {
+        fineSizes = cb.checked;
+        try { localStorage.setItem(FINE_KEY, fineSizes ? "1" : "0"); } catch { /* not remembered */ }
+        this.refresh();
+      } }) as HTMLInputElement;
+    return h("label", {}, cb, "Fine sizes");
   }
 
   private selectedPieces(): Piece[] {
@@ -809,9 +834,9 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     this.level = { id: "new-level", name: "New Level", pieces: [
       newPiece("start", 0, 0, 0),
-      { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: { n: false, e: true, s: true, w: true } } as Piece,
+      { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: { n: false, e: false, s: false, w: false } } as Piece,
       newPiece("goal", 0, 0, -12),
-      { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { n: true, e: true, s: false, w: true } } as Piece,
+      { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { n: false, e: false, s: false, w: false } } as Piece,
     ] };
     this.sel.clear();
     this.undoStack.push(before);

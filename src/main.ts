@@ -27,8 +27,9 @@ function show(next: () => Mode) {
   mode = next();
 }
 
+let admin = false;
 function menu() {
-  show(() => new Menu(ctx, { onPlay: playLevel, onEdit: edit }));
+  show(() => new Menu(ctx, { admin, onPlay: playLevel, onEdit: edit, onToggleAdmin: () => { admin = !admin; menu(); } }));
 }
 
 function playLevel(i: number) {

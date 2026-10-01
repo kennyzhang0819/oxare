@@ -144,12 +144,13 @@ for (const rise of [RAMP_RISE, -RAMP_RISE]) {
   if (p.z > -42 || Math.abs(p.y - (y1 + BALL_RADIUS)) > 0.1) { failed = true; console.error(`FAIL ramp ${rise}: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, expected y ${y1 + BALL_RADIUS}`); }
   else console.log(`ok ramp-${rise > 0 ? "up" : "down"}: ball rides the ramp to y ${p.y.toFixed(2)}`);
 }
-// A hole swallows the ball; the floor beside it still carries one.
-for (const [name, x, falls] of [["through", 0, true], ["beside", 4, false]] as const) {
+// A hole swallows the ball; the floor beside it still carries one. A hole across the slab's
+// edge notches it: the ball falls through the notch and rolls past it.
+for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, false], ["notch", 4, 5, true], ["past-notch", -1, 5, false]] as const) {
   const level = validateLevel({ id: `hole-${name}`, name, pieces: [
     { type: "start", x, y: 0, z: 0 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
-    { type: "hole", x: 0, y: 0, z: -9, w: 4, d: 6, rot: 0 },
+    { type: "hole", x: hx, y: 0, z: -9, w: 4, d: 6, rot: 0 },
     { type: "goal", x: 0, y: 0, z: -18, r: 2 },
   ] });
   const sim = await createSim(level);

@@ -7,7 +7,9 @@ import { createScene, type SceneEnv } from "./scene.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
-export interface MenuOpts { onPlay(index: number): void; onEdit(level: Level): void }
+// `admin` swaps the player's level list for the admin panel (levels, editors); Ctrl+Shift+S
+// flips between them. It only hides the tools, it is not access control.
+export interface MenuOpts { admin: boolean; onPlay(index: number): void; onEdit(level: Level): void; onToggleAdmin(): void }
 
 export class Menu implements Mode {
   private ctx: Ctx;
@@ -15,6 +17,7 @@ export class Menu implements Mode {
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private raf = 0;
   private onResize = () => this.resize();
+  private onKey: (e: KeyboardEvent) => void;
 
   constructor(ctx: Ctx, opts: MenuOpts) {
     this.ctx = ctx;
@@ -23,17 +26,37 @@ export class Menu implements Mode {
     addEventListener("resize", this.onResize);
     this.resize();
     this.raf = requestAnimationFrame(this.frame);
+    this.onKey = (e) => {
+      if (e.code === "KeyS" && e.ctrlKey && e.shiftKey) { e.preventDefault(); opts.onToggleAdmin(); }
+    };
+    addEventListener("keydown", this.onKey);
     const progress = loadProgress();
+    const best = (l: Level) => h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : "");
+    if (!opts.admin) {
+      ctx.overlay.append(
+        h("div", { class: "menu" },
+          h("h1", {}, "OXARE"),
+          h("div", { class: "levels" },
+            ...LEVELS.map((l, i) => h("div", { class: "level-row" },
+              h("span", { class: "name" }, `${i + 1}. ${l.name}`),
+              best(l),
+              h("button", { onclick: () => opts.onPlay(i) }, "Play"),
+            )),
+          ),
+        ),
+      );
+      return;
+    }
     const draft = loadDraft();
     ctx.overlay.append(
       h("div", { class: "menu" },
-        h("h1", {}, "OXARE"),
+        h("h1", {}, "ADMIN"),
         h("div", { class: "levels" },
           ...LEVELS.map((l, i) => h("div", { class: "level-row" },
             h("span", { class: "name" }, `${i + 1}. ${l.name}`),
-            h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : ""),
-            h("button", { onclick: () => opts.onPlay(i) }, "Play"),
-            h("button", { class: "ghost", onclick: () => opts.onEdit(cloneLevel(l)) }, "Edit"),
+            h("span", { class: "best" }, `${l.id}.json`),
+            h("button", { class: "ghost", onclick: () => opts.onPlay(i) }, "Play"),
+            h("button", { onclick: () => opts.onEdit(cloneLevel(l)) }, "Edit"),
           )),
           draft ? h("div", { class: "level-row" },
             h("span", { class: "name" }, `Draft: ${draft.name}`),
@@ -43,6 +66,7 @@ export class Menu implements Mode {
             h("button", { onclick: () => opts.onEdit(cloneLevel(LEVELS[0]!)) }, "Open editor"),
           ),
         ),
+        h("button", { class: "ghost", onclick: () => opts.onToggleAdmin() }, "Back to levels (Ctrl+Shift+S)"),
       ),
     );
   }
@@ -63,6 +87,7 @@ export class Menu implements Mode {
   dispose() {
     cancelAnimationFrame(this.raf);
     removeEventListener("resize", this.onResize);
+    removeEventListener("keydown", this.onKey);
     clear(this.ctx.overlay);
   }
 }

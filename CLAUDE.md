@@ -10,4 +10,4 @@ Ball-rolling sky puzzle game. TypeScript + Vite + Three.js + Rapier. No engine, 
 - Feel tunables live in `src/tuning.ts` and are editable live in-game (`T`). The user judges feel by playing; do not "fix" the numbers without being asked.
 - Controls are Aerox-style: steer input rotates the camera yaw, throttle pushes along the camera forward. Keep it that way.
 - Modes (`menu.ts`, `game.ts`, `editor.ts`) own their DOM under `#overlay` and clear it in `dispose()`.
-- Comments: only where a future reader would otherwise get it wrong. docs/levels.md documents controls and the level format.
+- Comments: only where a dev would otherwise break something; one short plain line. Explanations go in docs/ (levels.md: controls and level format; platforms.md: edge profile, holes, physics floor), kept up to date.
