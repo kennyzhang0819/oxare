@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, PLANK_HINGE_H, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
 
@@ -279,7 +279,7 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
   p = sim.ball.translation();
   const fallen = plank.translation();
   sim.free();
-  if (!frozen || Math.abs(standing.y - 5.16) > 0.05 || Math.abs(standing.z + 10) > 0.05) { failed = true; console.error(`FAIL plank: did not hold still (frozen ${frozen}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
+  if (!frozen || Math.abs(standing.y - (PLANK_HINGE_H + 5)) > 0.05 || Math.abs(standing.z + 10) > 0.05) { failed = true; console.error(`FAIL plank: did not hold still (frozen ${frozen}, centre y ${standing.y.toFixed(2)} z ${standing.z.toFixed(2)})`); }
   else if (fallen.y > 0.6 || fallen.z > -14) { failed = true; console.error(`FAIL plank: did not fall (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
   else console.log(`ok plank: stood frozen until touched, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
@@ -398,7 +398,7 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
   for (let i = 0; i < 120 * 8 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
   const after = plank.translation();
   sim.free();
-  if (Math.abs(lying.y - 0.16) > 0.03 || Math.abs(lying.z + 10) > 0.05 || after.y > 0.3 || p.z > -16) { failed = true; console.error(`FAIL plank-flat: started at y ${lying.y.toFixed(2)} z ${lying.z.toFixed(2)}, after y ${after.y.toFixed(2)}, ball z ${p.z.toFixed(2)}`); }
+  if (Math.abs(lying.y - PLANK_HINGE_H) > 0.03 || Math.abs(lying.z + 10) > 0.05 || after.y > 0.3 || p.z > -16) { failed = true; console.error(`FAIL plank-flat: started at y ${lying.y.toFixed(2)} z ${lying.z.toFixed(2)}, after y ${after.y.toFixed(2)}, ball z ${p.z.toFixed(2)}`); }
   else console.log(`ok plank-flat: started flat at z ${lying.z.toFixed(2)}, ball rolled over to z ${p.z.toFixed(2)}`);
 }
 // A plank set to start leaning at 45 degrees holds that angle untouched, then falls flat once the
@@ -423,13 +423,13 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
   if (Math.abs(held - 45) > 0.5 || Math.abs(fell - 90) > 3) { failed = true; console.error(`FAIL plank-lean: held ${held.toFixed(1)} deg (want 45), after the ball ${fell.toFixed(1)} deg (want 90)`); }
   else console.log(`ok plank-lean: held ${held.toFixed(1)} deg untouched, fell to ${fell.toFixed(1)} deg once hit`);
 }
-// A pumped tube carries the ball in at platform level, up four layers and out onto the upper
-// platform, through smooth and sharp elbows alike; a tube with no pump drops it four layers.
-for (const [name, bend, speed, y0, y1] of [["up-smooth", 1.5, 6, 0, 4], ["up-sharp", 0, 6, 0, 4], ["down-sharp", 0, 0, 4, 0], ["down-smooth", 1.5, 0, 4, 0]] as const) {
+// Held forward, the ball climbs a tube four layers up and out onto the upper platform, or runs
+// down one, through smooth and sharp elbows alike. Nothing pumps it: the push does the work.
+for (const [name, bend, y0, y1] of [["up-smooth", 1.5, 0, 4], ["up-sharp", 0, 0, 4], ["down-sharp", 0, 4, 0], ["down-smooth", 1.5, 4, 0]] as const) {
   const level = validateLevel({ id: `tube-${name}`, name, pieces: [
     { type: "start", x: 0, y: y0, z: -2 },
     { type: "slab", x: 0, y: y0, z: -5, w: 8, d: 10, rot: 0, fences: {} },
-    { type: "tube", x: 0, y: y0, z: -7, rot: 0, speed, path: [
+    { type: "tube", x: 0, y: y0, z: -7, rot: 0, path: [
       { x: 0, y: 0, z: -6, bend }, { x: 0, y: y1 - y0, z: -6, bend }, { x: 0, y: y1 - y0, z: -17, bend: 0 },
     ] },
     { type: "slab", x: 0, y: y1, z: -30, w: 8, d: 24, rot: 0, fences: {} },
@@ -445,12 +445,39 @@ for (const [name, bend, speed, y0, y1] of [["up-smooth", 1.5, 6, 0, 4], ["up-sha
   if (p.z > -24 || Math.abs(p.y - (y1 + BALL_RADIUS)) > 0.1 || minY < Math.min(y0, y1)) { failed = true; console.error(`FAIL tube-${name}: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, lowest y ${minY.toFixed(2)}`); }
   else console.log(`ok tube-${name}: ball came out at y ${p.y.toFixed(2)} z ${p.z.toFixed(2)}`);
 }
+// Two-way and manual: let go halfway up the climb and the ball slides back out the bottom; a
+// tube laid exit-first (the climb entered at its exit mouth) climbs just the same.
+for (const reversed of [false, true]) {
+  const path = [{ x: 0, y: 0, z: -6 }, { x: 0, y: 4, z: -6 }, { x: 0, y: 4, z: -17 }];
+  // Reversed: the same pipe, its entrance on the upper platform and its exit at the bottom.
+  const tube = reversed
+    ? { type: "tube", x: 0, y: 4, z: -24, rot: 0, path: [{ x: 0, y: 0, z: 11, bend: 1.5 }, { x: 0, y: -4, z: 11, bend: 1.5 }, { x: 0, y: -4, z: 17, bend: 0 }] }
+    : { type: "tube", x: 0, y: 0, z: -7, rot: 0, path: path.map((n, k) => ({ ...n, bend: k < 2 ? 1.5 : 0 })) };
+  const level = validateLevel({ id: "tube-manual", name: "tube-manual", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 8, d: 10, rot: 0, fences: {} },
+    tube,
+    { type: "slab", x: 0, y: 4, z: -30, w: 8, d: 24, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 4, z: -38, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 10 && p.y < 2.5; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  const reached = p.y;
+  for (let i = 0; i < 120 * 6; i++) sim.step(0, 0, -1);
+  const back = sim.ball.translation();
+  sim.free();
+  const name = reversed ? "tube-reversed" : "tube-manual";
+  if (reached < 2.5 || back.y > 0.6 + 0.1 || back.z < -14) { failed = true; console.error(`FAIL ${name}: climbed to y ${reached.toFixed(2)}, after letting go at y ${back.y.toFixed(2)} z ${back.z.toFixed(2)}`); }
+  else console.log(`ok ${name}: climbed to y ${reached.toFixed(2)} under push, slid back to z ${back.z.toFixed(2)} on release`);
+}
 // The tube's outside is solid: a ball rolled at it from the side stops against it.
 {
   const level = validateLevel({ id: "tube-side", name: "tube-side", pieces: [
     { type: "start", x: -3, y: 0, z: -8 },
     { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 16, rot: 0, fences: {} },
-    { type: "tube", x: 0, y: 0, z: -2, rot: 0, speed: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }] },
+    { type: "tube", x: 0, y: 0, z: -2, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }] },
     { type: "goal", x: 3, y: 0, z: -14, r: 1 },
   ] });
   const sim = await createSim(level);
@@ -460,5 +487,195 @@ for (const [name, bend, speed, y0, y1] of [["up-smooth", 1.5, 6, 0, 4], ["up-sha
   sim.free();
   if (maxX > 0) { failed = true; console.error(`FAIL tube-side: ball went through the tube wall (x ${maxX.toFixed(2)})`); }
   else console.log(`ok tube-side: tube wall stops the ball at x ${maxX.toFixed(2)}`);
+}
+// A tube mouth's collar is solid: rolled at it from the side, the ball stops against the collar's
+// outside, not the thinner glass under it.
+{
+  const level = validateLevel({ id: "tube-collar", name: "tube-collar", pieces: [
+    { type: "start", x: 4, y: 0, z: -7.2 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 12, d: 16, rot: 0, fences: {} },
+    { type: "tube", x: 0, y: 0, z: -7, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: 0 }] },
+    { type: "goal", x: 4, y: 0, z: -16, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  let near = Infinity;
+  for (let i = 0; i < 120 * 4; i++) {
+    sim.step(1, -1, 0);
+    const b = sim.ball.translation();
+    near = Math.min(near, Math.hypot(b.x, b.y - TUBE_R));
+  }
+  sim.free();
+  const want = TUBE_R + TUBE_COLLAR_T + BALL_RADIUS - 0.05;
+  if (near < want) { failed = true; console.error(`FAIL tube-collar: ball got within ${near.toFixed(2)} of the tube axis at the mouth (collar keeps it at ${(want + 0.05).toFixed(2)})`); }
+  else console.log(`ok tube-collar: ball stopped ${near.toFixed(2)} from the axis, against the collar`);
+}
+// A segment with a curve point is a smooth arc: a half circle from y 0 to y 1 with its curve
+// point at the apex is round all the way and climbs steadily, not at the nodes. And on the flat,
+// the ball rolls in one mouth, round the half circle and out the other.
+{
+  const half = { type: "tube", x: -4, y: 0, z: -6, rot: 0, path: [{ x: 8, y: 1, z: 0, bend: 0, mid: { x: 4, y: 0.5, z: -4 } }] };
+  const rings = tubeRings(validateLevel({ id: "c", name: "c", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 }, { type: "slab", x: 0, y: 0, z: -4, w: 16, d: 16, rot: 0, fences: {} }, half, { type: "goal", x: 0, y: 0, z: -2, r: 1 },
+  ] }).pieces[2] as Tube);
+  const ys = rings.map((q) => q.c[1] - TUBE_R), radii = rings.map((q) => Math.hypot(q.c[0] - 4, q.c[2]));
+  const steps = ys.slice(1).map((y, i) => y - ys[i]!);
+  const round = Math.max(...radii) - Math.min(...radii) < 1e-6 && Math.abs(Math.min(...rings.map((q) => q.c[2])) + 4) < 1e-6;
+  if (!round || Math.min(...steps) < -1e-9 || Math.max(...steps) > 0.1 || Math.abs(ys.at(-1)! - 1) > 1e-9) { failed = true; console.error(`FAIL tube-curve: round ${round}, height steps ${Math.min(...steps).toFixed(3)} to ${Math.max(...steps).toFixed(3)}, ends at y ${ys.at(-1)!.toFixed(2)}`); }
+  else console.log(`ok tube-curve: half circle stays radius 4 and climbs 0 to 1 in ${steps.length} steps of at most ${Math.max(...steps).toFixed(3)}`);
+
+  const level = validateLevel({ id: "tube-u", name: "tube-u", pieces: [
+    { type: "start", x: -4, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -6, w: 16, d: 16, rot: 0, fences: {} },
+    { type: "tube", x: -4, y: 0, z: -6, rot: 0, path: [{ x: 8, y: 0, z: 0, bend: 0, mid: { x: 4, y: 0, z: -4 } }] },
+    { type: "goal", x: 6, y: 0, z: -12, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  // Steer like a player following the tube: push the way the ball is already heading.
+  let dir: [number, number] = [0, -1], p = sim.ball.translation();
+  for (let i = 0; i < 120 * 12 && !(p.x > 3 && p.z > -3); i++) {
+    const v = sim.ball.linvel(), hv = Math.hypot(v.x, v.z);
+    if (hv > 0.5) dir = [v.x / hv, v.z / hv];
+    sim.step(1, dir[0], dir[1]);
+    p = sim.ball.translation();
+  }
+  sim.free();
+  if (!(p.x > 3 && p.z > -3) || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL tube-u: ball ended at ${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`); }
+  else console.log(`ok tube-u: ball rolled round the curved tube and out at ${p.x.toFixed(2)},${p.z.toFixed(2)}`);
+}
+// Tubes are rigid: the ball, fired at a tube's side, top and mouth collars from rolling height to
+// airborne, fast and slow, square on and glancing, never ends up inside the wall or a collar.
+{
+  const level = validateLevel({ id: "tube-phase", name: "tube-phase", pieces: [
+    { type: "start", x: 6, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 16, d: 20, rot: 0, fences: {} },
+    { type: "tube", x: 0, y: 0, z: -6, rot: 0, path: [{ x: 0, y: 0, z: -10, bend: 0 }] },
+    { type: "goal", x: 6, y: 0, z: -18, r: 1 },
+  ] });
+  const z0 = -6, z1 = -16;
+  // Inside the wall: off the axis by more than a ball in the bore can be, closer than the solid allows.
+  const inWall = (b: { x: number; y: number; z: number }) => {
+    if (b.z > z0 + 0.05 || b.z < z1 - 0.05) return false;
+    const r = Math.hypot(b.x, b.y - TUBE_R);
+    const collar = b.z > z0 - TUBE_COLLAR_L + 0.05 || b.z < z1 + TUBE_COLLAR_L - 0.05;
+    return r > 0.1 && r < (collar ? TUBE_R + TUBE_COLLAR_T : TUBE_R + TUBE_SOLID_WALL) + BALL_RADIUS - 0.05;
+  };
+  const shots: { from: [number, number, number]; v: [number, number, number] }[] = [];
+  for (const speed of [3, 6, 10]) {
+    for (const y of [0.55, 0.9, 1.3, 1.8]) for (const deg of [-50, 0, 50]) {
+      const a = (deg * Math.PI) / 180;
+      shots.push({ from: [2.5, y, -11 - 2.5 * Math.sin(a)], v: [-Math.cos(a) * speed, 0, Math.sin(a) * speed] });
+    }
+    for (const x of [0.75, 0.95, 1.2]) for (const y of [0.55, 1.0, 1.5]) shots.push({ from: [x, y, z0 + 2.5], v: [0, 0, -speed] });
+    shots.push({ from: [0, 3, -11], v: [0, -speed, 0] }, { from: [0.5, 3, z0 - 0.2], v: [0, -speed, 0] });
+  }
+  const bad: string[] = [];
+  for (const sh of shots) {
+    const sim = await createSim(level, { x: sh.from[0], y: 0, z: sh.from[2] });
+    sim.ball.setTranslation({ x: sh.from[0], y: sh.from[1], z: sh.from[2] }, true);
+    sim.ball.setLinvel({ x: sh.v[0], y: sh.v[1], z: sh.v[2] }, true);
+    const hv = Math.hypot(sh.v[0], sh.v[2]) || 1;
+    for (let i = 0; i < 240; i++) {
+      sim.step(sh.v[1] ? 0 : 1, sh.v[0] / hv, sh.v[2] / hv);
+      const b = sim.ball.translation();
+      if (inWall(b)) { bad.push(`from ${sh.from.join(",")} at ${sh.v.join(",")}: ball inside at ${b.x.toFixed(2)},${b.y.toFixed(2)},${b.z.toFixed(2)}`); break; }
+    }
+    sim.free();
+  }
+  if (bad.length) { failed = true; console.error(`FAIL tube-phasing: ${bad.length} of ${shots.length} shots got inside the tube wall: ${bad.slice(0, 6).join("; ")}`); }
+  else console.log(`ok tube-phasing: ${shots.length} shots at the tube's side, top and collars, none got inside the wall`);
+}
+// Moving platforms keep their schedule (waits, eased legs, ping-pong and loop), carry a ball
+// parked on them out and back without it sliding off, and lift it up layers.
+{
+  const mover = (extra: object) => ({ type: "mover", x: 0, y: 0, z: -8, w: 8, d: 8, rot: 0, speed: 2, wait: 1, offset: 0, loop: "pingpong", stops: [{ x: 0, y: 0, z: -16, wait: 2 }], ...extra });
+  const levelWith = (m: object) => validateLevel({ id: "mover", name: "mover", pieces: [
+    { type: "start", x: 0, y: 0, z: 2 }, { type: "slab", x: 0, y: 0, z: 2, w: 8, d: 4, rot: 0, fences: {} },
+    m, { type: "goal", x: 0, y: 0, z: 1, r: 1 },
+  ] });
+  const travel = (16 / 2) * (Math.PI / 2);
+  const pp = levelWith(mover({})).pieces[2] as Mover, lp = levelWith(mover({ loop: "loop", stops: [{ x: 8, y: 0, z: 0, wait: 0 }, { x: 8, y: 0, z: -8, wait: 0 }] })).pieces[2] as Mover;
+  const expect: [Mover, number, [number, number, number]][] = [
+    [pp, 0.5, [0, 0, 0]], [pp, 1 + travel / 2, [0, 0, -8]], [pp, 1 + travel + 1, [0, 0, -16]], [pp, 1 + travel + 2 + travel / 2, [0, 0, -8]],
+    [pp, 1 + 2 * travel + 2 + 0.5, [0, 0, 0]], [pp, 1 + 2 * travel + 2 + 1 + travel / 2, [0, 0, -8]],
+    [lp, 1 + (8 / 2) * (Math.PI / 2) * 1.5, [8, 0, -4]],
+  ];
+  const off = expect.map(([m, t, want]) => { const o = moverOffset(m, t); return Math.hypot(o.x - want[0], o.y - want[1], o.z - want[2]); });
+  if (Math.max(...off) > 1e-6) { failed = true; console.error(`FAIL mover-schedule: positions off by up to ${Math.max(...off).toFixed(3)}`); }
+  else console.log(`ok mover-schedule: waits, eased legs, ping-pong and loop land where expected`);
+
+  for (const [name, m, out, leg] of [["mover-ride", mover({}), [0, 0, -24], travel], ["mover-lift", mover({ stops: [{ x: 0, y: 4, z: 0, wait: 2 }] }), [0, 4, -8], (4 / 2) * (Math.PI / 2)]] as const) {
+    const level = levelWith(m);
+    const sim = await createSim(level, { x: 0, y: 0, z: -8 });
+    let at = { x: 0, y: 0, z: 0 };
+    // Ride out to the stop and halfway through its wait, then all the way back home.
+    for (let i = 0; i < Math.round((1 + leg + 1) / STEP); i++) sim.step(0, 0, -1);
+    const there = sim.ball.translation();
+    for (let i = 0; i < Math.round((1 + leg + 0.5) / STEP); i++) sim.step(0, 0, -1);
+    at = sim.ball.translation();
+    sim.free();
+    const dOut = Math.hypot(there.x - out[0], there.y - (out[1] + BALL_RADIUS), there.z - out[2]);
+    const dHome = Math.hypot(at.x, at.y - BALL_RADIUS, at.z + 8);
+    if (dOut > 0.6 || dHome > 0.6) { failed = true; console.error(`FAIL ${name}: ball at the stop ${dOut.toFixed(2)} off the platform centre, back home ${dHome.toFixed(2)} off`); }
+    else console.log(`ok ${name}: ball rode to the stop (${dOut.toFixed(2)} off centre) and back (${dHome.toFixed(2)} off)`);
+  }
+}
+// No phasing: the ball is fired at the side of a platform one layer up (slab, holed slab, curve
+// end and arc, ramp side) from rolling height to airborne, fast and slow, square on and glancing,
+// and its centre must never end up inside a platform's body.
+{
+  const raised: Record<string, { pieces: object[]; at: [number, number]; out: [number, number]; ground?: object }[]> = {
+    slab: [{ pieces: [{ type: "slab", x: 0, y: 1, z: 9, w: 8, d: 8, rot: 0, fences: {} }], at: [0, 5], out: [0, -1] }],
+    holed: [{ pieces: [{ type: "slab", x: 0, y: 1, z: 9, w: 8, d: 8, rot: 0, fences: {} }, { type: "hole", x: 0, y: 1, z: 7, w: 2, d: 2, rot: 0 }], at: [0, 5], out: [0, -1] }],
+    curve: [
+      { pieces: [{ type: "curve", x: -4, y: 1, z: 5, inner: 2, outer: 10, rot: 270, fences: {} }], at: [2, 5], out: [0, -1] },
+      { pieces: [{ type: "curve", x: -4, y: 1, z: 5, inner: 2, outer: 10, rot: 270, fences: {} }], at: [-4 + 7.071, 5 + 7.071], out: [0.7071, 0.7071] },
+    ],
+    ramp: [15, 17].map((z) => ({ pieces: [{ type: "ramp", x: 0, y: 0, z: 12, w: 8, d: 24, rot: 0, rise: 4, fences: {} }], at: [4, z] as [number, number], out: [1, 0] as [number, number], ground: { type: "slab", x: 12, y: 0, z: 12, w: 16, d: 40, rot: 0, fences: {} } })),
+  };
+  const inside = (level: Level, b: { x: number; y: number; z: number }) => level.pieces.some((p: Piece) => {
+    if (p.type !== "slab" && p.type !== "curve" && p.type !== "ramp") return false;
+    if (p.y === 0 && p.type === "slab") return false; // the ground slab the ball starts on
+    const top = p.type === "ramp" ? p.y + rampHeight(p, (p.d / 2 - (b.z - p.z)) / p.d) : p.y;
+    if (b.y > top - 0.05 || b.y < top - 1 + 0.05) return false;
+    const inPoly = (poly: [number, number][]) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, zi] = poly[i]!, [xj, zj] = poly[j]!;
+        if ((zi > b.z) !== (zj > b.z) && b.x < ((xj - xi) * (b.z - zi)) / (zj - zi) + xi) c = !c;
+      }
+      return c;
+    };
+    // A ball dropping through a hole is not inside the slab.
+    if (level.pieces.some((h) => h.type === "hole" && Math.abs(h.y - p.y) < 1e-6 && inPoly(holeFootprint(h)))) return false;
+    return platformFootprint(p).some(inPoly);
+  });
+  let runs = 0;
+  const bad: string[] = [];
+  for (const [name, targets] of Object.entries(raised)) for (const t of targets) {
+    const level = validateLevel({ id: `phase-${name}`, name, pieces: [
+      ...(t.ground ? [{ type: "start", x: 12, y: 0, z: 0 }, t.ground, { type: "goal", x: 12, y: 0, z: 28, r: 1 }]
+        : [{ type: "start", x: 0, y: 0, z: -12 }, { type: "slab", x: 0, y: 0, z: 0, w: 40, d: 40, rot: 0, fences: {} }, { type: "goal", x: 0, y: 0, z: -16, r: 1 }]),
+      ...t.pieces,
+    ] });
+    for (const y0 of [0.55, 0.75, 0.95, 1.3]) for (const speed of [3, 6, 10]) for (const deg of [-50, 0, 50]) {
+      const a = (deg * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+      // Heading into the edge: the inward normal turned by `deg`.
+      const hx = -(t.out[0] * c - t.out[1] * sn), hz = -(t.out[0] * sn + t.out[1] * c);
+      const sx = t.at[0] - hx * 1.2, sz = t.at[1] - hz * 1.2;
+      const sim = await createSim(level, { x: sx, y: 0, z: sz });
+      sim.ball.setTranslation({ x: sx, y: y0, z: sz }, true);
+      sim.ball.setLinvel({ x: hx * speed, y: 0, z: hz * speed }, true);
+      runs++;
+      for (let i = 0; i < 240; i++) {
+        sim.step(1, hx, hz);
+        const b = sim.ball.translation();
+        if (inside(level, b)) { bad.push(`${name} at ${t.at.map((v) => v.toFixed(1)).join(",")} from y ${y0} at ${speed} m/s, ${deg} deg: ball inside at ${b.x.toFixed(2)},${b.y.toFixed(2)},${b.z.toFixed(2)}`); break; }
+      }
+      sim.free();
+    }
+  }
+  if (bad.length) { failed = true; console.error(`FAIL phasing: ${bad.length} of ${runs} shots ended inside a platform: ${bad.slice(0, 8).join("; ")}`); }
+  else console.log(`ok phasing: ${runs} shots at raised slab, holed slab, curve and ramp edges, none got inside`);
 }
 if (failed) process.exit(1);

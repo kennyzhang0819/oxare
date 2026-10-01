@@ -30,7 +30,8 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   pillar: [],
   spinner: [["length", 0.5], ["speed", 0.1]],
   goal: [["r", 0.5]],
-  tube: [["rot", 15], ["speed", 0.5]],
+  tube: [["rot", 15]],
+  mover: [["w", 0.5], ["d", 0.5], ["rot", 15], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
 };
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
 const SNAP_KEY = "balling.snap.v2";
@@ -61,19 +62,30 @@ const FINE_KEY = "balling.fineSizes";
 let fineSizes = false;
 try { fineSizes = localStorage.getItem(FINE_KEY) === "1"; } catch { /* coarse */ }
 const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
-  slab: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
+  slab: ["y", "w", "d"], mover: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
 };
 const isCoarse = (t: PieceType, key: string) => !fineSizes && !!COARSE_FIELDS[t]?.includes(key);
 
-// A tube's nodes in world space, entrance first, and the inverse: rebuild the piece from them.
-interface WorldNode { x: number; y: number; z: number; bend: number }
-const tubeWorld = (p: Tube): WorldNode[] => [0, ...p.path.map((_, i) => i + 1)].map((k) => ({ ...tubeNodeWorld(p, k), bend: k ? p.path[k - 1]!.bend : 0 }));
+// A tube's nodes in world space, first mouth first, and the inverse: rebuild the piece from them.
+// `mid` is the curve point of the segment arriving at the node, if that segment is curved.
+interface P3 { x: number; y: number; z: number }
+interface WorldNode extends P3 { bend: number; mid?: P3 }
+const toWorld = (p: Tube, l: P3): P3 => { const o = rotXZ(l.x, l.z, p.rot); return { x: p.x + o.x, y: p.y + l.y, z: p.z + o.z }; };
+const tubeWorld = (p: Tube): WorldNode[] => [0, ...p.path.map((_, i) => i + 1)].map((k) => {
+  const n = k ? p.path[k - 1]! : undefined;
+  return { ...tubeNodeWorld(p, k), bend: n?.bend ?? 0, ...(n?.mid ? { mid: toWorld(p, n.mid) } : {}) };
+});
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 function setTubeWorld(p: Tube, nodes: WorldNode[]) {
   const [o] = nodes;
   p.x = o!.x; p.y = o!.y; p.z = o!.z;
-  p.path = nodes.slice(1).map((n) => { const l = rotXZ(n.x - p.x, n.z - p.z, -p.rot); return { x: r3(l.x), y: r3(n.y - p.y), z: r3(l.z), bend: n.bend }; });
+  const local = (w: P3) => { const l = rotXZ(w.x - p.x, w.z - p.z, -p.rot); return { x: r3(l.x), y: r3(w.y - p.y), z: r3(l.z) }; };
+  p.path = nodes.slice(1).map((n) => ({ ...local(n), bend: n.bend, ...(n.mid ? { mid: local(n.mid) } : {}) }));
 }
+// Where a segment's midpoint dot sits: its curve point, or halfway along it while straight.
+const midOf = (ns: WorldNode[], k: number): P3 => ns[k]!.mid ?? { x: (ns[k - 1]!.x + ns[k]!.x) / 2, y: (ns[k - 1]!.y + ns[k]!.y) / 2, z: (ns[k - 1]!.z + ns[k]!.z) / 2 };
+// Curve points snap finer than nodes, so a curve can be shaped by hand.
+const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
 
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
@@ -152,9 +164,11 @@ export class Editor implements Mode {
   private ghost = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true }));
   private hereBtn!: HTMLButtonElement;
   private grid: THREE.LineSegments | null = null;
-  // The selected tube's node handles; `node` is the picked node, -1 for none.
+  // The selected tube's node handles and segment midpoint dots; `node` is the picked node and
+  // `mid` the picked segment (by the node it arrives at), -1 for none; at most one is picked.
   private handles = new THREE.Group();
   private node = -1;
+  private mid = -1;
   private nodeDrag: { plane: THREE.Plane; off: THREE.Vector3; before: string } | null = null;
   private undoStack: string[] = [];
   private raf = 0;
@@ -341,6 +355,7 @@ export class Editor implements Mode {
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
       if (p.type === "tube") this.body.append(this.tubePanel(p));
+      if (p.type === "mover") this.body.append(this.moverPanel(p));
       this.body.append(
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
           h("button", { class: "ghost", onclick: () => this.duplicate() }, "Duplicate"),
@@ -355,20 +370,32 @@ export class Editor implements Mode {
     return p?.type === "tube" ? p : null;
   }
 
-  // A sphere at each node of the selected tube, drawn through everything; the picked one is yellow.
+  // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
+  // drawn through everything; the picked one is yellow.
   private drawHandles() {
     for (const c of [...this.handles.children]) { c.removeFromParent(); (c as THREE.Mesh).geometry.dispose(); }
     const p = this.selectedTube();
-    if (!p) { this.node = -1; return; }
+    if (!p) { this.node = -1; this.mid = -1; return; }
     if (this.node > p.path.length) this.node = -1;
-    tubeWorld(p).forEach((n, k) => {
-      const color = k === this.node ? 0xffd23f : k === 0 ? 0x2fe6ff : k === p.path.length ? 0xff8a3d : 0xffffff;
+    if (this.mid > p.path.length) this.mid = -1;
+    const ns = tubeWorld(p);
+    ns.forEach((n, k) => {
+      const color = k === this.node ? 0xffd23f : 0xffffff;
       const m = new THREE.Mesh(new THREE.SphereGeometry(k === this.node ? 0.42 : 0.34, 16, 10), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
       m.position.set(n.x, n.y + TUBE_R, n.z);
       m.renderOrder = 10;
       m.userData.tubeNode = k;
       this.handles.add(m);
     });
+    // A smaller dot halfway along each segment: drag it to bend that segment into a curve.
+    for (let k = 1; k < ns.length; k++) {
+      const at = midOf(ns, k), picked = k === this.mid;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(picked ? 0.34 : 0.28, 14, 8), new THREE.MeshBasicMaterial({ color: picked ? 0xffd23f : ns[k]!.mid ? 0x5dffa8 : 0xa8ffd0, depthTest: false, transparent: true, opacity: 0.95 }));
+      m.position.set(at.x, at.y + TUBE_R, at.z);
+      m.renderOrder = 10;
+      m.userData.tubeMid = k;
+      this.handles.add(m);
+    }
   }
 
   // Edit the selected tube's nodes in world space and commit.
@@ -393,9 +420,9 @@ export class Editor implements Mode {
     };
     const rows = [{ x: 0, y: 0, z: 0, bend: 0 }, ...p.path].map((n, k) => {
       const last = k === p.path.length, end = k === 0 || last;
-      const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.refresh(); } } },
-        h("span", { class: "tag" }, k === 0 ? "in" : last ? "out" : `${k}`));
-      if (k === 0) row.append(h("span", { class: "hint" }, "entrance at x y z"));
+      const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.mid = -1; this.refresh(); } } },
+        h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
+      if (k === 0) row.append(h("span", { class: "hint" }, "mouth at x y z"));
       else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", LAYER_H), num(n as unknown as Record<string, number>, "z", SNAP.platform));
       if (!end) {
         const smooth = n.bend > 0;
@@ -405,14 +432,55 @@ export class Editor implements Mode {
         );
         if (smooth) row.append(num(n as unknown as Record<string, number>, "bend", 0.5));
       }
+      if (k > 0 && "mid" in n && n.mid) {
+        row.append(h("button", { class: "ghost", title: "Make the segment into this node straight again", onclick: () => { const before = JSON.stringify(this.level); delete (n as { mid?: unknown }).mid; this.commit(before); } }, "straighten"));
+      }
       return row;
     });
     wrap.append(...rows, h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" },
       h("button", { class: "ghost", title: "Insert a node halfway along the segment after the picked node", onclick: () => this.splitNode() }, "Split"),
       h("button", { class: "ghost", title: "Remove the picked node (Delete)", onclick: () => this.removeNode() }, "Remove node"),
-      h("button", { class: "ghost", title: "Carry on 4 past the exit", onclick: () => this.extendTube() }, "Extend"),
-      h("button", { class: "ghost", title: "Swap entrance and exit", onclick: () => this.editTube((ns) => { ns.reverse(); ns[0]!.bend = 0; }) }, "Reverse"),
-    ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth. Turns are at most 90°."));
+      h("button", { class: "ghost", title: "Carry on 4 past the last node", onclick: () => this.extendTube() }, "Extend"),
+      h("button", { class: "ghost", title: "Number the nodes from the other end", onclick: () => this.editTube((ns) => {
+        // Each curve point belongs to the segment arriving at its node, so it moves one node along.
+        const mids = ns.map((n) => n.mid);
+        ns.reverse();
+        ns.forEach((n, k) => { const m = mids[ns.length - k]; if (m) n.mid = m; else delete n.mid; });
+        ns[0]!.bend = 0;
+      }) }, "Reverse"),
+    ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
+    return wrap;
+  }
+
+  // Schedule editor: ping-pong or loop, and one row per stop (offset from the start, before rot,
+  // and the seconds it waits there), with stops added past the last one or removed.
+  private moverPanel(p: Piece & { type: "mover" }): HTMLElement {
+    const wrap = h("div", { class: "tube-path" }, h("h3", {}, "schedule"));
+    const change = (fn: () => void) => { const before = JSON.stringify(this.level); fn(); this.commit(before); };
+    const loop = h("select", { onchange: () => change(() => { p.loop = loop.value === "loop" ? "loop" : "pingpong"; }) },
+      h("option", { value: "pingpong", selected: p.loop === "pingpong" }, "ping-pong: out and back"),
+      h("option", { value: "loop", selected: p.loop === "loop" }, "loop: last stop back to start"),
+    ) as HTMLSelectElement;
+    wrap.append(h("label", {}, "route", loop));
+    const num = (o: Record<string, number>, key: string, step: number) => {
+      const input = h("input", { type: "number", step, value: o[key] ?? 0, onchange: () => change(() => { o[key] = Number(input.value); }) });
+      return h("label", {}, key, input);
+    };
+    wrap.append(h("div", { class: "node" }, h("span", { class: "tag" }, "start"), h("span", { class: "hint" }, `waits ${p.wait}s (the wait field above)`)));
+    p.stops.forEach((st, k) => {
+      const o = st as unknown as Record<string, number>;
+      wrap.append(h("div", { class: "node" }, h("span", { class: "tag" }, `${k + 1}`),
+        num(o, "x", SNAP.platform), num(o, "y", LAYER_H), num(o, "z", SNAP.platform), num(o, "wait", 0.5),
+        h("button", { class: "ghost", title: "Remove this stop", onclick: () => change(() => { p.stops.splice(k, 1); }) }, "remove")));
+    });
+    wrap.append(h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" },
+      h("button", { class: "ghost", title: "Add a stop 8 further along the way the last leg went", onclick: () => change(() => {
+        const last = p.stops[p.stops.length - 1] ?? { x: 0, y: 0, z: 0, wait: p.wait };
+        const prev = p.stops[p.stops.length - 2] ?? { x: 0, y: 0, z: 0 };
+        const dx = last.x - prev.x, dy = last.y - prev.y, dz = last.z - prev.z, l = Math.hypot(dx, dy, dz);
+        p.stops.push(l > 1e-6 ? { x: last.x + (dx / l) * 8, y: last.y + (dy / l) * 8, z: last.z + (dz / l) * 8, wait: 1 } : { x: 0, y: 0, z: -8, wait: 1 });
+      }) }, "Add stop"),
+    ), h("div", { class: "hint" }, "Stops are offsets from the platform's start (before rot). It eases in and out of every stop at up to `speed`; `offset` starts it that many seconds into its schedule."));
     return wrap;
   }
 
@@ -422,9 +490,13 @@ export class Editor implements Mode {
     const k = Math.max(0, Math.min(this.node < 0 ? 0 : this.node, p.path.length - 1));
     this.editTube((ns) => {
       const a = ns[k]!, b = ns[k + 1]!;
-      ns.splice(k + 1, 0, { x: snap((a.x + b.x) / 2), y: layerSnap((a.y + b.y) / 2), z: snap((a.z + b.z) / 2), bend: TUBE_BEND });
+      // A curved segment splits at its curve point, into two straight halves.
+      const at = b.mid ? { x: b.mid.x, y: b.mid.y, z: b.mid.z } : { x: snap((a.x + b.x) / 2), y: layerSnap((a.y + b.y) / 2), z: snap((a.z + b.z) / 2) };
+      delete b.mid;
+      ns.splice(k + 1, 0, { ...at, bend: TUBE_BEND });
     });
     this.node = k + 1;
+    this.mid = -1;
     this.refresh();
   }
 
@@ -432,8 +504,9 @@ export class Editor implements Mode {
     const p = this.selectedTube();
     if (!p || this.node < 0 || p.path.length < 2) return;
     const k = this.node;
-    this.editTube((ns) => { ns.splice(k, 1); ns[0]!.bend = 0; });
+    this.editTube((ns) => { ns.splice(k, 1); if (ns[k]) delete ns[k]!.mid; ns[0]!.bend = 0; delete ns[0]!.mid; });
     this.node = -1;
+    this.mid = -1;
     this.refresh();
   }
 
@@ -447,14 +520,28 @@ export class Editor implements Mode {
       ns.push({ x: snap(b.x + ((b.x - a.x) / l) * 4), y: layerSnap(b.y + ((b.y - a.y) / l) * 4), z: snap(b.z + ((b.z - a.z) / l) * 4), bend: 0 });
     });
     this.node = p.path.length;
+    this.mid = -1;
     this.refresh();
   }
 
-  // Move the picked node; moving the entrance leaves the other nodes where they are.
+  // Move the picked node; moving the first mouth leaves the other nodes where they are.
   private moveNode(fn: (n: WorldNode) => void, before?: string) {
     const k = this.node;
     if (k < 0) return;
     this.editTube((ns) => fn(ns[k]!), before);
+  }
+
+  // Move the picked segment's curve point, curving the segment if it was straight.
+  private moveMid(fn: (m: P3) => void, before?: string) {
+    const k = this.mid;
+    if (k < 1) return;
+    this.editTube((ns) => { const m = { ...midOf(ns, k) }; fn(m); ns[k]!.mid = m; }, before);
+  }
+
+  private straightenMid() {
+    const k = this.mid;
+    if (k < 1) return;
+    this.editTube((ns) => { delete ns[k]!.mid; });
   }
 
   // A labelled dropdown of snap increments; changing it redraws the grid and the panel.
@@ -484,6 +571,7 @@ export class Editor implements Mode {
 
   private select(i: number, add = false) {
     this.node = -1;
+    this.mid = -1;
     if (!add) this.sel.clear();
     if (i >= 0) { if (add && this.sel.has(i)) this.sel.delete(i); else this.sel.add(i); }
     this.refresh();
@@ -570,7 +658,7 @@ export class Editor implements Mode {
     }
     if (e.target instanceof HTMLInputElement) return;
     if (!mod && ["KeyW", "KeyA", "KeyS", "KeyD"].includes(e.code)) { this.held.add(e.code); return; }
-    if (e.code === "Escape") { if (this.dropping) { this.armDrop(false); return; } if (this.node >= 0) { this.node = -1; this.refresh(); return; } this.sel.clear(); this.refresh(); return; }
+    if (e.code === "Escape") { if (this.dropping) { this.armDrop(false); return; } if (this.node >= 0 || this.mid >= 0) { this.node = -1; this.mid = -1; this.refresh(); return; } this.sel.clear(); this.refresh(); return; }
     if (!mod && e.code === "KeyP") { this.armDrop(!this.dropping); return; }
     if (mod && e.code === "KeyZ") { e.preventDefault(); this.undo(); return; }
     if (mod && e.code === "KeyD") { e.preventDefault(); this.duplicate(); return; }
@@ -588,6 +676,20 @@ export class Editor implements Mode {
         PageDown: () => this.moveNode((n) => { n.y -= LAYER_H; }), KeyQ: () => this.moveNode((n) => { n.y -= LAYER_H; }),
         KeyB: () => this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : TUBE_BEND; }),
         Delete: () => this.removeNode(), Backspace: () => this.removeNode(),
+      };
+      const op = ops[e.code];
+      if (op) { e.preventDefault(); op(); return; }
+    }
+    if (this.mid >= 1 && this.selectedTube() && !mod) {
+      const g = midSnap(1) * (e.shiftKey ? 4 : 1);
+      const ops: Record<string, () => void> = {
+        ArrowLeft: () => this.moveMid((m) => { m.x = midSnap(m.x - g); }),
+        ArrowRight: () => this.moveMid((m) => { m.x = midSnap(m.x + g); }),
+        ArrowUp: () => this.moveMid((m) => { m.z = midSnap(m.z - g); }),
+        ArrowDown: () => this.moveMid((m) => { m.z = midSnap(m.z + g); }),
+        PageUp: () => this.moveMid((m) => { m.y = r3(m.y + 0.5); }), KeyE: () => this.moveMid((m) => { m.y = r3(m.y + 0.5); }),
+        PageDown: () => this.moveMid((m) => { m.y = r3(m.y - 0.5); }), KeyQ: () => this.moveMid((m) => { m.y = r3(m.y - 0.5); }),
+        Delete: () => this.straightenMid(), Backspace: () => this.straightenMid(),
       };
       const op = ops[e.code];
       if (op) { e.preventDefault(); op(); return; }
@@ -661,7 +763,9 @@ export class Editor implements Mode {
       this.castFrom(e.clientX, e.clientY);
       const hit = this.ray.intersectObjects(this.handles.children, false)[0];
       if (hit) {
-        this.node = hit.object.userData.tubeNode as number;
+        const isMid = hit.object.userData.tubeMid !== undefined;
+        this.node = isMid ? -1 : hit.object.userData.tubeNode as number;
+        this.mid = isMid ? hit.object.userData.tubeMid as number : -1;
         const at = hit.object.position;
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -at.y);
         const pt = new THREE.Vector3();
@@ -711,11 +815,13 @@ export class Editor implements Mode {
       const pt = new THREE.Vector3();
       const p = this.selectedTube();
       if (!p || !this.ray.ray.intersectPlane(nd.plane, pt)) return;
-      const x = snap(pt.x + nd.off.x), z = snap(pt.z + nd.off.z), cur = tubeNodeWorld(p, this.node);
+      const s = this.mid >= 1 ? midSnap : snap;
+      const x = s(pt.x + nd.off.x), z = s(pt.z + nd.off.z), cur = this.mid >= 1 ? midOf(tubeWorld(p), this.mid) : tubeNodeWorld(p, this.node);
       if (Math.abs(cur.x - x) < 1e-6 && Math.abs(cur.z - z) < 1e-6) return;
       // Each step re-commits from the drag's start, so one undo takes back the whole drag.
       const before = this.undoStack.length && this.undoStack[this.undoStack.length - 1] === nd.before ? this.undoStack.pop()! : nd.before;
-      this.moveNode((n) => { n.x = x; n.z = z; }, before);
+      if (this.mid >= 1) this.moveMid((m) => { m.x = x; m.z = z; }, before);
+      else this.moveNode((n) => { n.x = x; n.z = z; }, before);
       return;
     }
     if (!this.drag) return;

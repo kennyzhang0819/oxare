@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_WALL, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
 import { buildRails } from "./rails.ts";
 import { platformGeometry } from "./platform.ts";
@@ -318,7 +318,7 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   const panel = new THREE.Group();
   panel.position.set(0, pose.y, pose.z);
   panel.rotation.x = (-pose.tilt * Math.PI) / 180;
-  const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, 0.06), st.plank);
+  const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, PLANK_T / 2 - 0.01), st.plank);
   body.castShadow = body.receiveShadow = true;
   panel.add(body);
   const rim = rimFrame(w - 0.3, h - 0.3, 0.1, 0.02);
@@ -354,7 +354,7 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
   const board = new THREE.Group();
   board.position.y = H;
   board.rotation.x = (seesawTilt(p) * Math.PI) / 180;
-  const body = new THREE.Mesh(roundedBox(W, T, D, 0.06), st.plank);
+  const body = new THREE.Mesh(roundedBox(W, T, D, T / 2 - 0.01), st.plank);
   body.castShadow = body.receiveShadow = true;
   board.add(body);
   const rim = rimFrame(W - 0.2, D - 0.2, 0.1, 0.02);
@@ -368,10 +368,15 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
   hub.position.y = -T / 2 - 0.09;
   board.add(hub);
   g.add(board);
-  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, W + 2 * SEESAW_POST_W + 0.2, 12), st.hinge);
-  axle.rotation.z = Math.PI / 2;
-  axle.position.y = H;
-  g.add(axle);
+  // The axle shows only as a stub from each post into the board's edge: the board is thinner than
+  // the axle, so one rod straight across would stick out through its top.
+  const stubL = SEESAW_POST_W + 0.2;
+  for (const side of [1, -1]) {
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, stubL, 12), st.hinge);
+    stub.rotation.z = Math.PI / 2;
+    stub.position.set(side * (W / 2 + stubL / 2 - 0.03), H, 0);
+    g.add(stub);
+  }
   const postH = H + 0.3;
   for (const side of [1, -1]) {
     const x = side * (W / 2 + SEESAW_POST_W / 2 + 0.05);
@@ -396,7 +401,6 @@ const TUBE_GLASS = new THREE.MeshPhysicalMaterial({
   color: 0x5ad2e6, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1,
 });
 const TUBE_COLLAR = new THREE.MeshStandardMaterial({ color: 0xc9d0d6, roughness: 0.35, metalness: 0.15, side: THREE.DoubleSide });
-const TUBE_EXIT_GLOW = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff6a1a, emissiveIntensity: 0.8, roughness: 0.4 });
 
 // Wall of thickness r1 - r0 swept through `rings`, with flat annular ends.
 function tubeShell(rings: SweepRing[], r0: number, r1: number, sides = 32): THREE.BufferGeometry {
@@ -417,14 +421,19 @@ function tubeShell(rings: SweepRing[], r0: number, r1: number, sides = 32): THRE
 }
 
 // Tube: a glass pipe with a metal collar at each mouth, slotted into eight segments, and a light
-// ring on the inside face (cyan at the entrance, orange at the exit).
+// ring on the inside face; both mouths alike, since the tube runs either way.
 function buildTube(g: THREE.Group, p: Tube) {
   const rings = tubeRings(p);
-  const glass = new THREE.Mesh(tubeShell(rings, TUBE_R, TUBE_R + TUBE_WALL), TUBE_GLASS);
+  if (rings.length < 2) return;
+  const skin = sweepTube(rings, TUBE_R, true, 32), skinGeo = new THREE.BufferGeometry();
+  skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
+  skinGeo.setIndex(skin.indices);
+  skinGeo.computeVertexNormals();
+  const glass = new THREE.Mesh(skinGeo, TUBE_GLASS);
   glass.renderOrder = 1;
   g.add(glass);
-  const COLLAR_L = 0.4, COLLAR_T = 0.16, SLOTS = 8;
-  for (const [at, out, glow] of [[rings[0]!, -1, STRUCT!.glow], [rings[rings.length - 1]!, 1, TUBE_EXIT_GLOW]] as const) {
+  const COLLAR_L = TUBE_COLLAR_L, COLLAR_T = TUBE_COLLAR_T, SLOTS = 8;
+  for (const [at, out, glow] of [[rings[0]!, -1, STRUCT!.glow], [rings[rings.length - 1]!, 1, STRUCT!.glow]] as const) {
     const d = new THREE.Vector3(...at.d), c = new THREE.Vector3(...at.c);
     const collar = new THREE.Group();
     collar.position.copy(c);
@@ -433,13 +442,13 @@ function buildTube(g: THREE.Group, p: Tube) {
     const along = (z: number): SweepRing => ({ c: [0, 0, z], d: [0, 0, 1], m: [0, 0, 1] });
     for (let k = 0; k < SLOTS; k++) {
       const a0 = (k / SLOTS) * Math.PI * 2 + 0.06, a1 = ((k + 1) / SLOTS) * Math.PI * 2 - 0.06;
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R + TUBE_WALL + COLLAR_T, TUBE_R + TUBE_WALL + COLLAR_T, COLLAR_L, 6, 1, true, a0, a1 - a0), TUBE_COLLAR);
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R + COLLAR_T, TUBE_R + COLLAR_T, COLLAR_L, 6, 1, true, a0, a1 - a0), TUBE_COLLAR);
       seg.rotation.x = Math.PI / 2;
       seg.position.z = -COLLAR_L / 2;
       seg.castShadow = true;
       collar.add(seg);
     }
-    const sleeve = new THREE.Mesh(tubeShell([along(-COLLAR_L), along(0)], TUBE_R - 0.02, TUBE_R + TUBE_WALL + COLLAR_T - 0.03, 32), STRUCT!.hinge);
+    const sleeve = new THREE.Mesh(tubeShell([along(-COLLAR_L), along(0)], TUBE_R - 0.02, TUBE_R + COLLAR_T - 0.03, 32), STRUCT!.hinge);
     const light = new THREE.Mesh(new THREE.TorusGeometry(TUBE_R + 0.02, 0.035, 8, 40), glow);
     light.position.z = 0.01;
     collar.add(sleeve, light);
@@ -767,6 +776,8 @@ export interface Built {
   bridges: Map<number, THREE.Group[]>;
   // The swinging panel of each knock-down plank, local to the piece group.
   planks: Map<number, THREE.Group>;
+  // Each moving platform's piece group, placed by its schedule every frame in play.
+  movers: Map<number, THREE.Group>;
   goal: { index: number; mesh: THREE.Object3D } | null;
 }
 
@@ -787,6 +798,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
   const crates = new Map<number, THREE.Group>();
   const bridges = new Map<number, THREE.Group[]>();
   const planks = new Map<number, THREE.Group>();
+  const movers = new Map<number, THREE.Group>();
   let goal: Built["goal"] = null;
 
   level.pieces.forEach((p, index) => {
@@ -825,6 +837,14 @@ export function buildLevel(level: Level, editor: boolean): Built {
       g.add(m);
     }
     if (p.type === "hole" && editor) buildHoleMarker(g, p.w, p.d);
+    if (p.type === "mover") {
+      const m = new THREE.Mesh(platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE), [mat.platform, mat.edge, mat.rim, mat.border]);
+      m.receiveShadow = true;
+      m.castShadow = true;
+      g.add(m);
+      if (editor) buildMoverRoute(g, p);
+      movers.set(index, g);
+    }
     if (p.type === "ramp") {
       const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t));
       geo.rotateY(Math.PI / 2);
@@ -859,7 +879,24 @@ export function buildLevel(level: Level, editor: boolean): Built {
     pieceGroups.push(g);
   });
 
-  return { group, pieceGroups, spinnerBars, crates, bridges, planks, goal };
+  return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, goal };
+}
+
+const ROUTE_MAT = new THREE.LineBasicMaterial({ color: 0x5dffa8, transparent: true, opacity: 0.9, depthTest: false });
+// Editor only: an outline of the platform at each stop and a line along its route (closing back
+// to the start for a loop), in the piece's own frame like the stops.
+function buildMoverRoute(g: THREE.Group, p: Piece & { type: "mover" }) {
+  const box = new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, PLATFORM_THICKNESS, p.d));
+  for (const s of p.stops) {
+    const o = new THREE.LineSegments(box, ROUTE_MAT);
+    o.position.set(s.x, s.y - PLATFORM_THICKNESS / 2, s.z);
+    o.renderOrder = 9;
+    g.add(o);
+  }
+  const pts = [{ x: 0, y: 0, z: 0 }, ...p.stops, ...(p.loop === "loop" ? [{ x: 0, y: 0, z: 0 }] : [])].map((s) => new THREE.Vector3(s.x, s.y + 0.05, s.z));
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ROUTE_MAT);
+  line.renderOrder = 9;
+  g.add(line);
 }
 
 let BAD_MAT: THREE.MeshStandardMaterial | null = null;

@@ -1,6 +1,8 @@
 export const TUNING = {
-  gravity: 4,
+  gravity: 5,
   throttleForce: 8,
+  // Share of a slope's backward pull cancelled while the ball is pushed up it (ramps, kickers, tubes).
+  climbAssist: 0.2,
   maxSpeed: 10,
   linearDamping: 0.8,
   angularDamping: 0.8,
@@ -22,6 +24,7 @@ export type TuningKey = keyof Tuning;
 export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: number]> = {
   gravity: [1, 25, 0.5],
   throttleForce: [1, 40, 0.5],
+  climbAssist: [0, 1, 0.05],
   maxSpeed: [1, 20, 0.25],
   linearDamping: [0, 4, 0.05],
   angularDamping: [0, 4, 0.05],

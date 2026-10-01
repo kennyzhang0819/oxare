@@ -41,7 +41,7 @@ export const BRIDGE_SLACK = 0.025;
 // Knock-down plank: a tall panel standing on a platform edge, hinged along its bottom edge. It
 // holds still until anything touches it, then topples under physics and lies across the gap.
 // Place every plank 0.5 tiles back from the border of the platform it stands on (docs/levels.md).
-export const PLANK_T = 0.3;
+export const PLANK_T = 0.12;
 // The hinge runs through the middle of the panel's base, held this high above the surface in a
 // yoke at each end: just over half the panel's thickness, so whichever way it topples the base
 // corners swing past the floor instead of into it, and it lies flat either way.
@@ -49,7 +49,7 @@ export const PLANK_HINGE_H = PLANK_T / 2 + 0.01;
 // Seesaw: a board `w` wide and `d` long (along local z) pinned at its middle on an axle between
 // two posts, live under physics from the start, so the ball's weight tips it. Thinner than a
 // knock-down plank so the ball rolls onto its low end without a big step.
-export const SEESAW_T = 0.2, SEESAW_PIVOT_H = 1.2, SEESAW_POST_W = 0.36, SEESAW_POST_D = 0.8;
+export const SEESAW_T = 0.1, SEESAW_PIVOT_H = 1.2, SEESAW_POST_W = 0.36, SEESAW_POST_D = 0.8;
 
 // Pose of a knock-down plank's centre relative to the piece origin before yaw, for its start
 // angle: `tilt` degrees about the hinge, 0 standing up, positive leaning toward local -z (the
@@ -91,15 +91,25 @@ export function supportPillars(p: Piece & { type: "support" }): { x: number; z: 
 }
 
 // Tube: a glass pipe just wide enough for the ball, routed through a list of nodes. The piece
-// origin is the entrance, on a platform top; `path` holds the remaining nodes relative to it
-// (before `rot`), the last one being the exit, also on a platform top. Node y is the tube's
-// inner floor, so at a mouth the inside of the tube is flush with the platform. Each turn is at
-// most 90 degrees; a node's `bend` is the radius of the arc through it, 0 for a sharp mitred
-// elbow. `speed` pumps the ball along toward the exit (0 leaves it to gravity and momentum).
-export const TUBE_R = 0.72, TUBE_WALL = 0.1;
-export const TUBE_MAX_TURN = 90, TUBE_BEND_MIN = 1, TUBE_BEND = 1.5, TUBE_SPEED = 6;
-export interface TubeNode { x: number; y: number; z: number; bend: number }
+// origin is the first mouth; `path` holds the remaining nodes relative to it (before `rot`), the
+// last being the other mouth. Node y is the tube's inner floor, so a mouth sitting on a platform
+// top is flush with it. A node's `bend` is the radius of the arc through it, 0 for a sharp mitred
+// elbow. Nothing is checked: the designer places mouths and turns freely. Nothing pushes the
+// ball either; it runs either way under the player's own push, so the two mouths are alike.
+// A single glass skin with no wall thickness.
+export const TUBE_R = 0.58;
+// The glass is drawn as one thin skin, but in the physics it is a solid wall this thick outside the
+// skin, so nothing can slip through it from outside however it arrives.
+export const TUBE_SOLID_WALL = 0.08;
+// The metal collar round each mouth: this thick outside the glass and this long back from the
+// mouth. It is solid, in the physics as in the picture.
+export const TUBE_COLLAR_T = 0.16, TUBE_COLLAR_L = 0.4;
+export const TUBE_BEND = 1.5;
+// `mid`, when set, is a point the segment arriving at this node passes through halfway, which
+// bends that segment into a smooth curve (see tubeSegments); without it the segment is straight.
+export interface TubeNode { x: number; y: number; z: number; bend: number; mid?: { x: number; y: number; z: number } }
 export type Tube = Piece & { type: "tube" };
+
 type V3 = [number, number, number];
 // A ring of the tube: centre `c`, its circle square to `d`, projected along `d` onto the plane
 // through `c` with normal `m` (equal to `d` except at a sharp elbow, where `m` is the mitre).
@@ -109,29 +119,75 @@ const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a: V3, b: V3, k = 1): V3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unit = (a: V3): V3 => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const angle = (a: V3, b: V3) => (Math.acos(Math.max(-1, Math.min(1, dot(a, b)))) * 180) / Math.PI;
 
-// Centreline nodes in the piece's local space (unrotated), entrance first.
+// Centreline nodes in the piece's local space (unrotated), first mouth first.
 export function tubeNodes(p: Tube): V3[] {
   return [[0, TUBE_R, 0], ...p.path.map((n): V3 => [n.x, n.y + TUBE_R, n.z])];
 }
 
-// Turn in degrees at each node (0 at the two mouths).
-export function tubeTurns(p: Tube): number[] {
+// Each segment's centreline from its start node to its end node. A straight segment is just its
+// two ends. A curved one follows the circle through its start, `mid` and end as seen from above,
+// with the height changing smoothly along it (a quadratic through the three heights), so a curve
+// that climbs climbs all the way round rather than at the nodes. If seen from above the three
+// points are in a line (or two coincide), it is the smooth curve through them in 3D instead.
+export function tubeSegments(p: Tube): V3[][] {
   const c = tubeNodes(p);
-  return c.map((_, k) => {
-    if (k === 0 || k === c.length - 1) return 0;
-    const a = unit(sub(c[k]!, c[k - 1]!)), b = unit(sub(c[k + 1]!, c[k]!));
-    return (Math.acos(Math.max(-1, Math.min(1, dot(a, b)))) * 180) / Math.PI;
+  return p.path.map((n, i) => {
+    const a = c[i]!, b = c[i + 1]!;
+    if (!n.mid) return [a, b];
+    const m: V3 = [n.mid.x, n.mid.y + TUBE_R, n.mid.z];
+    const ax = a[0], az = a[2], bx = b[0], bz = b[2], mx = m[0], mz = m[2];
+    const D = 2 * (ax * (mz - bz) + mx * (bz - az) + bx * (az - mz));
+    const span = Math.hypot(bx - ax, bz - az) + Math.hypot(mx - ax, mz - az);
+    const out: V3[] = [];
+    if (Math.abs(D) > 1e-3 * Math.max(1, span * span)) {
+      const s2 = (x: number, z: number) => x * x + z * z;
+      const ux = (s2(ax, az) * (mz - bz) + s2(mx, mz) * (bz - az) + s2(bx, bz) * (az - mz)) / D;
+      const uz = (s2(ax, az) * (bx - mx) + s2(mx, mz) * (ax - bx) + s2(bx, bz) * (mx - ax)) / D;
+      const r = Math.hypot(ax - ux, az - uz);
+      const ang = (x: number, z: number) => Math.atan2(z - uz, x - ux);
+      const t0 = ang(ax, az), tm = ang(mx, mz), t1 = ang(bx, bz);
+      // Sweep from a to b the way round that passes through m.
+      const wrap = (t: number) => ((t % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const ccw = wrap(tm - t0) < wrap(t1 - t0);
+      const total = ccw ? wrap(t1 - t0) : -wrap(t0 - t1);
+      const fm = (ccw ? wrap(tm - t0) : wrap(t0 - tm)) / Math.abs(total);
+      // Height: the quadratic through (0, a.y), (fm, m.y), (1, b.y).
+      const yAt = (f: number) => (a[1] * (f - fm) * (f - 1)) / fm + (m[1] * f * (f - 1)) / (fm * (fm - 1)) + (b[1] * f * (f - fm)) / (1 - fm);
+      const steps = Math.max(8, Math.ceil(Math.abs(total) / (Math.PI / 24)), Math.ceil((Math.abs(total) * r) / 0.5));
+      for (let k = 0; k <= steps; k++) {
+        const f = k / steps, t = t0 + total * f;
+        out.push(k === 0 ? a : k === steps ? b : [ux + r * Math.cos(t), yAt(f), uz + r * Math.sin(t)]);
+      }
+      return out;
+    }
+    const q = add(add(m, m), add(a, b), -0.5);
+    const len = Math.hypot(...sub(m, a)) + Math.hypot(...sub(b, m));
+    const steps = Math.max(8, Math.ceil(len / 0.5));
+    for (let k = 0; k <= steps; k++) {
+      const f = k / steps, g = 1 - f;
+      out.push(k === 0 ? a : k === steps ? b : [g * g * a[0] + 2 * g * f * q[0] + f * f * b[0], g * g * a[1] + 2 * g * f * q[1] + f * f * b[1], g * g * a[2] + 2 * g * f * q[2] + f * f * b[2]]);
+    }
+    return out;
   });
+}
+const tangentIn = (s: V3[]) => unit(sub(s[s.length - 1]!, s[s.length - 2]!));
+const tangentOut = (s: V3[]) => unit(sub(s[1]!, s[0]!));
+
+// Turn in degrees at each node (0 at the two mouths), between the tangents meeting there.
+export function tubeTurns(p: Tube): number[] {
+  const segs = tubeSegments(p);
+  return tubeNodes(p).map((_, k) => (k === 0 || k === segs.length ? 0 : angle(tangentIn(segs[k - 1]!), tangentOut(segs[k]!))));
 }
 
 // How far each node's arc reaches back and forward along its segments, shrunk where two arcs
-// would overlap on one segment (levelProblems reports that).
+// would overlap on one segment. Only a corner between two straight segments is rounded.
 function tubeReach(p: Tube): number[] {
   const c = tubeNodes(p), turns = tubeTurns(p);
   const a = c.map((_, k) => {
     const n = p.path[k - 1];
-    if (!n || k === c.length - 1 || n.bend <= 0 || turns[k]! < 1e-3) return 0;
+    if (!n || k === c.length - 1 || n.bend <= 0 || turns[k]! < 1e-3 || turns[k]! > 179 || n.mid || p.path[k]!.mid) return 0;
     return n.bend * Math.tan((turns[k]! * Math.PI) / 360);
   });
   for (let k = 0; k + 1 < c.length; k++) {
@@ -141,19 +197,27 @@ function tubeReach(p: Tube): number[] {
   return a;
 }
 
-// The tube's rings in local space from entrance to exit: straight runs need only their ends,
-// smooth bends are sampled every ~11 degrees, and a sharp elbow is one mitred ring.
+// The tube's rings in local space from one mouth to the other: straight runs need only their
+// ends, rounded corners are sampled every ~11 degrees, curved segments along their length, and
+// any other corner is one mitred ring.
+// Tubes are not validated, so a path the sweep cannot follow (no second mouth, or two nodes on
+// one spot) yields no rings and the tube is simply left out; a full U-turn becomes an elbow.
 export function tubeRings(p: Tube): TubeRing[] {
-  const c = tubeNodes(p), reach = tubeReach(p), turns = tubeTurns(p);
-  const dirs = c.slice(1).map((q, k) => unit(sub(q, c[k]!)));
-  const out: TubeRing[] = [{ c: c[0]!, d: dirs[0]!, m: dirs[0]! }];
+  const c = tubeNodes(p);
+  if (c.length < 2 || c.some((q, k) => k > 0 && Math.hypot(...sub(q, c[k - 1]!)) < 1e-6)) return [];
+  const segs = tubeSegments(p), reach = tubeReach(p), turns = tubeTurns(p);
+  const out: TubeRing[] = [{ c: c[0]!, d: tangentOut(segs[0]!), m: tangentOut(segs[0]!) }];
   for (let k = 1; k < c.length; k++) {
-    const din = dirs[k - 1]!, dout = dirs[k];
+    const seg = segs[k - 1]!, next = segs[k];
+    for (let i = 1; i + 1 < seg.length; i++) { const d = unit(sub(seg[i + 1]!, seg[i - 1]!)); out.push({ c: seg[i]!, d, m: d }); }
+    const din = tangentIn(seg);
+    if (!next) { out.push({ c: c[k]!, d: din, m: din }); break; }
+    const dout = tangentOut(next), curvedHere = seg.length > 2 || next.length > 2;
+    if (turns[k]! < 1e-3) { if (curvedHere) out.push({ c: c[k]!, d: din, m: din }); continue; }
+    if (turns[k]! > 179) { out.push({ c: c[k]!, d: din, m: din }, { c: c[k]!, d: dout, m: dout }); continue; }
     const a = reach[k]!;
-    const end = add(c[k]!, din, -a);
-    if (!dout) { out.push({ c: c[k]!, d: din, m: din }); break; }
-    if (turns[k]! < 1e-3) continue;
     if (a <= 0) { out.push({ c: c[k]!, d: din, m: unit(add(din, dout)) }); continue; }
+    const end = add(c[k]!, din, -a);
     out.push({ c: end, d: din, m: din });
     const th = (turns[k]! * Math.PI) / 180, rho = a / Math.tan(th / 2);
     const u = unit(add(dout, din, -dot(din, dout)));
@@ -166,6 +230,62 @@ export function tubeRings(p: Tube): TubeRing[] {
     }
   }
   return out;
+}
+
+// Moving platform: a slab `w` by `d` (top at y) that travels a schedule. Its start (x, y, z) is the
+// first stop and `stops` are the rest, relative to it before `rot`; it pauses `wait` seconds at the
+// start and each stop's own `wait` at that stop, and travels between them at `speed`, easing in and
+// out of every stop. `pingpong` runs out to the last stop and back the same way; `loop` goes from
+// the last stop straight back to the start and round again. `offset` starts it that many seconds
+// into its schedule, to stagger several. Its place is a pure function of time, so the physics, the
+// picture and the editor preview always agree.
+export type MoverLoop = "pingpong" | "loop";
+export interface MoverStop { x: number; y: number; z: number; wait: number }
+export type Mover = Piece & { type: "mover" };
+export const MOVER_SPEED = 3;
+
+interface MoverLeg { a: MoverStop; b: MoverStop; travel: number; wait: number }
+function moverLegs(p: Mover): MoverLeg[] {
+  const start: MoverStop = { x: 0, y: 0, z: 0, wait: p.wait };
+  const route = [start, ...p.stops];
+  const order = p.loop === "loop" ? [...route, start] : [...route, ...route.slice(0, -1).reverse()];
+  const speed = Math.max(1e-3, p.speed);
+  const legs: MoverLeg[] = [];
+  for (let k = 0; k + 1 < order.length; k++) {
+    const a = order[k]!, b = order[k + 1]!;
+    // Easing in and out of each stop: the cosine ease peaks at pi/2 times the mean speed, so the
+    // leg takes that much longer to keep `speed` as the top speed.
+    legs.push({ a, b, travel: (Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / speed) * (Math.PI / 2), wait: b.wait });
+  }
+  // The cycle opens with the wait at the start, so arriving back there adds none.
+  if (legs.length) legs[legs.length - 1]!.wait = 0;
+  return legs;
+}
+
+// The platform's offset from its start at time t (seconds), before `rot`.
+export function moverOffset(p: Mover, t: number): { x: number; y: number; z: number } {
+  const legs = moverLegs(p);
+  const period = p.wait + legs.reduce((s, l) => s + l.travel + l.wait, 0);
+  if (!legs.length || period <= 1e-9) return { x: 0, y: 0, z: 0 };
+  let u = (((t + p.offset) % period) + period) % period;
+  if (u < p.wait) return { x: 0, y: 0, z: 0 };
+  u -= p.wait;
+  for (const l of legs) {
+    if (u < l.travel) {
+      const f = (1 - Math.cos((Math.PI * u) / l.travel)) / 2;
+      return { x: l.a.x + (l.b.x - l.a.x) * f, y: l.a.y + (l.b.y - l.a.y) * f, z: l.a.z + (l.b.z - l.a.z) * f };
+    }
+    u -= l.travel;
+    if (u < l.wait) return { x: l.b.x, y: l.b.y, z: l.b.z };
+    u -= l.wait;
+  }
+  return { x: 0, y: 0, z: 0 };
+}
+
+// The platform's top-centre in world space at time t.
+export function moverAt(p: Mover, t: number): { x: number; y: number; z: number } {
+  const o = moverOffset(p, t), r = rotXZ(o.x, o.z, p.rot);
+  return { x: p.x + r.x, y: p.y + o.y, z: p.z + r.z };
 }
 
 export interface Fences4 { n: boolean; e: boolean; s: boolean; w: boolean }
@@ -191,10 +311,11 @@ export type Piece =
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
   | (At & { type: "goal"; r: number })
-  | (At & { type: "tube"; rot: number; speed: number; path: TubeNode[] });
+  | (At & { type: "tube"; rot: number; path: TubeNode[] })
+  | (At & { type: "mover"; w: number; d: number; rot: number; speed: number; wait: number; offset: number; loop: MoverLoop; stops: MoverStop[] });
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "plank", "seesaw", "support", "kicker", "hole", "blockade", "barrier", "pillar", "crate", "block", "spinner", "tube", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "mover", "bridge", "plank", "seesaw", "support", "kicker", "hole", "blockade", "barrier", "pillar", "crate", "block", "spinner", "tube", "goal", "start"];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
   p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "kicker";
@@ -411,7 +532,7 @@ export function surfaceAt(level: Level, x: number, z: number): number | null {
 }
 
 export function pieceRot(p: Piece): number {
-  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "kicker" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" || p.type === "tube" ? p.rot : 0;
+  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "kicker" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" || p.type === "tube" || p.type === "mover" ? p.rot : 0;
 }
 
 export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
@@ -423,6 +544,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
     case "seesaw": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 10 };
+    case "mover": return { type, x, y, z, w: LANE_WIDTH, d: 8, rot: 0, speed: MOVER_SPEED, wait: 1, offset: 0, loop: "pingpong", stops: [{ x: 0, y: 0, z: -12, wait: 1 }] };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
     case "hole": return { type, x, y, z, w: 4, d: 4, rot: 0 };
@@ -434,7 +556,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "spinner": return { type, x, y, z, length: 8, speed: 1.2 };
     case "goal": return { type, x, y, z, r: 1.2 };
     // Up three layers and down again: out along -z, an elbow up, a run across, an elbow down.
-    case "tube": return { type, x, y, z, rot: 0, speed: TUBE_SPEED, path: [
+    case "tube": return { type, x, y, z, rot: 0, path: [
       { x: 0, y: 0, z: -3, bend: TUBE_BEND }, { x: 0, y: 3, z: -3, bend: TUBE_BEND }, { x: 0, y: 3, z: -9, bend: TUBE_BEND },
       { x: 0, y: 0, z: -9, bend: TUBE_BEND }, { x: 0, y: 0, z: -12, bend: 0 },
     ] };
@@ -456,8 +578,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
-    if (p.type === "tube") out.push(...tubeProblems(level, p).map((m) => `piece ${i}: tube ${m}`));
-    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "tube") && Math.abs(p.y / LAYER_H - Math.round(p.y / LAYER_H)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${LAYER_H}`);
+    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support") && Math.abs(p.y / LAYER_H - Math.round(p.y / LAYER_H)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${LAYER_H}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
   });
@@ -478,26 +599,6 @@ export function tubeRingsWorld(p: Tube): TubeRing[] {
   return tubeRings(p).map((q) => ({ c: add([p.x, p.y, p.z], r(q.c)), d: r(q.d), m: r(q.m) }));
 }
 
-function tubeProblems(level: Level, p: Tube): string[] {
-  const out: string[] = [];
-  const c = tubeNodes(p), turns = tubeTurns(p);
-  if (!p.path.length) return ["needs an exit node"];
-  for (let k = 1; k < c.length; k++) if (Math.hypot(...sub(c[k]!, c[k - 1]!)) < 1e-6) return [`node ${k} sits on node ${k - 1}`];
-  if (Math.abs(c[1]![1] - c[0]![1]) > 1e-6) out.push("must leave its entrance level (node 1 at y 0)");
-  if (c.length > 2 && Math.abs(c[c.length - 1]![1] - c[c.length - 2]![1]) > 1e-6) out.push("must reach its exit level (the last two nodes at one y)");
-  turns.forEach((t, k) => { if (t > TUBE_MAX_TURN + 1e-6) out.push(`turns ${t.toFixed(0)}° at node ${k}, more than ${TUBE_MAX_TURN}°`); });
-  p.path.forEach((n, i) => { if (n.bend > 0 && n.bend < TUBE_BEND_MIN && turns[i + 1]! > 1e-3) out.push(`bend at node ${i + 1} is tighter than ${TUBE_BEND_MIN}; use 0 for a sharp elbow`); });
-  for (let k = 0; k + 1 < c.length; k++) {
-    const reach = (j: number) => { const n = p.path[j - 1]; return n && j < c.length - 1 && n.bend > 0 ? n.bend * Math.tan((turns[j]! * Math.PI) / 360) : 0; };
-    if (reach(k) + reach(k + 1) > Math.hypot(...sub(c[k + 1]!, c[k]!)) + 1e-6) out.push(`segment ${k}-${k + 1} is too short for its bends`);
-  }
-  if (!Number.isFinite(p.speed) || p.speed < 0) out.push("speed must be 0 or more");
-  for (const [k, what] of [[0, "entrance"], [c.length - 1, "exit"]] as const) {
-    const w = tubeNodeWorld(p, k), y = surfaceAt(level, w.x, w.z);
-    if (y === null || Math.abs(y - w.y) > 1e-6) out.push(`${what} must sit on a platform top`);
-  }
-  return out;
-}
 
 const num = (v: unknown, what: string): number => {
   if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`${what} must be a finite number`);
@@ -525,6 +626,14 @@ export function validateLevel(raw: unknown): Level {
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt") };
       case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt") };
+      case "mover": {
+        const stops = (Array.isArray(p.stops) ? p.stops : []).map((q: unknown, k: number) => {
+          const n = (q ?? {}) as Record<string, unknown>;
+          return { x: num(n.x ?? 0, `piece ${i}.stops[${k}].x`), y: num(n.y ?? 0, `piece ${i}.stops[${k}].y`), z: num(n.z ?? 0, `piece ${i}.stops[${k}].z`), wait: num(n.wait ?? 0, `piece ${i}.stops[${k}].wait`) };
+        });
+        return { type: "mover", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), speed: num(p.speed ?? MOVER_SPEED, "speed"),
+          wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", stops };
+      }
       case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot") };
       case "support": return { type: "support", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot") };
       case "block": return { type: "block", ...at, w: num(p.w, "w"), h: num(p.h, "h"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
@@ -543,9 +652,14 @@ export function validateLevel(raw: unknown): Level {
         if (!Array.isArray(p.path)) throw new Error(`piece ${i}: tube needs a path array`);
         const path = p.path.map((q: unknown, k: number) => {
           const n = (q ?? {}) as Record<string, unknown>;
-          return { x: num(n.x, `piece ${i}.path[${k}].x`), y: num(n.y, `piece ${i}.path[${k}].y`), z: num(n.z, `piece ${i}.path[${k}].z`), bend: num(n.bend ?? 0, "bend") };
+          const node: TubeNode = { x: num(n.x, `piece ${i}.path[${k}].x`), y: num(n.y, `piece ${i}.path[${k}].y`), z: num(n.z, `piece ${i}.path[${k}].z`), bend: num(n.bend ?? 0, "bend") };
+          if (n.mid && typeof n.mid === "object") {
+            const m = n.mid as Record<string, unknown>;
+            node.mid = { x: num(m.x, `piece ${i}.path[${k}].mid.x`), y: num(m.y, `piece ${i}.path[${k}].mid.y`), z: num(m.z, `piece ${i}.path[${k}].mid.z`) };
+          }
+          return node;
         });
-        return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), speed: num(p.speed ?? TUBE_SPEED, "speed"), path };
+        return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path };
       }
       default: throw new Error(`piece ${i}: unknown type ${String(p.type)}`);
     }

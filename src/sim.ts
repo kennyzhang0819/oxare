@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
-import { sectorMesh, sweepTube } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_HINGE_H, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_WALL, tubeRingsWorld, bridgeChain, isTilted, plankPose, seesawTilt, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
+import { sectorMesh, sweepTube, tubeWallBlocks } from "./geometry.ts";
+import { BALL_RADIUS, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_HINGE_H, PLANK_T, FENCE_HEIGHT, FENCE_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, PLATFORM_THICKNESS, moverAt, type Mover, tubeRingsWorld, bridgeChain, isTilted, plankPose, seesawTilt, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -17,16 +17,15 @@ const KNOCK_PLANK_MASS = 0.1;
 // Seesaw board: half the ball's mass, so the ball tips it decisively but it still swings with weight.
 const SEESAW_MASS = 0.5;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
-// A tube with speed drives the ball's speed along it toward `speed` at this rate (1/s), on top
-// of cancelling gravity's pull along the tube, so it climbs as readily as it falls.
-const TUBE_PUMP_GAIN = 4, TUBE_PUMP_MAX = 20;
 
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
 export interface SimBridge { index: number; planks: RAPIER.RigidBody[] }
 // `frozen` is set while a knock-down plank waits to be touched: its collider, checked each step.
 export interface SimPlank { index: number; body: RAPIER.RigidBody; frozen?: RAPIER.Collider }
-export interface SimTube { index: number; centre: [number, number, number][]; speed: number }
+// `chord` is the horizontal unit direction from entrance to exit (zero if they share x and z).
+export interface SimTube { index: number; centre: [number, number, number][]; chord: [number, number] }
+export interface SimMover { index: number; body: RAPIER.RigidBody; piece: Mover }
 export interface Sim {
   world: RAPIER.World;
   ball: RAPIER.RigidBody;
@@ -35,6 +34,9 @@ export interface Sim {
   bridges: SimBridge[];
   planks: SimPlank[];
   tubes: SimTube[];
+  movers: SimMover[];
+  // Seconds of play stepped so far: the clock moving platforms run their schedules on.
+  readonly time: number;
   step(throttle: number, fx: number, fz: number): void;
   respawn(): void;
   free(): void;
@@ -78,6 +80,10 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   world.createCollider(
     RAPIER.ColliderDesc.trimesh(floor.body.positions, floor.body.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
   );
+  for (const pts of floor.solids) {
+    const desc = RAPIER.ColliderDesc.convexHull(pts);
+    if (desc) world.createCollider(desc.setFriction(0.6));
+  }
   for (const p of level.pieces) {
     const rot = pieceRot(p);
     if (p.type === "slab" && isTilted(p)) {
@@ -214,7 +220,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + c.x, p.y + pose.y, p.z + c.z).setRotation(qmul(yaw, xQuat(-pose.tilt)))
         .setAngularDamping(0.02).setGravityScale(TUNING.propGravity),
     );
-    const r = 0.06;
+    const r = PLANK_T / 2 - 0.01;
     const collider = world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, PLANK_T / 2 - r, r).setMass(KNOCK_PLANK_MASS).setFriction(0.6).setRestitution(0.05), body);
     world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: -p.h / 2, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, false);
     planks.push({ index, body, frozen: collider });
@@ -231,7 +237,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, H, p.z).setRotation(qmul(yaw, xQuat(seesawTilt(p))))
         .setAngularDamping(0.3).setGravityScale(TUNING.propGravity),
     );
-    const r = 0.06;
+    const r = SEESAW_T / 2 - 0.01;
     world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, SEESAW_T / 2 - r, p.d / 2 - r, r).setMass(SEESAW_MASS).setFriction(1).setRestitution(0.02), body);
     world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }), pivot, body, true);
     for (const side of [1, -1]) {
@@ -244,6 +250,17 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     planks.push({ index, body });
   });
 
+  // Moving platforms: a solid slab on a kinematic body, set each step to where its schedule says.
+  const movers: SimMover[] = [];
+  level.pieces.forEach((p, index) => {
+    if (p.type !== "mover") return;
+    const at = moverAt(p, 0), r = 0.12;
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z).setRotation(yQuat(p.rot)));
+    world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, PLATFORM_THICKNESS / 2 - r, p.d / 2 - r, r).setTranslation(0, -PLATFORM_THICKNESS / 2, 0).setFriction(1), body);
+    movers.push({ index, body, piece: p });
+  });
+  let time = 0;
+
   // Kickers: a fixed convex wedge each, so the slope is one flat face with no seams to catch on.
   for (const p of level.pieces) {
     if (p.type !== "kicker") continue;
@@ -252,18 +269,32 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (desc) world.createCollider(desc.setFriction(1));
   }
 
-  // Tubes: the inner wall holds the ball in, the outer wall keeps it out; both are swept meshes.
+  // Tubes: the inside is one smooth swept skin the ball rolls on. The wall behind it, and the
+  // collar round each mouth, are solid convex blocks: a zero-thickness surface only pushes from
+  // its front face, so a ball could slip in from outside where a block never lets it. The blocks
+  // start a little outside the skin so their flat inner faces never narrow the bore.
   const tubes: SimTube[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "tube") return;
     const rings = tubeRingsWorld(p);
-    for (const [r, inward] of [[TUBE_R, true], [TUBE_R + TUBE_WALL, false]] as const) {
-      const m = sweepTube(rings, r, inward);
-      world.createCollider(
-        RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
-      );
+    if (rings.length < 2) return;
+    const skin = sweepTube(rings, TUBE_R, true);
+    world.createCollider(
+      RAPIER.ColliderDesc.trimesh(new Float32Array(skin.positions), new Uint32Array(skin.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
+    );
+    const SIDES = 20, rIn = TUBE_R / Math.cos(Math.PI / SIDES) + 0.005;
+    const blocks = tubeWallBlocks(rings, rIn, TUBE_R + TUBE_SOLID_WALL, SIDES);
+    for (const [ring, sign] of [[rings[0]!, -1], [rings[rings.length - 1]!, 1]] as const) {
+      const out: [number, number, number] = [ring.d[0] * sign, ring.d[1] * sign, ring.d[2] * sign];
+      const back: [number, number, number] = [ring.c[0] - out[0] * TUBE_COLLAR_L, ring.c[1] - out[1] * TUBE_COLLAR_L, ring.c[2] - out[2] * TUBE_COLLAR_L];
+      blocks.push(...tubeWallBlocks([{ c: back, d: out, m: out }, { c: ring.c, d: out, m: out }], rIn, TUBE_R + TUBE_COLLAR_T, SIDES));
     }
-    tubes.push({ index, centre: rings.map((q) => q.c), speed: p.speed });
+    for (const pts of blocks) {
+      const desc = RAPIER.ColliderDesc.convexHull(pts);
+      if (desc) world.createCollider(desc.setFriction(0.6));
+    }
+    const a = rings[0]!.c, e = rings[rings.length - 1]!.c, cl = Math.hypot(e[0] - a[0], e[2] - a[2]);
+    tubes.push({ index, centre: rings.map((q) => q.c), chord: cl > 1e-6 ? [(e[0] - a[0]) / cl, (e[2] - a[2]) / cl] : [0, 0] });
   });
   // Direction along the tube at the ball, when the ball is inside it between the two mouths.
   const tubeDir = (t: SimTube, b: { x: number; y: number; z: number }): [number, number, number] | null => {
@@ -292,7 +323,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   const ball = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic().setTranslation(spawn.x, spawn.y, spawn.z).setCcdEnabled(true),
   );
-  world.createCollider(RAPIER.ColliderDesc.ball(BALL_RADIUS).setMass(1).setFriction(1).setRestitution(0.05), ball);
+  const ballCollider = world.createCollider(RAPIER.ColliderDesc.ball(BALL_RADIUS).setMass(1).setFriction(1).setRestitution(0.05), ball);
+  const down = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
   return {
     world,
@@ -302,6 +334,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     bridges,
     planks,
     tubes,
+    movers,
+    get time() { return time; },
     step(throttle, fx, fz) {
       props ??= [...crates.map((c) => c.body), ...bridges.flatMap((b) => b.planks), ...planks.map((p) => p.body)];
       for (const c of crates) {
@@ -321,21 +355,50 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       ball.setLinearDamping(TUNING.linearDamping);
       ball.setAngularDamping(TUNING.angularDamping);
       const f = throttle * TUNING.throttleForce;
-      ball.addForce({ x: fx * f, y: 0, z: fz * f }, true);
-      const at = ball.translation(), vel = ball.linvel();
-      for (const t of tubes) {
-        const d = t.speed > 0 ? tubeDir(t, at) : null;
-        if (!d) continue;
-        const along = vel.x * d[0] + vel.y * d[1] + vel.z * d[2];
-        const a = Math.max(-TUBE_PUMP_MAX, Math.min(TUBE_PUMP_MAX, TUBE_PUMP_GAIN * (t.speed - along))) + TUNING.gravity * d[1];
-        ball.addForce({ x: d[0] * a, y: d[1] * a, z: d[2] * a }, true);
-        break;
+      // Inside a tube the push runs along the tube instead, so the player can drive the ball up a
+      // climb (against gravity, which still pulls it back) or back out. Where the tube is level the
+      // push counts by how well it lines up with the tube; on a steep run, where the tube's own
+      // heading vanishes, it counts by the entrance-to-exit heading instead.
+      const at = ball.translation();
+      let d: [number, number, number] | null = null, tube: SimTube | undefined;
+      for (const t of tubes) if ((d = tubeDir(t, at))) { tube = t; break; }
+      // The push, and the slope it is on: the tube's direction, or the ground's normal under the ball.
+      let push: [number, number, number], slope: [number, number, number] | null = null;
+      if (d && tube) {
+        const hl = Math.hypot(d[0], d[2]);
+        const along = fx * d[0] + fz * d[2] + (1 - hl) * (fx * tube.chord[0] + fz * tube.chord[1]);
+        push = [d[0] * f * along, d[1] * f * along, d[2] * f * along];
+        slope = [-TUNING.gravity * d[1] * d[0], -TUNING.gravity * d[1] * d[1], -TUNING.gravity * d[1] * d[2]];
+      } else {
+        push = [fx * f, 0, fz * f];
+        down.origin = at;
+        const hit = world.castRayAndGetNormal(down, BALL_RADIUS * 1.6 + 0.1, true, undefined, undefined, ballCollider, ball);
+        // Riding a moving platform: drag acts on the ball's speed over the ground, which would pull
+        // it back off a platform carrying it, so give back the drag on the platform's own speed.
+        const rode = hit ? movers.find((m) => m.body.handle === hit.collider.parent()?.handle) : undefined;
+        if (rode) {
+          const a = moverAt(rode.piece, time), b = moverAt(rode.piece, time + STEP), c = TUNING.linearDamping / STEP;
+          push = [push[0] + (b.x - a.x) * c, push[1] + (b.y - a.y) * c, push[2] + (b.z - a.z) * c];
+        }
+        if (hit && TUNING.climbAssist > 0 && throttle !== 0 && hit.normal.y > 0.2 && hit.normal.y < 0.999) {
+          // Gravity's pull along the slope: g minus its part into the surface.
+          const n = hit.normal, gn = -TUNING.gravity * n.y;
+          slope = [-gn * n.x, -TUNING.gravity - gn * n.y, -gn * n.z];
+        }
       }
+      // Climb assist: while the push works against the slope's pull, cancel a share of that pull.
+      if (slope && push[0] * slope[0] + push[1] * slope[1] + push[2] * slope[2] < 0) {
+        const k = TUNING.climbAssist * Math.min(1, Math.abs(throttle));
+        push = [push[0] - slope[0] * k, push[1] - slope[1] * k, push[2] - slope[2] * k];
+      }
+      ball.addForce({ x: push[0], y: push[1], z: push[2] }, true);
+      for (const m of movers) m.body.setNextKinematicTranslation(moverAt(m.piece, time + STEP));
       for (const s of spinners) {
         s.angle += s.speed * STEP;
         body_rot(s.body, s.angle);
       }
       world.step();
+      time += STEP;
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
       ball.resetForces(true);
       const v = ball.linvel();

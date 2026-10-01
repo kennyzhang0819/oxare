@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { BALL_RADIUS, GOAL_BEAM_H, type Level } from "./level.ts";
+import { BALL_RADIUS, GOAL_BEAM_H, moverAt, type Level } from "./level.ts";
 import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
@@ -17,7 +17,8 @@ export function loadProgress(): Progress {
 }
 
 export interface PlayFrom { x: number; y: number; z: number; yaw: number }
-export interface GameOpts { onExit(): void; onNext?: () => void; onRetry(): void; from?: PlayFrom }
+// `admin` (played from the admin panel or the editor) adds the feel-tuning panel: a Tune button and T.
+export interface GameOpts { onExit(): void; onNext?: () => void; onRetry(): void; from?: PlayFrom; admin?: boolean }
 
 export class Game implements Mode {
   private scene: THREE.Scene;
@@ -48,7 +49,7 @@ export class Game implements Mode {
   private onResize = () => this.resize();
   private onKey = (e: KeyboardEvent) => {
     if (e.code === "Escape" && !this.done) this.togglePause();
-    if (e.code === "KeyT" && !(e.target instanceof HTMLInputElement)) this.toggleTune();
+    if (e.code === "KeyT" && this.opts.admin && !(e.target instanceof HTMLInputElement)) this.toggleTune();
     if (e.code === "KeyR" && !(e.target instanceof HTMLInputElement)) this.fall();
   };
 
@@ -66,6 +67,7 @@ export class Game implements Mode {
     this.scene.add(this.built.group, this.ball.mesh);
     this.hud = h("div", { class: "hud" },
       h("span", { class: "spacer" }),
+      opts.admin ? h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)") : null,
       h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
     );
     ctx.overlay.append(this.hud);
@@ -130,6 +132,11 @@ export class Game implements Mode {
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);
+    }
+    // Moving platforms by their schedule at the same in-between moment the ball is drawn at.
+    for (const m of sim.movers) {
+      const g = this.built.movers.get(m.index);
+      if (g) { const at = moverAt(m.piece, sim.time - STEP * (1 - alpha)); g.position.set(at.x, at.y, at.z); }
     }
     for (const c of sim.crates) {
       const g = this.built.crates.get(c.index);

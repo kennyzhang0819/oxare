@@ -76,6 +76,24 @@ export function sectorMesh(inner: number, outer: number, y0: number, y1: number,
 type V3 = [number, number, number];
 export interface SweepRing { c: V3; d: V3; m: V3 }
 
+// A thick-walled tube between radii `rIn` and `rOut` swept through `rings`, cut into one convex
+// block per ring pair per side, each as a point cloud for a convex hull. `rIn` must sit far enough
+// out that each block's flat inner face (a chord of the circle) clears the bore.
+export function tubeWallBlocks(rings: SweepRing[], rIn: number, rOut: number, sides = 20): Float32Array[] {
+  const inner = sweepTube(rings, rIn, true, sides).positions, outer = sweepTube(rings, rOut, false, sides).positions;
+  const out: Float32Array[] = [];
+  for (let i = 0; i + 1 < rings.length; i++) {
+    for (let j = 0; j < sides; j++) {
+      const pts: number[] = [];
+      for (const k of [i * sides + j, i * sides + ((j + 1) % sides), (i + 1) * sides + j, (i + 1) * sides + ((j + 1) % sides)]) {
+        pts.push(inner[k * 3]!, inner[k * 3 + 1]!, inner[k * 3 + 2]!, outer[k * 3]!, outer[k * 3 + 1]!, outer[k * 3 + 2]!);
+      }
+      out.push(new Float32Array(pts));
+    }
+  }
+  return out;
+}
+
 // Circles of radius `r` swept through `rings` (see TubeRing in level.ts) as a triangle tube.
 // The circle's frame is carried from ring to ring by the smallest rotation between their
 // directions, so the surface never twists on itself; `inward` winds the faces toward the axis.

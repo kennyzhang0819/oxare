@@ -1,4 +1,10 @@
 import * as THREE from "three";
+import "@fontsource/orbitron/700.css";
+import "@fontsource/orbitron/900.css";
+import "@fontsource/chakra-petch/400.css";
+import "@fontsource/chakra-petch/600.css";
+import "@fontsource/chakra-petch/700.css";
+import "@fontsource/jetbrains-mono/500.css";
 import "./style.css";
 import { Editor } from "./editor.ts";
 import { Game } from "./game.ts";
@@ -36,6 +42,7 @@ function playLevel(i: number) {
   const level = LEVELS[i];
   if (!level) return show(() => new Loading(ctx, menu));
   show(() => new Game(ctx, level, {
+    admin,
     onExit: menu,
     onRetry: () => playLevel(i),
     onNext: LEVELS[i + 1] ? () => playLevel(i + 1) : undefined,
@@ -45,7 +52,7 @@ function playLevel(i: number) {
 function edit(level: Level) {
   show(() => new Editor(ctx, level, {
     onExit: menu,
-    onPlay: (l, from) => show(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l), from })),
+    onPlay: (l, from) => show(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l), from, admin: true })),
   }));
 }
 

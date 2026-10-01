@@ -79,7 +79,13 @@ const drop = (s: number, depth: number, w: number) => depth === BY
   : (depth * (1 + Math.cos((Math.PI * s) / w))) / 2;
 
 export interface Mesh { positions: Float32Array; indices: Uint32Array }
-export interface Floor extends Mesh { body: Mesh }
+// `solids` are point clouds for convex hulls filling each platform from its underside to just
+// under its rolling surface. The meshes are zero-thickness shells that only push from their front
+// face, so a ball that reaches the corner where a side wall meets the lip could pass straight in;
+// a solid pushes any overlap back out. They sit SOLID_GAP below the surface, under the lip's
+// chord, so the ball rolling on top never touches them.
+export interface Floor extends Mesh { body: Mesh; solids: Float32Array[] }
+const SOLID_GAP = 0.03;
 
 export function floorMesh(level: Level): Floor {
   const polys = topPolys(level);
@@ -144,6 +150,15 @@ export function floorMesh(level: Level): Floor {
     return { pos, idx, vertex, tri: (a: number, b: number, c: number) => idx.push(a, b, c) };
   };
   const top = mesh(), under = mesh();
+  const solids: Float32Array[] = [];
+  const cloud = (pts: { v: XZ; y: number }[]) => new Float32Array(pts.flatMap((w) => [w.v[0], w.y, w.v[1]]));
+  const convex = (q: V[]) => q.every((a, i) => {
+    const b = q[(i + 1) % q.length]!, c = q[(i + 2) % q.length]!;
+    return (b.v[0] - a.v[0]) * (c.v[1] - b.v[1]) - (b.v[1] - a.v[1]) * (c.v[0] - b.v[0]) <= 1e-9;
+  }) || q.every((a, i) => {
+    const b = q[(i + 1) % q.length]!, c = q[(i + 2) % q.length]!;
+    return (b.v[0] - a.v[0]) * (c.v[1] - b.v[1]) - (b.v[1] - a.v[1]) * (c.v[0] - b.v[0]) >= -1e-9;
+  });
   const fill = (m: ReturnType<typeof mesh>, loops: V[][], ids: number[][], up: boolean) => {
     const flat: number[] = [], holes: number[] = [], all = ids.flat();
     loops.forEach((loop, k) => { if (k > 0) holes.push(flat.length / 2); for (const w of loop) flat.push(w.v[0], w.v[1]); });
@@ -225,10 +240,27 @@ export function floorMesh(level: Level): Floor {
       }
     });
     fill(top, insets, insets.map((l) => l.map((w) => top.vertex(w.v[0], w.y, w.v[1]))), true);
+    const lip = (w: V) => ({ v: w.v, y: w.y - BY - SOLID_GAP }), base = (w: V) => ({ v: w.v, y: w.y - PLATFORM_THICKNESS });
+    if (q.loops.length === 1 && convex(q.loops[0]!)) {
+      // One hull: the full outline from the underside to just under the lip, chamfered in to the
+      // inset ring just under the surface.
+      const loop = q.loops[0]!;
+      solids.push(cloud([...loop.map(base), ...loop.map(lip), ...insets[0]!.map((w) => ({ v: w.v, y: w.y - SOLID_GAP }))]));
+    } else {
+      // A slab cut by holes: prisms over its triangles up to just under the lip.
+      const flat: number[] = [], holes: number[] = [], all = q.loops.flat();
+      q.loops.forEach((loop, k) => { if (k > 0) holes.push(flat.length / 2); for (const w of loop) flat.push(w.v[0], w.v[1]); });
+      const t = earcut(flat, holes);
+      for (let i = 0; i < t.length; i += 3) {
+        const tri = [all[t[i]!]!, all[t[i + 1]!]!, all[t[i + 2]!]!];
+        solids.push(cloud([...tri.map(base), ...tri.map(lip)]));
+      }
+    }
     fill(under, q.loops, q.loops.map((l) => l.map((w) => under.vertex(w.v[0], w.y - PLATFORM_THICKNESS, w.v[1]))), false);
   }
   return {
     positions: new Float32Array(top.pos), indices: new Uint32Array(top.idx),
     body: { positions: new Float32Array(under.pos), indices: new Uint32Array(under.idx) },
+    solids,
   };
 }

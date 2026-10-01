@@ -38,5 +38,6 @@ The ball rolls on one welded triangle mesh built from every platform top (`floor
 - An open edge (nothing next to it, including a hole's edge) has the same rounded lip as the visuals, so the ball rolls off it.
 - Where two pieces meet, the lip is only a tiny dip (`PLATFORM_SEAM_DROP`, 0.015) so the ball keeps its speed. The visuals still show the full groove.
 - Under the top there is a second mesh with the side walls and underside, so a ball below or beside a platform hits it.
+- Both meshes are zero-thickness shells that only push from their front face, so every platform is also filled with solid convex hulls from its underside to 0.03 below its surface, chamfered under the lip. The ball never touches them while rolling, but if it ever reaches the corner where a wall meets the lip, the solid pushes it back out instead of letting it in. `check.ts` fires balls at raised slab, holed slab, curve and ramp edges to prove nothing gets inside.
 
 `npm run check` checks that seams stay shallow, curves stay flat, and that the ball falls through holes and notches but rolls past them.

@@ -4,6 +4,7 @@ import { LEVELS } from "./levels/index.ts";
 import { loadDraft } from "./editor.ts";
 import { loadProgress } from "./game.ts";
 import { createScene, type SceneEnv } from "./scene.ts";
+import { GlassTitle } from "./title.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -16,6 +17,7 @@ export class Menu implements Mode {
   private env: SceneEnv;
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private raf = 0;
+  private title: GlassTitle;
   private onResize = () => this.resize();
   private onKey: (e: KeyboardEvent) => void;
 
@@ -23,6 +25,10 @@ export class Menu implements Mode {
     this.ctx = ctx;
     // Open sky and sea behind the menu, nothing else; the camera slowly turns over the water.
     this.env = createScene();
+    this.env.scene.add(this.camera);
+    const word = opts.admin ? "ADMIN" : "OXARE";
+    const slot = h("h1", { class: "title-slot" }, word);
+    this.title = new GlassTitle(ctx.renderer, this.camera, slot, word);
     addEventListener("resize", this.onResize);
     this.resize();
     this.raf = requestAnimationFrame(this.frame);
@@ -35,7 +41,7 @@ export class Menu implements Mode {
     if (!opts.admin) {
       ctx.overlay.append(
         h("div", { class: "menu" },
-          h("h1", {}, "OXARE"),
+          slot,
           h("div", { class: "levels" },
             ...LEVELS.map((l, i) => h("div", { class: "level-row" },
               h("span", { class: "name" }, `${i + 1}. ${l.name}`),
@@ -50,7 +56,7 @@ export class Menu implements Mode {
     const draft = loadDraft();
     ctx.overlay.append(
       h("div", { class: "menu" },
-        h("h1", {}, "ADMIN"),
+        slot,
         h("div", { class: "levels" },
           ...LEVELS.map((l, i) => h("div", { class: "level-row" },
             h("span", { class: "name" }, `${i + 1}. ${l.name}`),
@@ -80,12 +86,14 @@ export class Menu implements Mode {
     const a = now / 1000 * 0.03;
     this.camera.position.set(0, 10, 0);
     this.camera.lookAt(Math.sin(a) * 40, 2, Math.cos(a) * 40);
+    this.title.update(now / 1000);
     this.env.render(this.ctx.renderer, this.camera);
     this.raf = requestAnimationFrame(this.frame);
   };
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.title.dispose();
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);
     clear(this.ctx.overlay);
