@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_D, BARRIER_H, BARRIER_W, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_POST_D, SEESAW_POST_W, SEESAW_T, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_WALL, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerCorners, pieceRot, plankPose, rampHeight, seesawTilt, supportPillars, rotXZ, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
 import { buildRails } from "./rails.ts";
 import { platformGeometry } from "./platform.ts";
+import { sweepTube, type SweepRing } from "./geometry.ts";
 
 export const EDGE_RADIUS = 0.3;
 const HOLE_LIP = 0.35;
@@ -403,6 +404,61 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
   return board;
 }
 
+const TUBE_GLASS = new THREE.MeshPhysicalMaterial({
+  color: 0x5ad2e6, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1,
+});
+const TUBE_COLLAR = new THREE.MeshStandardMaterial({ color: 0xc9d0d6, roughness: 0.35, metalness: 0.15, side: THREE.DoubleSide });
+const TUBE_EXIT_GLOW = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff6a1a, emissiveIntensity: 0.8, roughness: 0.4 });
+
+// Wall of thickness r1 - r0 swept through `rings`, with flat annular ends.
+function tubeShell(rings: SweepRing[], r0: number, r1: number, sides = 32): THREE.BufferGeometry {
+  const inner = sweepTube(rings, r0, true, sides), outer = sweepTube(rings, r1, false, sides, rings.length * sides);
+  const pos = [...inner.positions, ...outer.positions], idx = [...inner.indices, ...outer.indices];
+  const n = rings.length * sides;
+  for (const [ring, flip] of [[0, true], [rings.length - 1, false]] as const) {
+    for (let j = 0; j < sides; j++) {
+      const a = ring * sides + j, b = ring * sides + ((j + 1) % sides), c = a + n, d = b + n;
+      if (flip) idx.push(a, d, c, a, b, d); else idx.push(a, c, d, a, d, b);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Tube: a glass pipe with a metal collar at each mouth, slotted into eight segments, and a light
+// ring on the inside face (cyan at the entrance, orange at the exit).
+function buildTube(g: THREE.Group, p: Tube) {
+  const rings = tubeRings(p);
+  const glass = new THREE.Mesh(tubeShell(rings, TUBE_R, TUBE_R + TUBE_WALL), TUBE_GLASS);
+  glass.renderOrder = 1;
+  g.add(glass);
+  const COLLAR_L = 0.4, COLLAR_T = 0.16, SLOTS = 8;
+  for (const [at, out, glow] of [[rings[0]!, -1, STRUCT!.glow], [rings[rings.length - 1]!, 1, TUBE_EXIT_GLOW]] as const) {
+    const d = new THREE.Vector3(...at.d), c = new THREE.Vector3(...at.c);
+    const collar = new THREE.Group();
+    collar.position.copy(c);
+    collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().multiplyScalar(out));
+    // Built along +z, pointing out of the mouth.
+    const along = (z: number): SweepRing => ({ c: [0, 0, z], d: [0, 0, 1], m: [0, 0, 1] });
+    for (let k = 0; k < SLOTS; k++) {
+      const a0 = (k / SLOTS) * Math.PI * 2 + 0.06, a1 = ((k + 1) / SLOTS) * Math.PI * 2 - 0.06;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R + TUBE_WALL + COLLAR_T, TUBE_R + TUBE_WALL + COLLAR_T, COLLAR_L, 6, 1, true, a0, a1 - a0), TUBE_COLLAR);
+      seg.rotation.x = Math.PI / 2;
+      seg.position.z = -COLLAR_L / 2;
+      seg.castShadow = true;
+      collar.add(seg);
+    }
+    const sleeve = new THREE.Mesh(tubeShell([along(-COLLAR_L), along(0)], TUBE_R - 0.02, TUBE_R + TUBE_WALL + COLLAR_T - 0.03, 32), STRUCT!.hinge);
+    const light = new THREE.Mesh(new THREE.TorusGeometry(TUBE_R + 0.02, 0.035, 8, 40), glow);
+    light.position.z = 0.01;
+    collar.add(sleeve, light);
+    g.add(collar);
+  }
+}
+
 // Pushable crate: one textured cube, placed by the physics body each frame.
 function buildCrate(g: THREE.Group, w: number, h: number, d: number) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(0.08, w / 2, h / 2, d / 2) * 0.99), STRUCT!.crate);
@@ -761,6 +817,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
     if (p.type === "support") buildSupport(g, p);
     if (p.type === "kicker") buildKicker(g, p);
+    if (p.type === "tube") buildTube(g, p);
     for (const b of pieceBoxes(p)) {
       if (b.kind !== "block" || p.type === "blockade" || p.type === "barrier" || p.type === "support") continue; // these props draw themselves; the box is only their collider
       const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat.block);

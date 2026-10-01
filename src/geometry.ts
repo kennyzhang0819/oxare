@@ -72,3 +72,46 @@ export function sectorMesh(inner: number, outer: number, y0: number, y1: number,
   cap(angle, -Math.sin(angle), -Math.cos(angle));
   return { positions: new Float32Array(pos), indices: new Uint32Array(idx), uvs: new Float32Array(uv) };
 }
+
+type V3 = [number, number, number];
+export interface SweepRing { c: V3; d: V3; m: V3 }
+
+// Circles of radius `r` swept through `rings` (see TubeRing in level.ts) as a triangle tube.
+// The circle's frame is carried from ring to ring by the smallest rotation between their
+// directions, so the surface never twists on itself; `inward` winds the faces toward the axis.
+export function sweepTube(rings: SweepRing[], r: number, inward: boolean, sides = 20, first = 0): { positions: number[]; indices: number[] } {
+  const pos: number[] = [], idx: number[] = [];
+  const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const norm = (a: V3): V3 => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const d0 = rings[0]!.d;
+  let n: V3 = Math.abs(d0[1]) < 0.9 ? norm([-d0[0] * d0[1], 1 - d0[1] * d0[1], -d0[2] * d0[1]]) : norm(cross(d0, [1, 0, 0]));
+  let prev = d0;
+  for (const ring of rings) {
+    const d = ring.d;
+    // Rodrigues rotation of n by the turn from prev to d.
+    const axis = cross(prev, d), s = Math.hypot(...axis), c = dot(prev, d);
+    if (s > 1e-9) {
+      const k = norm(axis), kn = cross(k, n), kd = dot(k, n);
+      n = norm([n[0] * c + kn[0] * s + k[0] * kd * (1 - c), n[1] * c + kn[1] * s + k[1] * kd * (1 - c), n[2] * c + kn[2] * s + k[2] * kd * (1 - c)]);
+    }
+    n = norm([n[0] - d[0] * dot(n, d), n[1] - d[1] * dot(n, d), n[2] - d[2] * dot(n, d)]);
+    const b = cross(d, n);
+    const md = dot(ring.m, d);
+    for (let j = 0; j < sides; j++) {
+      const a = (j / sides) * Math.PI * 2, ca = Math.cos(a) * r, sa = Math.sin(a) * r;
+      const off: V3 = [n[0] * ca + b[0] * sa, n[1] * ca + b[1] * sa, n[2] * ca + b[2] * sa];
+      const t = -dot(ring.m, off) / md;
+      pos.push(ring.c[0] + off[0] + d[0] * t, ring.c[1] + off[1] + d[1] * t, ring.c[2] + off[2] + d[2] * t);
+    }
+    prev = d;
+  }
+  for (let i = 0; i + 1 < rings.length; i++) {
+    for (let j = 0; j < sides; j++) {
+      const a = first + i * sides + j, b = first + i * sides + ((j + 1) % sides), c = a + sides, e = b + sides;
+      // Ring points run counter-clockwise about d, so (a, b, c) faces outward.
+      if (inward) idx.push(a, c, b, b, c, e); else idx.push(a, b, c, b, e, c);
+    }
+  }
+  return { positions: pos, indices: idx };
+}

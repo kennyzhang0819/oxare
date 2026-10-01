@@ -422,4 +422,42 @@ TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
   if (Math.abs(held - 45) > 0.5 || Math.abs(fell - 90) > 3) { failed = true; console.error(`FAIL plank-lean: held ${held.toFixed(1)} deg (want 45), after the ball ${fell.toFixed(1)} deg (want 90)`); }
   else console.log(`ok plank-lean: held ${held.toFixed(1)} deg untouched, fell to ${fell.toFixed(1)} deg once hit`);
 }
+// A pumped tube carries the ball in at platform level, up four layers and out onto the upper
+// platform, through smooth and sharp elbows alike; a tube with no pump drops it four layers.
+for (const [name, bend, speed, y0, y1] of [["up-smooth", 1.5, 6, 0, 4], ["up-sharp", 0, 6, 0, 4], ["down-sharp", 0, 0, 4, 0], ["down-smooth", 1.5, 0, 4, 0]] as const) {
+  const level = validateLevel({ id: `tube-${name}`, name, pieces: [
+    { type: "start", x: 0, y: y0, z: -2 },
+    { type: "slab", x: 0, y: y0, z: -5, w: 8, d: 10, rot: 0, fences: {} },
+    { type: "tube", x: 0, y: y0, z: -7, rot: 0, speed, path: [
+      { x: 0, y: 0, z: -6, bend }, { x: 0, y: y1 - y0, z: -6, bend }, { x: 0, y: y1 - y0, z: -17, bend: 0 },
+    ] },
+    { type: "slab", x: 0, y: y1, z: -30, w: 8, d: 24, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: y1, z: -38, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let p = sim.ball.translation(), minY = Infinity;
+  for (let i = 0; i < 120 * 15 && p.z > -26; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); minY = Math.min(minY, p.y); }
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  p = sim.ball.translation();
+  sim.free();
+  if (p.z > -24 || Math.abs(p.y - (y1 + BALL_RADIUS)) > 0.1 || minY < Math.min(y0, y1)) { failed = true; console.error(`FAIL tube-${name}: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, lowest y ${minY.toFixed(2)}`); }
+  else console.log(`ok tube-${name}: ball came out at y ${p.y.toFixed(2)} z ${p.z.toFixed(2)}`);
+}
+// The tube's outside is solid: a ball rolled at it from the side stops against it.
+{
+  const level = validateLevel({ id: "tube-side", name: "tube-side", pieces: [
+    { type: "start", x: -3, y: 0, z: -8 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 16, rot: 0, fences: {} },
+    { type: "tube", x: 0, y: 0, z: -2, rot: 0, speed: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }] },
+    { type: "goal", x: 3, y: 0, z: -14, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let maxX = -Infinity;
+  for (let i = 0; i < 120 * 4; i++) { sim.step(1, 1, 0); maxX = Math.max(maxX, sim.ball.translation().x); }
+  sim.free();
+  if (maxX > 0) { failed = true; console.error(`FAIL tube-side: ball went through the tube wall (x ${maxX.toFixed(2)})`); }
+  else console.log(`ok tube-side: tube wall stops the ball at x ${maxX.toFixed(2)}`);
+}
 if (failed) process.exit(1);

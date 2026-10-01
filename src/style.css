@@ -64,4 +64,12 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .marquee { position: absolute; border: 1px solid #2ee8ff; background: rgba(46, 232, 255, 0.12); pointer-events: none; }
 .editor .notice { color: #1f6b3a; padding: 0 10px 6px; }
 .editor .notice.error { color: #b3261e; }
+.editor .tube-path .node { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 4px; border-radius: 6px; cursor: pointer; }
+.editor .tube-path .node.picked { background: #fff3c4; }
+.editor .tube-path .node label { display: inline-flex; align-items: center; gap: 3px; }
+.editor .tube-path .node input { width: 46px; }
+.editor .tube-path .node button { padding: 2px 8px; font-size: 12px; }
+.editor .tube-path .tag { min-width: 26px; font-weight: 600; }
+.editor .tube-path .hint { padding: 0; border: 0; }
+.editor .tube-path > .hint { padding-top: 6px; font-size: 12px; }
 .editor h3 { margin: 8px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
