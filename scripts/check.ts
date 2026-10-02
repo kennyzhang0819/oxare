@@ -257,8 +257,8 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
   if (minZ < -8 || maxY > 1.2) { failed = true; console.error(`FAIL stop-${piece.type}: ball passed the ${piece.type} (z ${minZ.toFixed(2)}, y ${maxY.toFixed(2)})`); }
   else console.log(`ok stop-${piece.type}: ${piece.type} holds the ball`);
 }
-// The kick at a kicker's top edge carries the ball further: from full speed with forward held, a
-// 1-high kicker on the end of a platform lands the ball over 7 past its edge (6.2 without the kick).
+// From full speed with forward held, a 1-high kicker on the end of a platform carries the ball over
+// an 8 gap onto the next one.
 {
   const level = testLevel({ id: "kick-gap", name: "kick-gap", pieces: [
     { type: "start", x: 0, y: 0, z: 0 },
@@ -277,7 +277,7 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
     if (a.z < -40.5 && sim.ball.linvel().y <= 0 && a.y < 0.6) land = -40 - a.z;
   }
   sim.free();
-  if (land === null || land < 7) { failed = true; console.error(`FAIL kick-gap: touched down ${land?.toFixed(2) ?? "never"} past the kicker (want 7+)`); }
+  if (land === null || land < 8) { failed = true; console.error(`FAIL kick-gap: touched down ${land?.toFixed(2) ?? "never"} past the kicker (want 8+)`); }
   else console.log(`ok kick-gap: a 1-high kicker at full speed carries the ball ${land.toFixed(2)} past its edge`);
 }
 // Rolled props turn about their own front-to-back axis through their base, behaviour included: a

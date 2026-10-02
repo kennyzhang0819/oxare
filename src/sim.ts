@@ -429,10 +429,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
 
   let time = 0;
   const fallY = respawnY(level);
-  // After a kicker's kick the ball may keep the horizontal speed it was given, over the speed cap,
-  // until it lands (touches down after leaving the ground); slowing down lowers that allowance.
-  let flight = 0, flown = false;
-  const landRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
   // Jump pads: a fixed convex hull each, base and top outlines, so the ramp all round is seamless.
   for (const p of jumps) {
@@ -449,7 +445,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // Kickers: a fixed rounded convex wedge each, so the slope is one flat face with no seams to catch on.
   // A sliding one is a stool's way: a body on a prismatic link along its x. Its slope reaches below
   // the surface (KICKER_SINK), so it never meets the floor; the link alone holds it up.
-  const kicks: { p: Piece & { type: "kicker" }; body?: RAPIER.RigidBody; mover?: SimMover; last: number | null }[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "kicker") return;
     if (isSliding(p)) {
@@ -465,11 +460,9 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       joint.limits = [slide.lo - slide.at, slide.hi - slide.at];
       world.createMultibodyJoint(joint, anchor, body, true);
       planks.push({ index, body });
-      kicks.push({ p, body, last: null });
       return;
     }
     riding = rides.get(index);
-    kicks.push({ p, mover: riding, last: null });
     const hull = kickerHull(p);
     const pts = new Float32Array(hull.corners.flatMap((c) => { const r = rollPoint(p.roll ?? 0, c), o = rotXZ(r[0], r[2], p.rot); return [p.x + o.x, p.y + r[1], p.z + o.z]; }));
     const desc = RAPIER.ColliderDesc.roundConvexHull(pts, hull.r);
@@ -586,6 +579,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       // The push, the slope it is on (the tube's direction, or the ground's normal under the ball), and
       // the way the push heads along that slope.
       let push: [number, number, number], slope: [number, number, number] | null = null, heading: [number, number, number] | null = null;
+      // A moving platform carrying the ball: its speed, and the drag on that speed given back.
+      let carry: [number, number, number] = [0, 0, 0], extra: [number, number, number] = [0, 0, 0];
       if (d && tube) {
         const hl = Math.hypot(d[0], d[2]);
         const along = fx * d[0] + fz * d[2] + (1 - hl) * (fx * tube.chord[0] + fz * tube.chord[1]);
@@ -600,8 +595,9 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         // it back off a platform carrying it, so give back the drag on the platform's own speed.
         const rode = hit ? movers.find((m) => m.body.handle === hit.collider.parent()?.handle) : undefined;
         if (rode) {
-          const a = moverAt(rode.piece, time), b = moverAt(rode.piece, time + STEP), c = TUNING.linearDamping / STEP;
-          push = [push[0] + (b.x - a.x) * c, push[1] + (b.y - a.y) * c, push[2] + (b.z - a.z) * c];
+          const a = moverAt(rode.piece, time), b = moverAt(rode.piece, time + STEP);
+          carry = [(b.x - a.x) / STEP, (b.y - a.y) / STEP, (b.z - a.z) / STEP];
+          extra = [carry[0] * TUNING.linearDamping, carry[1] * TUNING.linearDamping, carry[2] * TUNING.linearDamping];
         }
         if (hit && TUNING.climbAssist > 0 && throttle !== 0 && hit.normal.y > 0.2 && hit.normal.y < 0.999) {
           // Gravity's pull along the slope: g minus its part into the surface.
@@ -618,6 +614,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const k = TUNING.climbAssist * Math.min(1, Math.abs(throttle));
         push = [push[0] - heading[0] * back * k, push[1] - heading[1] * back * k, push[2] - heading[2] * back * k];
       }
+      // Speed cap: the player's own push (throttle and climb assist) never takes the ball's level speed,
+      // over the ground or the platform carrying it, past maxSpeed; bumpers, jump pads, slopes and props can.
+      // At the cap the push still turns the ball, keeping its speed. Push is read as acceleration: the ball's mass is 1.
+      const vb = ball.linvel(), rx = vb.x - carry[0], rz = vb.z - carry[2], cap = Math.max(TUNING.maxSpeed, Math.hypot(rx, rz));
+      const wx = rx + push[0] * STEP, wz = rz + push[2] * STEP, wh = Math.hypot(wx, wz);
+      if (wh > cap) push = [(wx * (cap / wh) - rx) / STEP, push[1], (wz * (cap / wh) - rz) / STEP];
+      push = [push[0] + extra[0], push[1] + extra[1], push[2] + extra[2]];
       // Magnets: a pull toward each one's axis, fading out at its reach; its level part is capped below
       // the throttle so the ball can always be driven off.
       for (const c of magnets) {
@@ -656,21 +659,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const v = ball.linvel(), vn = v.x * n.x + v.y * n.y + v.z * n.z, out = Math.max(TUNING.bumperKick, -vin * TUNING.bumperBounce);
         if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
       }
-      // Kickers: the moment the ball goes over a kicker's top edge it is kicked on, kickerBoost faster
-      // along the way the kicker throws it (up its slope, or level off a long kicker's deck).
-      for (const k of kicks) {
-        const p = k.p, s = k.mover ? moverShift(k.mover.piece, time) : { x: 0, y: 0, z: 0 };
-        const o = k.body ? k.body.translation() : { x: p.x + s.x, y: p.y + s.y, z: p.z + s.z };
-        const b = ball.translation(), l = rotXZ(b.x - o.x, b.z - o.z, -p.rot), u = rollPoint(-(p.roll ?? 0), [l.x, b.y - o.y, l.z]);
-        const edge = -(p.d + (p.flat ?? 0)) / 2, last = k.last;
-        k.last = u[2];
-        if (last === null || last <= edge || u[2] > edge || Math.abs(u[0]) > p.w / 2 || u[1] < p.h - 0.2 || u[1] > p.h + BALL_RADIUS + 0.5) continue;
-        const along = p.flat ? 0 : Math.hypot(p.h, p.d), dir = rollPoint(p.roll ?? 0, p.flat ? [0, 0, -1] : [0, p.h / along, -p.d / along]), w = rotXZ(dir[0], dir[2], p.rot);
-        const v = ball.linvel(), kick = TUNING.kickerBoost;
-        ball.setLinvel({ x: v.x + w.x * kick, y: v.y + dir[1] * kick, z: v.z + w.z * kick }, true);
-        flight = Math.hypot(v.x + w.x * kick, v.z + w.z * kick);
-        flown = false;
-      }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
       // Jump pads: in a launch zone the ball's speed out of the pad (straight up, or along a rolled
       // pad's own up) becomes what carries it the pad's rise above its top from where it is, so
@@ -684,23 +672,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         if (vn < want) ball.setLinvel({ x: v.x + n.x * (want - vn), y: v.y + n.y * (want - vn), z: v.z + n.z * (want - vn) }, true);
       }
       ball.resetForces(true);
-      const v = ball.linvel();
-      const h = Math.hypot(v.x, v.z);
-      if (flight > 0) {
-        landRay.origin = ball.translation();
-        const ground = world.castRay(landRay, BALL_RADIUS + 0.06, true, undefined, undefined, ballCollider, ball);
-        if (!ground) flown = true;
-        else if (flown) flight = 0;
-        flight = Math.min(flight, h);
-      }
-      const cap = Math.max(TUNING.maxSpeed, flight);
-      if (h > cap) {
-        const k = cap / h;
-        ball.setLinvel({ x: v.x * k, y: v.y, z: v.z * k }, true);
-      }
     },
     respawn() {
-      flight = 0;
       ball.setTranslation(spawn, true);
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
       ball.setAngvel({ x: 0, y: 0, z: 0 }, true);

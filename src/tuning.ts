@@ -1,5 +1,5 @@
 export const TUNING = {
-  gravity: 7,
+  gravity: 5,
   throttleForce: 8,
   // Share of a slope's pull against the push cancelled while the ball is pushed up it; the sideways pull stays.
   climbAssist: 0.4,
@@ -19,8 +19,6 @@ export const TUNING = {
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
   bumperBounce: 0.8,
   bumperKick: 5,
-  // Kicker: speed added along the way a kicker throws the ball as it goes over the top edge.
-  kickerBoost: 1.5,
   // Magnet: its pull, fading to nothing at its reach (compare throttleForce), but never more than
   // magnetHold of throttleForce, so full throttle away always escapes.
   magnetForce: 21,
@@ -47,7 +45,6 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   propGravity: [0.1, 2, 0.05],
   bumperBounce: [0, 2, 0.05],
   bumperKick: [0, 15, 0.5],
-  kickerBoost: [0, 10, 0.25],
   magnetForce: [0, 30, 0.5],
   magnetHold: [0, 0.9, 0.05],
 };
