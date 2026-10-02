@@ -320,14 +320,14 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   return [mk(top), mk(glow), mk(centre), sktx];
 }
 
-// Crate face: grey plate, a screen in the middle, green corner brackets that glow.
+// Crate face: white plate, a screen in the middle, green corner brackets that glow.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
   const S = 256;
   const [c, ctx] = canvas(S, S);
   const [e, ectx] = canvas(S, S);
-  ctx.fillStyle = "#8c959d";
+  ctx.fillStyle = "#d3dae0";
   ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = "#a3abb2";
+  ctx.fillStyle = "#eef2f5";
   ctx.fillRect(14, 14, S - 28, S - 28);
   ctx.fillStyle = "#6c757d";
   ctx.fillRect(70, 86, 116, 84);
