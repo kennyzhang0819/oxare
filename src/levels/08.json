@@ -33,7 +33,7 @@
     {"type": "curve", "x": -8, "y": 5, "z": -52, "inner": 8, "outer": 16, "rot": 180, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
     {"type": "column", "x": -9.5, "y": -4, "z": -37.5, "h": 8},
     {"type": "column", "x": -9.5, "y": -4, "z": -42.5, "h": 8},
-    {"type": "rails", "x": 8, "y": 1, "z": -40, "rot": 0, "path": [{"x": -17, "y": 4, "z": 0, "bend": 0}], "lines": 2, "a": "side", "b": "top"},
+    {"type": "rails", "x": 8, "y": 1, "z": -40, "rot": 0, "path": [{"x": -17, "y": 4, "z": 0, "bend": 0}], "smooth": true, "lines": 2, "a": "side", "b": "top"},
     {"type": "column", "x": -17.5, "y": -4, "z": -50.5, "h": 8},
     {"type": "column", "x": -22.5, "y": -4, "z": -50.5, "h": 8},
     {"type": "slab", "x": -21.5, "y": 5, "z": -58, "w": 4, "d": 12, "rot": 180, "tilt": 0, "roll": 30, "fences": {"n": false, "e": false, "s": false, "w": false}},

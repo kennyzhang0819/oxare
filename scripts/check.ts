@@ -958,6 +958,23 @@ for (const reversed of [false, true]) {
   if (near < want) { failed = true; console.error(`FAIL tube-collar: ball got within ${near.toFixed(2)} of the tube axis at the mouth (the wall keeps it at ${(want + 0.05).toFixed(2)})`); }
   else console.log(`ok tube-collar: ball stopped ${near.toFixed(2)} from the axis, outside the mouth ring and wall`);
 }
+// A smooth path has no corners: an omega of rails between two platforms, side end to side end, and
+// a zigzag smooth tube turn under 20 degrees from ring to ring, stubs included (a corner turns 45+ at once).
+{
+  const level = testLevel({ id: "smooth", name: "smooth", pieces: [
+    { type: "start", x: 0, y: 0, z: 4 },
+    { type: "slab", x: 0, y: 0, z: 4, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -20, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "rails", x: 0, y: 0, z: 0, rot: 0, smooth: true, lines: 2, a: "side", b: "side",
+      path: [[-2, -4], [-6.5, -4.5], [-8, -8], [-6.5, -11.5], [-2, -12]].map(([x, z]) => ({ x, y: -0.5, z, bend: 0 })).concat([{ x: 0, y: 0, z: -16, bend: 0 }]) },
+    { type: "tube", x: 2, y: 0, z: 2, rot: 0, smooth: true, path: [{ x: 4, y: 0, z: -2, bend: 0 }, { x: 0, y: 1, z: -6, bend: 0 }, { x: 4, y: 1, z: -10, bend: 0 }] },
+    { type: "goal", x: 0, y: 0, z: -20, r: 1 },
+  ] });
+  const worst = (rings: { d: number[] }[]) => Math.max(...rings.slice(1).map((q, i) => Math.acos(Math.min(1, q.d[0]! * rings[i]!.d[0]! + q.d[1]! * rings[i]!.d[1]! + q.d[2]! * rings[i]!.d[2]!)) * 180 / Math.PI));
+  const r = worst(railsRingsWorld(level.pieces[3] as Rails, level)), t = worst(tubeRings(level.pieces[4] as Tube));
+  if (r > 20 || t > 20) { failed = true; console.error(`FAIL smooth: sharpest turn between rings ${r.toFixed(1)} deg on the rails, ${t.toFixed(1)} on the tube (want under 20)`); }
+  else console.log(`ok smooth: no corners, sharpest turn between rings ${r.toFixed(1)} deg on the rails, ${t.toFixed(1)} on the tube`);
+}
 // A segment with a curve point is a smooth arc: a half circle from y 0 to y 1 with its curve
 // point at the apex is round all the way and climbs steadily, not at the nodes. And on the flat,
 // the ball rolls in one mouth, round the half circle and out the other.

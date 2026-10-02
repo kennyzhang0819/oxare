@@ -918,8 +918,8 @@ export interface SceneEnv {
 }
 
 // Distance haze: squared-exponential, so what is near stays clear and only the far reaches fade
-// (in play, about a fifth hazed 100 out). The editor's is lighter, to see across its whole grid.
-export const FOG_PLAY = 0.005, FOG_EDITOR = 0.0018;
+// (in play, a tenth hazed 45 out and over a third 90 out). The editor's is lighter, to see across its whole grid.
+export const FOG_PLAY = 0.0075, FOG_EDITOR = 0.0018;
 export function createScene(fog = FOG_PLAY): SceneEnv {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY_HORIZON);

@@ -1,6 +1,6 @@
 {
   "id": "01",
-  "name": "Blockade & Barriers",
+  "name": "Blockade & barriers",
   "pieces": [
     {"type": "start", "x": 4, "y": 0, "z": -8},
     {"type": "slab", "x": 4, "y": 0, "z": -8, "w": 8, "d": 8, "rot": 0, "tilt": 0, "fences": {"n": false, "e": true, "s": true, "w": true}},

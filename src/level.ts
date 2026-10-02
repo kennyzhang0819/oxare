@@ -294,7 +294,7 @@ export interface TubeNode { x: number; y: number; z: number; bend: number; mid?:
 export type Tube = Piece & { type: "tube" };
 // Anything laid along a node path: tubes and rails.
 export type PathPiece = Piece & { type: "tube" | "rails" };
-type PathLike = { path: TubeNode[] };
+type PathLike = { path: TubeNode[]; smooth?: true };
 
 type V3 = [number, number, number];
 // A ring of the tube: centre `c`, its circle square to `d`, projected along `d` onto the plane
@@ -389,6 +389,35 @@ export function fitMid(p: PathLike, k: number, want: { x: number; y: number; z: 
   return furthest((t) => ({ ...flat, y: r(centre.y + (box.y - centre.y) * t) }), [1]);
 }
 
+// A smooth path (`smooth` on a tube or rails) is one curve through every node with no corner
+// anywhere: each span between two nodes is a cubic, and its direction at a node is the line from
+// the node before to the node after, or at an end `d0` / `d1` if given (a rails end's stub), else
+// toward the next node. `bend` and `mid` are not used. Sampled every SMOOTH_STEP or so.
+const SMOOTH_STEP = 0.25;
+export function smoothCurve(pts: V3[], d0?: V3, d1?: V3): V3[] {
+  const q = pts.filter((v, i) => i === 0 || Math.hypot(...sub(v, pts[i - 1]!)) > 1e-6);
+  if (q.length < 2) return q;
+  const n = q.length - 1, t = [0];
+  for (let i = 1; i <= n; i++) t.push(t[i - 1]! + Math.hypot(...sub(q[i]!, q[i - 1]!)));
+  const tan = q.map((v, i): V3 => {
+    if (i === 0) return d0 ? unit(d0) : unit(sub(q[1]!, v));
+    if (i === n) return d1 ? unit(d1) : unit(sub(v, q[n - 1]!));
+    return unit(sub(q[i + 1]!, q[i - 1]!));
+  });
+  const out: V3[] = [q[0]!];
+  for (let i = 0; i < n; i++) {
+    const h = t[i + 1]! - t[i]!, steps = Math.max(2, Math.ceil(h / SMOOTH_STEP)), a = q[i]!, b = q[i + 1]!, ta = tan[i]!, tb = tan[i + 1]!;
+    for (let k = 1; k <= steps; k++) {
+      const s = k / steps, s2 = s * s, s3 = s2 * s;
+      const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+      out.push(k === steps ? b : [0, 1, 2].map((j) => h00 * a[j]! + h10 * h * ta[j]! + h01 * b[j]! + h11 * h * tb[j]!) as V3);
+    }
+  }
+  return out;
+}
+// A smooth path written out as the plain straight path through its samples.
+const denseNodes = (pts: V3[], lift: number): TubeNode[] => pts.slice(1).map((v) => ({ x: v[0] - pts[0]![0], y: v[1] - lift, z: v[2] - pts[0]![2], bend: 0 }));
+
 const tangentIn = (s: V3[]) => unit(sub(s[s.length - 1]!, s[s.length - 2]!));
 const tangentOut = (s: V3[]) => unit(sub(s[1]!, s[0]!));
 
@@ -420,6 +449,7 @@ function tubeReach(p: PathLike): number[] {
 // Tubes are not validated, so a path the sweep cannot follow (no second mouth, or two nodes on
 // one spot) yields no rings and the tube is simply left out; a full U-turn becomes an elbow.
 export function tubeRings(p: PathLike, lift = TUBE_R): TubeRing[] {
+  if (p.smooth) return tubeRings({ path: denseNodes(smoothCurve(tubeNodes(p, lift)), lift) }, lift);
   const c = tubeNodes(p, lift);
   if (c.length < 2 || c.some((q, k) => k > 0 && Math.hypot(...sub(q, c[k - 1]!)) < 1e-6)) return [];
   const segs = tubeSegments(p, lift), reach = tubeReach(p), turns = tubeTurns(p);
@@ -545,7 +575,7 @@ export type Piece =
   | (At & { type: "curve"; inner: number; outer: number; rot: number; fences: CurveFences })
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number; fences: RampFences })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
-  | (At & { type: "rails"; rot: number; path: TubeNode[]; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
+  | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean })
   | (At & { type: "seesaw"; w: number; d: number; rot: number; tilt: number; freeze?: boolean })
   | (At & { type: "support"; w: number; h: number; rot: number })
@@ -561,7 +591,7 @@ export type Piece =
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
   | (At & { type: "goal"; r: number })
-  | (At & { type: "tube"; rot: number; path: TubeNode[] })
+  | (At & { type: "tube"; rot: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "hoop"; rot: number })
   | (At & { type: "column"; h: number })
   | (At & { type: "bumper" })
@@ -991,7 +1021,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "curve": return { type, x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, fences: { inner: false, outer: false, a: false, b: false } };
     case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 24, rot: 0, rise: RAMP_RISE, fences: { e: false, w: false } };
     case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
-    case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], lines: 2, a: "top", b: "top" };
+    case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], smooth: true, lines: 2, a: "top", b: "top" };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
     case "seesaw": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 10 };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
@@ -1088,15 +1118,16 @@ export function railsRings(p: Rails, level?: Level): TubeRing[] {
   const head = a.past;
   const rel = (v: { x: number; y: number; z: number }) => ({ x: v.x - head[0], y: v.y - head[1], z: v.z - head[2] });
   const node = (v: V3, bend: number, mid?: { x: number; y: number; z: number }): TubeNode => ({ ...rel({ x: v[0], y: v[1], z: v[2] }), bend, ...(mid ? { mid: rel(mid) } : {}) });
-  const path: TubeNode[] = [
-    node(a.at, a.bend),
-    node(a.stub, RAILS_STUB_BEND),
-    ...p.path.slice(0, m - 1).map((n) => node(local(n), n.bend, n.mid)),
-    // The segment that arrived at end b now arrives at its stub, curve point and all.
-    node(b.stub, RAILS_STUB_BEND, lastNode.mid),
-    node(b.at, b.bend),
-    node(b.past, 0),
-  ];
+  // A smooth path runs from stub to stub, leaving and meeting each along the stub's own heading.
+  const between: TubeNode[] = p.smooth
+    ? smoothCurve([a.stub, ...p.path.slice(0, m - 1).map(local), b.stub], dirs.a, [-dirs.b[0], -dirs.b[1], -dirs.b[2]]).map((v) => node(v, 0))
+    : [
+      node(a.stub, RAILS_STUB_BEND),
+      ...p.path.slice(0, m - 1).map((n) => node(local(n), n.bend, n.mid)),
+      // The segment that arrived at end b now arrives at its stub, curve point and all.
+      node(b.stub, RAILS_STUB_BEND, lastNode.mid),
+    ];
+  const path: TubeNode[] = [node(a.at, a.bend), ...between, node(b.at, b.bend), node(b.past, 0)];
   return tubeRings({ path }, lift).map((q) => ({ ...q, c: add(q.c, head) }));
 }
 
@@ -1216,7 +1247,7 @@ export function validateLevel(raw: unknown): Level {
       case "ramp": return { type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise"),
         fences: { e: fence(f.e), w: fence(f.w) } };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
-      case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i),
+      case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
         lines: p.lines === 1 ? 1 : 2, a: p.a === "side" ? "side" : "top", b: p.b === "side" ? "side" : "top",
         ...(typeof p.aYaw === "number" ? { aYaw: p.aYaw } : {}), ...(typeof p.bYaw === "number" ? { bYaw: p.bYaw } : {}) };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
@@ -1246,7 +1277,7 @@ export function validateLevel(raw: unknown): Level {
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: GOAL_R };
-      case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i) };
+      case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "hoop": return { type: "hoop", ...at, rot: num(p.rot ?? 0, "rot") };
       default: throw new Error(`piece ${i}: unknown type ${String(p.type)}`);
     }

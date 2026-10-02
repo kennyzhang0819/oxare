@@ -592,10 +592,12 @@ export class Editor implements Mode {
       m.userData.tubeNode = k;
       this.handles.add(m);
     });
-    // A smaller dot halfway along each segment: drag it to bend that segment into a curve.
+    // A smaller dot halfway along each segment: drag it to bend that segment into a curve, or on a
+    // smooth path to pull a new node out of it.
     for (let k = 1; k < ns.length; k++) {
       const at = midOf(ns, k), picked = k === this.mid;
-      const m = new THREE.Mesh(new THREE.SphereGeometry(picked ? 0.34 : 0.28, 14, 8), new THREE.MeshBasicMaterial({ color: picked ? 0xffd23f : ns[k]!.mid ? 0x5dffa8 : 0xa8ffd0, depthTest: false, transparent: true, opacity: 0.95 }));
+      const color = p.smooth ? 0x8fe9ff : picked ? 0xffd23f : ns[k]!.mid ? 0x5dffa8 : 0xa8ffd0;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(picked ? 0.34 : 0.28, 14, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.95 }));
       m.position.set(at.x, at.y + TUBE_R, at.z);
       m.renderOrder = 10;
       m.userData.tubeMid = k;
@@ -659,6 +661,14 @@ export class Editor implements Mode {
   private tubePanel(p: PathPiece): HTMLElement {
     const turns = tubeTurns(p);
     const wrap = h("div", { class: "tube-path" }, h("h3", {}, "path"));
+    const smoothPath = !!p.smooth;
+    wrap.append(h("div", { class: "checks" }, h("label", {}, "shape",
+      h("button", { title: "Smooth curve: one curve through every node, never a corner (drag the small dots to add nodes). Corners & arcs: straight runs, rounded or sharp corners and arc segments", onclick: () => {
+        const before = JSON.stringify(this.level);
+        if (smoothPath) delete p.smooth; else { p.smooth = true; for (const n of p.path) delete n.mid; }
+        this.mid = -1;
+        this.commit(before);
+      } }, smoothPath ? "smooth curve" : "corners & arcs"))));
     const num = (n: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
       return h("label", {}, label(key), input);
@@ -691,7 +701,7 @@ export class Editor implements Mode {
         h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
       if (k === 0) row.append(h("span", { class: "hint" }, "mouth at x y z"));
       else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
-      if (!end) {
+      if (!end && !smoothPath) {
         const smooth = n.bend > 0;
         row.append(
           h("span", { class: "hint" }, `${turns[k]!.toFixed(0)}°`),
@@ -705,7 +715,7 @@ export class Editor implements Mode {
         row.append(h("label", { title: "Heading of the rails out of this end, in degrees (R / Shift+R turn it 15)" }, "turn", input));
         if (p[key] !== undefined) row.append(h("button", { class: "ghost", title: "Back to the worked-out heading", onclick: () => { const before = JSON.stringify(this.level); delete p[key]; this.commit(before); } }, "auto"));
       }
-      return k > 0 ? [curveRow(k), row] : [row];
+      return k > 0 && !smoothPath ? [curveRow(k), row] : [row];
     }).flat();
     wrap.append(...rows, h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" },
       h("button", { class: "ghost", title: "Insert a node halfway along the segment after the picked node", onclick: () => this.splitNode() }, "Split"),
@@ -725,7 +735,9 @@ export class Editor implements Mode {
           if (ya !== undefined) q.bYaw = ya;
         }
       }) }, "Reverse"),
-    ), h("div", { class: "hint" }, "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth, R / Shift+R turn a rails end. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
+    ), h("div", { class: "hint" }, smoothPath
+      ? "Drag a node to shape the curve; E / Q raise or lower it, arrows nudge it, Delete removes it, R / Shift+R turn a rails end. Drag a small dot between two nodes to pull out a new node there."
+      : "Drag a node; E / Q raise or lower it, arrows nudge it, B toggles sharp / smooth, R / Shift+R turn a rails end. Drag the small dot halfway along a segment to curve it (E / Q tilt the curve up or down, Delete straightens it)."));
     return wrap;
   }
 
@@ -1066,6 +1078,20 @@ export class Editor implements Mode {
         this.fenceDrag = { plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -hit.object.position.y), ...fence, before: JSON.stringify(this.level) };
         this.controls.enabled = false;
         this.ctx.canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+      const tp = this.selectedTube();
+      if (hit && tp?.smooth && hit.object.userData.tubeMid !== undefined) {
+        // Smooth path: pull a new node out of the segment and drag it, all one undo.
+        const before = JSON.stringify(this.level);
+        this.node = (hit.object.userData.tubeMid as number) - 1;
+        this.splitNode();
+        const n = tubeNodeWorld(tp, this.node), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(n.y + TUBE_R)), pt = new THREE.Vector3();
+        if (this.ray.ray.intersectPlane(plane, pt)) {
+          this.nodeDrag = { plane, off: new THREE.Vector3(n.x - pt.x, 0, n.z - pt.z), before };
+          this.controls.enabled = false;
+          this.ctx.canvas.setPointerCapture(e.pointerId);
+        }
         return;
       }
       if (hit) {
