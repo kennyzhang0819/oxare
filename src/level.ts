@@ -60,14 +60,21 @@ export function jumpRings(p: Piece & { type: "jump" }): { base: XZ[]; top: XZ[] 
 }
 // The goal beam: touching it anywhere up to this height wins.
 export const GOAL_BEAM_H = 40;
-// The start pad: a low disc the ball spawns on top of.
-export const START_PAD_R = 1.3, START_PAD_H = 0.22;
-// The start pad's two tiers as [radius, y] outlines, bottom then top: a chamfered disc and a raised
-// centre, each a frustum. Drawn and solid alike.
-export const startPadProfiles = (): [number, number][][] => [
-  [[START_PAD_R, 0], [START_PAD_R - 0.08, START_PAD_H]],
-  [[START_PAD_R * 0.58, START_PAD_H], [START_PAD_R * 0.56, START_PAD_H + 0.05]],
-];
+// The start pad: a low disc like a nest, its centre carved into a shallow bowl the ball spawns in.
+// START_PAD_H is the rim's height; the bowl is START_PAD_BOWL across in radius and START_PAD_DIP
+// deep, so the ball rests with its centre START_PAD_REST above the pad's base.
+export const START_PAD_R = 1.03, START_PAD_H = 0.22, START_PAD_BOWL = 0.75, START_PAD_DIP = 0.16;
+export const START_PAD_REST = START_PAD_H - START_PAD_DIP + BALL_RADIUS;
+// The pad's outline as [radius, y], outside in: the chamfered skirt, the flat rim, then the bowl, a
+// spherical dish down to the centre. Revolved about the pad's axis; drawn and solid alike.
+export function startPadProfile(): [number, number][] {
+  const a = START_PAD_BOWL, s = START_PAD_DIP, rho = (a * a + s * s) / (2 * s), n = 10;
+  const bowl = Array.from({ length: n }, (_, k): [number, number] => {
+    const r = a * (1 - (k + 1) / n);
+    return [r, START_PAD_H - s + (rho - Math.sqrt(rho * rho - r * r))];
+  });
+  return [[START_PAD_R, 0], [START_PAD_R - 0.08, START_PAD_H], [a, START_PAD_H], ...bowl];
+}
 // Structures snap their centre to this grid and sit on the platform beneath them.
 export const STRUCT_GRID = 1;
 // Platform heights come in layers of one platform thickness; a ramp climbs or drops a
@@ -176,11 +183,14 @@ export const seesawTilt = (p: Piece & { type: "seesaw" }): number => Math.max(-s
 export const KICKER_W = 2.5, KICKER_D = 3, KICKER_H = 1;
 // A kicker's solid, drawn and in the physics alike: its corners pulled in by `r` and rounded back
 // out by `r`, so the edges are rounded like a stool's and the outside is the full shape. Seen
-// from the side it is the polygon low front edge (local +z, on the surface), slope top, back top,
-// back bottom; every edge line moves in by `r` and the new corners are where they meet.
+// from the side it is the polygon low front edge (local +z), slope top, back top, back bottom;
+// every edge line moves in by `r` and the new corners are where they meet. The slope carries on
+// KICKER_SINK below the surface, burying the front edge's rounding: where it meets the surface it
+// is a sharp crease, so the ball rolls straight up rather than bouncing off a rounded lip.
+export const KICKER_SINK = 0.2;
 export function kickerHull(p: Piece & { type: "kicker" }): { corners: [number, number, number][]; r: number } {
-  const r = propRound(p.w, p.h, p.d), f = p.flat ?? 0, front = (p.d + f) / 2, back = -front;
-  const prof: [number, number][] = f > 0 ? [[front, 0], [front - p.d, p.h], [back, p.h], [back, 0]] : [[front, 0], [back, p.h], [back, 0]];
+  const r = propRound(p.w, p.h, p.d), f = p.flat ?? 0, front = (p.d + f) / 2, back = -front, toe = front + (KICKER_SINK * p.d) / p.h;
+  const prof: [number, number][] = f > 0 ? [[toe, -KICKER_SINK], [front - p.d, p.h], [back, p.h], [back, -KICKER_SINK]] : [[toe, -KICKER_SINK], [back, p.h], [back, -KICKER_SINK]];
   let area = 0;
   prof.forEach(([z, y], i) => { const [z2, y2] = prof[(i + 1) % prof.length]!; area += z * y2 - z2 * y; });
   // Each edge as a point moved inward by r and its direction.

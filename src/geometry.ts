@@ -160,6 +160,19 @@ export function torusMesh(R: number, r: number, tubeSides = 10, segments = 48): 
 
 // Points of a surface of revolution about y: `profile` is [radius, y] pairs, swept round in
 // `sides` steps from angle 0, the way three's CylinderGeometry and SphereGeometry place theirs.
+// A surface of revolution through `profile` ([radius, y], listed outside in over the top, so faces
+// wind outward), `sides` around. `seam` repeats the first column at the end, for texture seams;
+// leave it off for physics, so every edge is shared.
+export function revolveMesh(profile: [number, number][], sides: number, seam = false): { positions: number[]; indices: number[] } {
+  const cols = seam ? sides + 1 : sides, pos: number[] = [], idx: number[] = [];
+  for (const [r, y] of profile) for (let i = 0; i < cols; i++) { const a = (i / sides) * Math.PI * 2; pos.push(r * Math.sin(a), y, r * Math.cos(a)); }
+  for (let j = 0; j + 1 < profile.length; j++) for (let i = 0; i < sides; i++) {
+    const n = seam ? i + 1 : (i + 1) % sides, a = j * cols + i, b = j * cols + n, c = (j + 1) * cols + i, d = (j + 1) * cols + n;
+    idx.push(a, b, c, b, d, c);
+  }
+  return { positions: pos, indices: idx };
+}
+
 export function revolvePoints(profile: [number, number][], sides: number): number[] {
   const out: number[] = [];
   for (const [r, y] of profile) for (let i = 0; i < sides; i++) { const a = (i / sides) * Math.PI * 2; out.push(r * Math.sin(a), y, r * Math.cos(a)); }

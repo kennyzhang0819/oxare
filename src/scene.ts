@@ -2,11 +2,11 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfiles, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
 import { buildRails, buildRailsPiece } from "./rails.ts";
 import { platformMesh } from "./platform.ts";
-import { sweepTube, torusMesh, type SweepRing } from "./geometry.ts";
+import { revolveMesh, sweepTube, torusMesh, type SweepRing } from "./geometry.ts";
 
 export const EDGE_RADIUS = BLOCK_R;
 
@@ -139,19 +139,31 @@ function buildBarrier(g: THREE.Group) {
   }
 }
 
-// Start pad: a low chamfered disc with a ribbed skirt, lit ring, and a raised centre of rings.
+// Start pad: a nest. A ribbed skirt, a flat rim with the lit ring, and the centre carved into a
+// bowl of rings. Each band is its own run of the revolved profile so each gets its own texture
+// mapping: the skirt wrapped round, the rim and the bowl laid flat from above.
 function buildStartPad(g: THREE.Group) {
-  const st = STRUCT!;
-  const R = START_PAD_R, H = START_PAD_H;
-  const [lo, hi] = startPadProfiles();
-  const tier = (prof: [number, number][]) => new THREE.CylinderGeometry(prof[1]![0], prof[0]![0], prof[1]![1] - prof[0]![1], 48);
-  const base = new THREE.Mesh(tier(lo!), [st.padSkirt, st.padTop, st.top]);
-  base.position.y = (lo![0]![1] + lo![1]![1]) / 2;
-  base.castShadow = base.receiveShadow = true;
-  const centre = new THREE.Mesh(tier(hi!), [st.top, st.padCentre, st.top]);
-  centre.position.y = (hi![0]![1] + hi![1]![1]) / 2;
-  centre.receiveShadow = true;
-  g.add(base, centre);
+  const st = STRUCT!, prof = startPadProfile(), SIDES = 48;
+  const bands: [profile: [number, number][], uv: (x: number, y: number, z: number, i: number) => [number, number]][] = [
+    [prof.slice(0, 2), (_x, y, _z, i) => [(i % (SIDES + 1)) / SIDES, y / START_PAD_H]],
+    [prof.slice(1, 3), (x, _y, z) => [0.5 + x / (2 * START_PAD_R), 0.5 - z / (2 * START_PAD_R)]],
+    [prof.slice(2), (x, _y, z) => [0.5 + x / (2 * START_PAD_BOWL), 0.5 - z / (2 * START_PAD_BOWL)]],
+  ];
+  const pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
+  for (const [band, map] of bands) {
+    const m = revolveMesh(band, SIDES, true), base = pos.length / 3;
+    for (let i = 0; i < m.positions.length / 3; i++) uv.push(...map(m.positions[i * 3]!, m.positions[i * 3 + 1]!, m.positions[i * 3 + 2]!, i));
+    geo.addGroup(idx.length, m.indices.length, geo.groups.length);
+    pos.push(...m.positions);
+    idx.push(...m.indices.map((k) => k + base));
+  }
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const pad = new THREE.Mesh(geo, [st.padSkirt, st.padTop, st.padCentre]);
+  pad.castShadow = pad.receiveShadow = true;
+  g.add(pad);
 }
 
 // Hanging bridge: each plank is a tiled slat with a green light strip round its rim and a hinge
@@ -333,11 +345,10 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
     }
     return t;
   };
-  // The slope's tread, tilted down toward local +z, kept clear of the rounding where the slope
-  // meets the ground: that shallow edge rounds off over about half a unit.
-  const a = Math.atan2(p.h, p.d), up = 0.2, slope = tread(Math.hypot(p.d, p.h) - 2 * up);
-  slope.position.set(0, p.h / 2 + Math.sin(a) * up, f / 2 - Math.cos(a) * up);
-  slope.rotation.x = a;
+  // The slope's tread at the slope's centre, tilted down toward local +z.
+  const slope = tread(Math.hypot(p.d, p.h));
+  slope.position.set(0, p.h / 2, f / 2);
+  slope.rotation.x = Math.atan2(p.h, p.d);
   g.add(slope);
   paint(slope, "y");
   if (f > 0.5) {
@@ -1147,7 +1158,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
       buildStartPad(g);
       if (editor) {
         const m = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 12, 8), START_MAT);
-        m.position.y = START_PAD_H + BALL_RADIUS;
+        m.position.y = START_PAD_REST;
         g.add(m);
       }
     }

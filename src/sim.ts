@@ -1,8 +1,8 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
-import { railSweep, revolvePoints, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfiles, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { railSweep, revolveMesh, revolvePoints, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
+import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -418,13 +418,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   let propGravity = TUNING.propGravity;
 
   const start = startOf(level);
-  for (const prof of startPadProfiles()) {
-    const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(revolvePoints(prof, 48)));
-    if (desc) world.createCollider(desc.setTranslation(start.x, start.y, start.z).setFriction(1));
-  }
+  // The pad is dished, so it is a triangle mesh rather than a convex hull.
+  const pad = revolveMesh(startPadProfile(), 48);
+  world.createCollider(RAPIER.ColliderDesc.trimesh(new Float32Array(pad.positions), new Uint32Array(pad.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES)
+    .setTranslation(start.x, start.y, start.z).setFriction(1));
   const spawn = from
     ? { x: from.x, y: from.y + BALL_RADIUS + 0.05, z: from.z }
-    : { x: start.x, y: start.y + START_PAD_H + BALL_RADIUS + 0.3, z: start.z };
+    : { x: start.x, y: start.y + START_PAD_REST + 0.3, z: start.z };
   const ball = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic().setTranslation(spawn.x, spawn.y, spawn.z).setCcdEnabled(true),
   );

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
 
@@ -283,18 +284,21 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   const ring = (ctx: CanvasRenderingContext2D, r0: number, r1: number, col: string) => {
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c0, c0, R * r1, 0, Math.PI * 2); ctx.arc(c0, c0, R * r0, 0, Math.PI * 2, true); ctx.fill();
   };
-  ring(t, 0.86, 0.95, "#2fe6ff");
-  ring(g, 0.86, 0.95, "#2fe6ff");
-  ring(t, 0.95, 1.0, "#dfe5ea");
+  // Only the rim outside the bowl shows this texture: lay its bands out across that, 0 at the
+  // bowl's edge and 1 at the pad's.
+  const q = START_PAD_BOWL / START_PAD_R, rim = (f: number) => q + f * (1 - q);
+  ring(t, rim(0.67), rim(0.88), "#2fe6ff");
+  ring(g, rim(0.67), rim(0.88), "#2fe6ff");
+  ring(t, rim(0.88), 1.0, "#dfe5ea");
   // Circuit arcs with gaps on the axes.
   const rnd = seeded(5);
   for (let k = 0; k < 4; k++) {
     const a0 = k * Math.PI / 2 + 0.16, a1 = (k + 1) * Math.PI / 2 - 0.16;
     t.fillStyle = "#6f7a85";
-    t.beginPath(); t.arc(c0, c0, R * 0.8, a0, a1); t.arc(c0, c0, R * 0.62, a1, a0, true); t.closePath(); t.fill();
+    t.beginPath(); t.arc(c0, c0, R * rim(0.55), a0, a1); t.arc(c0, c0, R * rim(0.1), a1, a0, true); t.closePath(); t.fill();
     t.fillStyle = "#b6bfc7";
     for (let i = 0; i < 9; i++) {
-      const a = a0 + 0.06 + rnd() * (a1 - a0 - 0.12), r = R * (0.65 + rnd() * 0.12), s = 5 + rnd() * 9;
+      const a = a0 + 0.06 + rnd() * (a1 - a0 - 0.12), r = R * rim(0.17 + rnd() * 0.25), s = 4 + rnd() * 6;
       const x = c0 + Math.cos(a) * r, y = c0 + Math.sin(a) * r;
       if (rnd() < 0.6) t.fillRect(x, y, s, 4); else t.fillRect(x, y, 4, s);
     }

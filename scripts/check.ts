@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, fenceRailPath, fenceRuns, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_H, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, fenceRailPath, fenceRuns, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_COLLAR_L, TUBE_SOLID_WALL, holeFootprint, TUBE_R, TUBE_COLLAR_T, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
@@ -25,7 +25,7 @@ for (const f of files) {
   const start = startOf(level);
   for (let i = 0; i < 240; i++) sim.step(0, 0, -1);
   const rest = sim.ball.translation();
-  if (Math.abs(rest.y - (start.y + START_PAD_H + BALL_RADIUS)) > 0.1) problems.push(`ball does not rest on the start pad (y=${rest.y.toFixed(2)})`);
+  if (Math.abs(rest.y - (start.y + START_PAD_REST)) > 0.02) problems.push(`ball does not rest in the start pad's bowl (y=${rest.y.toFixed(2)})`);
   let peak = 0;
   for (let i = 0; i < 2 * 120; i++) {
     sim.step(1, 0, -1);
