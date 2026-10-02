@@ -64,6 +64,9 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .settings label { display: grid; grid-template-columns: 1fr 3.5em; align-items: center; gap: 6px; margin: 10px 0; }
 .settings label > span:nth-child(2) { text-align: right; font-family: var(--mono); font-size: 0.9em; opacity: 0.7; }
 .settings input[type=range] { grid-column: 1 / -1; width: 100%; }
+.settings label.toggle { grid-template-columns: 1fr auto; }
+.settings label.toggle input { width: 18px; height: 18px; }
+.settings .hint { font-size: 12px; opacity: 0.7; min-height: 0; }
 
 .tune { position: absolute; right: 12px; top: 56px; width: 260px; background: rgba(255,255,255,0.92); border-radius: 12px; padding: 12px; font-size: 13px; color: #10233a; }
 .tune label { display: grid; grid-template-columns: 1fr 3.5em; align-items: center; gap: 6px; margin: 4px 0; }
@@ -72,12 +75,17 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .tune textarea { width: 100%; box-sizing: border-box; font: 11px/1.3 var(--mono); margin-top: 8px; height: 90px; }
 
 .editor { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; background: rgba(255,255,255,0.94); color: #10233a; display: flex; flex-direction: column; font-size: 13px; }
+.editor-back { position: absolute; top: 12px; left: 12px; width: 40px; height: 40px; padding: 0; border-radius: 999px; font-size: 20px; line-height: 40px; background: rgba(255,255,255,0.85); color: #10233a; box-shadow: 0 2px 8px rgba(16,35,58,0.18); }
+.editor-back:hover { background: #fff; }
 .editor .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid #dde4ec; }
 .editor .bar button { padding: 6px 10px; font-size: 13px; }
 .editor .bar.snap { gap: 12px; padding: 6px 10px; font-size: 12px; color: #4a5a6c; }
 .editor .bar.snap label { display: flex; align-items: center; gap: 6px; }
 .editor .bar.snap select { font: inherit; padding: 2px 4px; border: 1px solid #b7c3d1; border-radius: 6px; background: #fff; }
 .editor .bar.snap input[type=number] { width: 56px; font: inherit; padding: 2px 4px; border: 1px solid #b7c3d1; border-radius: 6px; background: #fff; }
+.editor .bar.add { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.editor .add .group { display: flex; flex-wrap: wrap; gap: 6px; }
+.editor .add .group-title { width: 100%; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6a7a8c; }
 .editor .add button.pick { padding: 2px; background: #eef3f8; border: 1px solid #c9d6e3; }
 .editor .add button.pick:hover { background: #dfeaf5; border-color: #2d7d46; }
 .editor .add img { display: block; width: 56px; height: 42px; border-radius: 6px; }

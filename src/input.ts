@@ -2,11 +2,16 @@ import { TUNING } from "./tuning.ts";
 
 const TILT_KEY = "balling.tilt";
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+// Tilt steering is one setting for the whole app: switched in the settings, it takes effect at
+// once in any attached Input (so from the pause menu too), and is remembered.
+let tilt = false;
+try { tilt = localStorage.getItem(TILT_KEY) === "1"; } catch { /* off */ }
+const live = new Set<Input>();
 
 export class Input {
   steer = 0;
   throttle = 0;
-  tiltOn = false;
+  get tiltOn(): boolean { return tilt; }
   private keys = new Set<string>();
   private drag: { id: number; x: number; y: number; mouse: boolean } | null = null;
   private lookPx = 0;
@@ -43,32 +48,40 @@ export class Input {
     el.addEventListener("contextmenu", menu);
     this.cleanup.push(() => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); el.removeEventListener("contextmenu", menu); });
     const orient = (e: DeviceOrientationEvent) => {
-      if (!this.tiltOn || e.gamma == null || e.beta == null) return;
+      if (!tilt || e.gamma == null || e.beta == null) return;
       // Degrees of roll / pitch for full steer and full throttle.
       this.tiltSteer = clamp(e.gamma / TUNING.tiltRange);
       this.tiltThrottle = clamp((this.neutralBeta - e.beta) / TUNING.tiltPitchRange);
     };
     on("deviceorientation", orient);
-    if (localStorage.getItem(TILT_KEY) === "1") this.tiltOn = true;
+    live.add(this);
   }
   private steerPtr = 0;
   private throttlePtr = 0;
+
+  static tiltEnabled(): boolean { return tilt; }
 
   static tiltAvailable(): boolean {
     return typeof DeviceOrientationEvent !== "undefined";
   }
 
+  // Turns tilt steering on; iOS asks the player for motion access first (call it from a tap).
+  // Whatever angle the device is held at next counts as no throttle.
   static async requestTilt(): Promise<boolean> {
     const D = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (typeof D.requestPermission === "function") {
       try { if ((await D.requestPermission()) !== "granted") return false; } catch { return false; }
     }
-    localStorage.setItem(TILT_KEY, "1");
+    tilt = true;
+    try { localStorage.setItem(TILT_KEY, "1"); } catch { /* this session only */ }
+    for (const i of live) i.calibrate();
     return true;
   }
 
   static disableTilt(): void {
-    localStorage.removeItem(TILT_KEY);
+    tilt = false;
+    try { localStorage.removeItem(TILT_KEY); } catch { /* this session only */ }
+    for (const i of live) { i.tiltSteer = 0; i.tiltThrottle = 0; }
   }
 
   calibrate(): void {
@@ -92,6 +105,7 @@ export class Input {
   }
 
   detach(): void {
+    live.delete(this);
     for (const c of this.cleanup) c();
     this.cleanup = [];
   }

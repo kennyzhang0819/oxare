@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BUMPER_H, BUMPER_R, bumperProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, BUMPER_H, BUMPER_R, bumperProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -63,11 +63,6 @@ export function yQuat(deg: number): { x: number; y: number; z: number; w: number
 type Quat = { x: number; y: number; z: number; w: number };
 const xQuat = (deg: number): Quat => { const h = (deg * Math.PI) / 360; return { x: Math.sin(h), y: 0, z: 0, w: Math.cos(h) }; };
 const zQuat = (deg: number): Quat => { const h = (deg * Math.PI) / 360; return { x: 0, y: 0, z: Math.sin(h), w: Math.cos(h) }; };
-const qrot = (q: Quat, v: { x: number; y: number; z: number }) => {
-  // v' = q v q*
-  const ix = q.w * v.x + q.y * v.z - q.z * v.y, iy = q.w * v.y + q.z * v.x - q.x * v.z, iz = q.w * v.z + q.x * v.y - q.y * v.x, iw = -q.x * v.x - q.y * v.y - q.z * v.z;
-  return { x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x };
-};
 // A moving or tilted slab's collider: the convex hull of its drawn mesh, rounded lip and all.
 const platformHull = (w: number, d: number): RAPIER.ColliderDesc =>
   RAPIER.ColliderDesc.convexHull(new Float32Array(platformMesh(w, d, PLATFORM_THICKNESS, PLATFORM_LIP, 1).positions))!;
@@ -155,18 +150,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     carried.push({ body: pl.body, base: { x: t.x - d.x, y: t.y - d.y, z: t.z - d.z }, mover: m, active: () => !!pl.frozen });
   };
 
-  // Fence rails are exactly the tube that is drawn: a capsule of the rail's radius along each
-  // stretch of the same centre line, with nothing above or below it.
-  const railColliders = (p: Piece, at: (v: [number, number, number]) => { x: number; y: number; z: number }) => {
-    for (const run of fenceRuns(p)) {
-      const pts = fenceRailPath(run).map(at), n = pts.length;
-      for (let i = 0; i < n - (run.closed ? 0 : 1); i++) {
-        const a = pts[i]!, b = pts[(i + 1) % n]!, d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, l = Math.hypot(d.x, d.y, d.z);
-        if (l < 1e-6) continue;
-        fixed(
-          RAPIER.ColliderDesc.capsule(l / 2, RAIL_R).setTranslation((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2).setRotation(yTo(d.x / l, d.y / l, d.z / l)).setFriction(1),
-        );
-      }
+  // A fence's rail is exactly the tube that is drawn: a capsule of the rail's radius along each
+  // stretch of its centre line, with nothing above or below it.
+  const fenceColliders = (p: Piece & { type: "fence" }) => {
+    const pts = fenceRings(p).map((q) => { const o = rotXZ(q.c[0], q.c[2], p.rot); return { x: p.x + o.x, y: p.y + q.c[1], z: p.z + o.z }; });
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i]!, b = pts[i + 1]!, d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, l = Math.hypot(d.x, d.y, d.z);
+      if (l < 1e-6) continue;
+      fixed(
+        RAPIER.ColliderDesc.capsule(l / 2, RAIL_R).setTranslation((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2).setRotation(yTo(d.x / l, d.y / l, d.z / l)).setFriction(1),
+      );
     }
   };
   const bumpers: RAPIER.Collider[] = [];
@@ -174,10 +167,9 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const rot = pieceRot(p);
     riding = rides.get(index) ?? moverOf.get(index);
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
-      // Roll about local z, tilt about local x, then yaw: the slab body and its fence rails as one rigid arrangement.
+      // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
       fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1));
-      railColliders(p, (v) => { const o = qrot(q, { x: v[0], y: v[1], z: v[2] }); return { x: p.x + o.x, y: p.y + o.y, z: p.z + o.z }; });
       return;
     }
     for (const b of pieceBoxes(p)) {
@@ -190,7 +182,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           .setFriction(1),
       );
     }
-    railColliders(p, (v) => { const o = rotXZ(v[0], v[2], rot); return { x: p.x + o.x, y: p.y + v[1], z: p.z + o.z }; });
+    if (p.type === "fence") fenceColliders(p);
     if (p.type === "rails") {
       // One welded mesh per rail, with a flat facet turned to where the ball touches it.
       const rings = railsRingsWorld(p, level);

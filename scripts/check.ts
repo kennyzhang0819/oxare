@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, twistAt, platformHeightAt, fenceRailPath, fenceRuns, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
@@ -123,7 +123,8 @@ Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_
     const ray = (o: [number, number, number], d: [number, number, number], len: number) =>
       sim.world.castRay(new RAPIER_RT.Ray({ x: o[0], y: o[1], z: o[2] }, { x: d[0], y: d[1], z: d[2] }), len, true, undefined, undefined, undefined, sim.ball)?.timeOfImpact ?? null;
     // On a curve a fenced probe sits on the nearest vertex of the rail's own line, where it is centred.
-    const line = fenceRuns(level.pieces[0]!).flatMap(fenceRailPath).filter((v) => Math.abs(v[1] - c.surface - FENCE_RAIL_Y) < 0.01);
+    const line = level.pieces.filter((q): q is FencePiece => q.type === "fence").flatMap((f) => fenceRings(f).map((q): [number, number, number] => [f.x + q.c[0], f.y + q.c[1], f.z + q.c[2]]))
+      .filter((v) => Math.abs(v[1] - c.surface - FENCE_RAIL_Y) < 0.01);
     const near = c.fenced && level.pieces[0]!.type === "curve" ? line.reduce((b, v) => (Math.hypot(v[0] - c.at[0], v[2] - c.at[1]) < Math.hypot(b[0] - c.at[0], b[2] - c.at[1]) ? v : b), line[0]!) : null;
     const [x, z] = near ? [near[0], near[2]] : c.at, top = c.surface + FENCE_RAIL_Y + RAIL_R;
     const down = ray([x, c.surface + 3, z], [0, -1, 0], 6), hitY = down === null ? null : c.surface + 3 - down;

@@ -295,8 +295,18 @@ export function playerSettings(): HTMLElement {
       oninput: () => { TUNING[key] = Number(range.value); val.textContent = pct(); saveTuning(); } }) as HTMLInputElement;
     return h("label", {}, h("span", {}, label), val, range);
   };
+  // Tilt steering: on asks for motion access where the device needs it; refused, it stays off.
+  const note = h("div", { class: "hint" });
+  const tilt = h("input", { type: "checkbox", checked: Input.tiltAvailable() && Input.tiltEnabled(), disabled: !Input.tiltAvailable(),
+    onchange: async () => {
+      note.textContent = "";
+      if (!tilt.checked) { Input.disableTilt(); return; }
+      if (!(await Input.requestTilt())) { tilt.checked = false; note.textContent = "Motion access was not allowed."; }
+    } }) as HTMLInputElement;
   return h("div", { class: "settings" },
     slider("Turn speed (keys)", "yawRate"),
     slider("Mouse sensitivity", "mouseSens"),
+    h("label", { class: "toggle", title: "Steer and throttle by tilting a phone or tablet; the angle it is held at when switched on is level" }, h("span", {}, "Tilt to steer"), tilt),
+    Input.tiltAvailable() ? note : h("div", { class: "hint" }, "Tilt needs a phone or tablet."),
   );
 }

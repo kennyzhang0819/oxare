@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs } from "./thumbs.ts";
@@ -12,13 +12,27 @@ const HITBOX_KEY = "balling.hitboxes";
 const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.8, depthTest: false });
 
 export function blankLevel(): Level {
-  const open = { n: false, e: false, s: false, w: false };
   return { id: "new-level", name: "New Level", pieces: [
     newPiece("start", 0, 0, 0),
-    { ...newPiece("slab", 0, 0, 0), w: 8, d: 8, fences: open } as Piece,
+    { ...newPiece("slab", 0, 0, 0), w: 8, d: 8 } as Piece,
     newPiece("goal", 0, 0, -12),
-    { ...newPiece("slab", 0, 0, -12), w: 8, d: 8, fences: { ...open } } as Piece,
+    { ...newPiece("slab", 0, 0, -12), w: 8, d: 8 } as Piece,
   ] };
+}
+
+// The add palette's sections; a type not listed here and not retired lands in misc.
+const PALETTE: [title: string, types: PieceType[]][] = [
+  ["Platforms", ["slab", "curve", "ramp", "bridge", "hole"]],
+  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "blockade", "barrier", "pillar", "hoop"]],
+  ["Connectors", ["tube", "rails", "fence"]],
+  ["Misc", ["start", "goal", "support", "column"]],
+];
+// Still loaded from old level files, but no longer offered.
+const RETIRED: PieceType[] = ["spinner", "block"];
+function paletteGroups(): [string, PieceType[]][] {
+  const listed = new Set(PALETTE.flatMap(([, ts]) => ts));
+  const rest = PIECE_TYPES.filter((t) => !RETIRED.includes(t) && !listed.has(t));
+  return PALETTE.map(([title, ts]): [string, PieceType[]] => [title, title === "Misc" ? [...ts, ...rest] : ts]);
 }
 
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
@@ -47,6 +61,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   goal: [],
   tube: [["rot", 15]],
   hoop: [["rot", 15]],
+  fence: [["rot", 15]],
 };
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
@@ -59,8 +74,6 @@ const label = (key: string) => LABELS[key] ?? key;
 const SNAP_KEY = "balling.snap.v2";
 const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
 const SNAP = { platform: 4, structure: STRUCT_GRID };
-// Fence ends on a curve's arcs snap to this many degrees.
-const ARC_SNAP = 5;
 try {
   const saved = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "{}") as Partial<typeof SNAP>;
   for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && v > 0) SNAP[k] = v; }
@@ -127,6 +140,15 @@ function settle(level: Level, p: Piece) {
   }
   if (p.type === "plank" && p.side) { attachToEdge(level, p); return; }
   if (p.type === "rails") { attachRailEnds(level, p); return; }
+  if (p.type === "fence") {
+    const y = surfaceAt(level, p.x, p.z);
+    if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
+    p.path.forEach((n, k) => {
+      const w = tubeNodeWorld(p, k + 1), at = surfaceAt(level, w.x, w.z);
+      if (at !== null) n.y = r3(at - p.y);
+    });
+    return;
+  }
   if (!isStructure(p)) return;
   p.x = gridSnap(p.x); p.z = gridSnap(p.z);
   // A column keeps the y it is given: it often stands under the platform it holds up.
@@ -262,9 +284,9 @@ export class Editor implements Mode {
   private node = -1;
   private mid = -1;
   private nodeDrag: { plane: THREE.Plane; off: THREE.Vector3; before: string } | null = null;
-  // Dragging one end of a fence span on the selected platform along its side.
-  private fenceDrag: { plane: THREE.Plane; key: string; span: number; end: 0 | 1; before: string } | null = null;
   private undoStack: string[] = [];
+  // What undo took back, newest last; any new edit clears it.
+  private redoStack: string[] = [];
   private raf = 0;
   private panel: HTMLElement;
   private body = h("div", { class: "body" });
@@ -309,24 +331,23 @@ export class Editor implements Mode {
 
     this.panel = h("div", { class: "editor" },
       h("div", { class: "bar" },
-        h("button", { class: "ghost", onclick: () => opts.onExit() }, "Menu"),
         h("button", { onclick: () => this.play() }, "▶ Play"),
-        this.hereBtn = h("button", { class: "ghost", title: "Play from a spot you click (P)", onclick: () => this.armDrop(!this.dropping) }, "▶ Here") as HTMLButtonElement,
-        h("button", { class: "ghost", onclick: () => this.undo() }, "Undo"),
+        this.hereBtn = h("button", { class: "ghost", title: "Play from a spot you click (P)", onclick: () => this.armDrop(!this.dropping) }, "▶ Play At") as HTMLButtonElement,
+        h("button", { class: "ghost", title: "Ctrl+Z", onclick: () => this.undo() }, "Undo"),
+        h("button", { class: "ghost", title: "Ctrl+Shift+Z", onclick: () => this.redo() }, "Redo"),
         h("button", { onclick: () => void this.save() }, "Save"),
-        h("button", { class: "ghost", onclick: () => this.newLevel() }, "New"),
         this.hitboxBtn = h("button", { class: "ghost", title: "Show every collider exactly as the physics has it (H)", onclick: () => this.toggleHitboxes() }, "Hitboxes") as HTMLButtonElement,
       ),
       h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle(), this.gridLevel()),
-      h("div", { class: "bar add" }, ...PIECE_TYPES.filter((t) => t !== "spinner").flatMap((t) => [
+      h("div", { class: "bar add" }, ...paletteGroups().map(([title, types]) => h("div", { class: "group" }, h("div", { class: "group-title" }, title), ...types.flatMap((t) => [
         { name: t as string, make: (x: number, y: number, z: number) => newPiece(t, x, y, z) },
         ...PIECE_VARIANTS.filter((v) => v.base === t),
-      ]).map((e) => h("button", { class: "pick", title: e.name, onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: e.name })))),
+      ]).map((e) => h("button", { class: "pick", title: e.name, onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: e.name })))))),
       this.problems,
       this.notice,
       this.body,
     );
-    ctx.overlay.append(this.panel);
+    ctx.overlay.append(h("button", { class: "editor-back", title: "Leave the editor", "aria-label": "Leave the editor", onclick: () => opts.onExit() }, "←"), this.panel);
     try { this.hitboxes = localStorage.getItem(HITBOX_KEY) === "1"; } catch { /* off */ }
     this.hitboxBtn.className = this.hitboxes ? "" : "ghost";
     ctx.canvas.addEventListener("pointerdown", this.down);
@@ -379,8 +400,7 @@ export class Editor implements Mode {
 
   private commit(before = JSON.stringify(this.level)) {
     for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "support" || q.type === "tube") q.y = layerSnap(q.y);
-    if (before !== JSON.stringify(this.level)) this.undoStack.push(before);
-    if (this.undoStack.length > 100) this.undoStack.shift();
+    if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
 
@@ -513,81 +533,40 @@ export class Editor implements Mode {
     }
   }
 
-  // Per side: a tick to fence it end to end or clear it, each fenced span's from and to, and a
-  // split that cuts a gap in the longest span.
+  // One button per side of the platform: adds a fence piece along that whole side, which is then
+  // its own piece to shorten, bend or delete.
   private fencePanel(p: Platform): HTMLElement {
-    const box = h("div", { class: "fences" }, h("div", { class: "title" }, "fences (from – to, clockwise; ° on arcs)"));
-    const f = p.fences as unknown as Record<string, Fence>;
+    const row = h("div", { class: "checks", title: "Add a fence piece along this side of the platform" }, h("span", {}, "fence a side"));
     for (const side of fenceSides(p)) {
-      const spans = fenceSpans(fenceOf(p, side.key), side.len), step = side.arc ? ARC_SNAP : SNAP.structure;
-      const set = (next: [number, number][]) => { const before = JSON.stringify(this.level); f[side.key] = fenceValue(next, side.len); this.commit(before); };
-      const cb = h("input", { type: "checkbox", checked: spans.length > 0, onchange: () => set(cb.checked ? [[0, side.len]] : []) });
-      const row = h("div", { class: "side" }, h("label", {}, cb, side.key));
-      spans.forEach((sp, k) => {
-        const num = (end: 0 | 1) => {
-          const input = h("input", { type: "number", step, value: r3(sp[end]), onchange: () => {
-            const next = spans.map((q) => [...q] as [number, number]);
-            next[k]![end] = Number(input.value);
-            set(next);
-          } });
-          return input;
-        };
-        row.append(h("span", { class: "span" }, num(0), "–", num(1), h("button", { class: "ghost", title: "Remove this span", onclick: () => set(spans.filter((_, j) => j !== k)) }, "✕")));
-      });
-      if (spans.length) {
-        row.append(h("button", { class: "ghost", title: "Cut a gap in the middle of the longest span", onclick: () => {
-          const k = spans.reduce((best, q, j) => (q[1] - q[0] > spans[best]![1] - spans[best]![0] ? j : best), 0), [a, b] = spans[k]!;
-          const gap = 2 * step, m = Math.round((a + b) / 2 / step) * step;
-          if (m - gap / 2 - a < step || b - m - gap / 2 < step) return;
-          set([...spans.slice(0, k), [a, m - gap / 2], [m + gap / 2, b], ...spans.slice(k + 1)]);
-        } }, "split"));
-      }
-      box.append(row);
+      row.append(h("button", { class: "ghost", onclick: () => {
+        const before = JSON.stringify(this.level);
+        const add = platformFence(p, side.key);
+        this.level.pieces.push(...add);
+        this.commit(before);
+        if (add.length) this.select(this.level.pieces.length - 1);
+      } }, side.key));
     }
-    return box;
-  }
-
-  // Move one end of a fence span on the selected platform to where the pointer is along its side,
-  // kept between its neighbours and at least one snap step long.
-  private dragFence(e: PointerEvent) {
-    const fd = this.fenceDrag!, p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    if (!p || !isPlatform(p)) return;
-    const side = fenceSides(p).find((q) => q.key === fd.key), pt = new THREE.Vector3();
-    this.castFrom(e.clientX, e.clientY);
-    if (!side || !this.ray.ray.intersectPlane(fd.plane, pt)) return;
-    const spans = fenceSpans(fenceOf(p, fd.key), side.len), span = spans[fd.span];
-    if (!span) return;
-    const step = side.arc ? ARC_SNAP : SNAP.structure, l = rotXZ(pt.x - p.x, pt.z - p.z, -pieceRot(p));
-    const lo = fd.end ? span[0] + step : spans[fd.span - 1]?.[1] ?? 0, hi = fd.end ? spans[fd.span + 1]?.[0] ?? side.len : span[1] - step;
-    if (lo > hi) return;
-    const v = r3(Math.max(lo, Math.min(hi, Math.round(side.param(l.x, l.z) / step) * step)));
-    if (Math.abs(v - span[fd.end]) < 1e-6) return;
-    span[fd.end] = v;
-    // Each step re-commits from the drag's start, so one undo takes back the whole drag.
-    const before = this.undoStack.length && this.undoStack[this.undoStack.length - 1] === fd.before ? this.undoStack.pop()! : fd.before;
-    (p.fences as unknown as Record<string, Fence>)[fd.key] = fenceValue(spans, side.len);
-    this.commit(before);
+    return row;
   }
 
   private selectedTube(): PathPiece | null {
     const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    return p?.type === "tube" || p?.type === "rails" ? p : null;
+    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" ? p : null;
   }
 
   // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
   // drawn through everything; the picked one is yellow.
   private drawHandles() {
     for (const c of [...this.handles.children]) { c.removeFromParent(); (c as THREE.Mesh).geometry.dispose(); }
-    this.drawFenceHandles();
     const p = this.selectedTube();
     if (!p) { this.node = -1; this.mid = -1; return; }
     if (this.node > p.path.length) this.node = -1;
     if (this.mid > p.path.length) this.mid = -1;
-    const ns = tubeWorld(p);
+    const ns = tubeWorld(p), lift = p.type === "fence" ? FENCE_RAIL_Y : TUBE_R;
     ns.forEach((n, k) => {
       const color = k === this.node ? 0xffd23f : 0xffffff;
       const m = new THREE.Mesh(new THREE.SphereGeometry(k === this.node ? 0.42 : 0.34, 16, 10), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
-      m.position.set(n.x, n.y + TUBE_R, n.z);
+      m.position.set(n.x, n.y + lift, n.z);
       m.renderOrder = 10;
       m.userData.tubeNode = k;
       this.handles.add(m);
@@ -598,32 +577,10 @@ export class Editor implements Mode {
       const at = midOf(ns, k), picked = k === this.mid;
       const color = p.smooth ? 0x8fe9ff : picked ? 0xffd23f : ns[k]!.mid ? 0x5dffa8 : 0xa8ffd0;
       const m = new THREE.Mesh(new THREE.SphereGeometry(picked ? 0.34 : 0.28, 14, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.95 }));
-      m.position.set(at.x, at.y + TUBE_R, at.z);
+      m.position.set(at.x, at.y + lift, at.z);
       m.renderOrder = 10;
       m.userData.tubeMid = k;
       this.handles.add(m);
-    }
-  }
-
-  // A cyan dot near each end of each fence span on the selected platform, set a little in from
-  // the end so the dots of two sides meeting at a corner sit apart.
-  private drawFenceHandles() {
-    const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    if (!p || !isPlatform(p) || isTilted(p)) return;
-    for (const side of fenceSides(p)) {
-      fenceSpans(fenceOf(p, side.key), side.len).forEach((span, k) => {
-        for (const end of [0, 1] as const) {
-          const mid = (span[0] + span[1]) / 2, m0 = side.at(mid - 0.5, FENCE_RAIL_INSET), m1 = side.at(mid + 0.5, FENCE_RAIL_INSET);
-          const unit = side.arc ? 1 / Math.max(0.05, Math.hypot(m1.x - m0.x, m1.z - m0.z)) : 1;
-          const off = Math.min(0.6 * unit, (span[1] - span[0]) / 3) * (end ? -1 : 1);
-          const q = side.at(span[end] + off, FENCE_RAIL_INSET), o = rotXZ(q.x, q.z, pieceRot(p));
-          const m = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 8), new THREE.MeshBasicMaterial({ color: 0x2ee8ff, depthTest: false, transparent: true, opacity: 0.95 }));
-          m.position.set(p.x + o.x, p.y + q.y + FENCE_RAIL_Y, p.z + o.z);
-          m.renderOrder = 10;
-          m.userData.fence = { key: side.key, span: k, end };
-          this.handles.add(m);
-        }
-      });
     }
   }
 
@@ -788,7 +745,7 @@ export class Editor implements Mode {
       // A curved segment splits at its curve point, into two straight halves.
       const at = b.mid ? { x: b.mid.x, y: b.mid.y, z: b.mid.z } : { x: snap((a.x + b.x) / 2), y: layerSnap((a.y + b.y) / 2), z: snap((a.z + b.z) / 2) };
       delete b.mid;
-      ns.splice(k + 1, 0, { ...at, bend: TUBE_BEND });
+      ns.splice(k + 1, 0, { ...at, bend: p.type === "fence" ? FENCE_RAIL_CORNER : TUBE_BEND });
     });
     this.node = k + 1;
     this.mid = -1;
@@ -942,13 +899,28 @@ export class Editor implements Mode {
     const before = JSON.stringify(this.level);
     for (const i of [...this.sel].sort((a, b) => b - a)) this.level.pieces.splice(i, 1);
     this.sel.clear();
-    this.undoStack.push(before);
+    this.pushUndo(before);
     this.refresh();
+  }
+
+  private pushUndo(before: string) {
+    this.undoStack.push(before);
+    if (this.undoStack.length > 100) this.undoStack.shift();
+    this.redoStack = [];
   }
 
   private undo() {
     const s = this.undoStack.pop();
     if (!s) return;
+    this.redoStack.push(JSON.stringify(this.level));
+    this.level = JSON.parse(s) as Level;
+    this.refresh();
+  }
+
+  private redo() {
+    const s = this.redoStack.pop();
+    if (!s) return;
+    this.undoStack.push(JSON.stringify(this.level));
     this.level = JSON.parse(s) as Level;
     this.refresh();
   }
@@ -967,7 +939,8 @@ export class Editor implements Mode {
     if (e.code === "Escape") { if (this.dropping) { this.armDrop(false); return; } if (this.node >= 0 || this.mid >= 0) { this.node = -1; this.mid = -1; this.refresh(); return; } this.sel.clear(); this.refresh(); return; }
     if (!mod && e.code === "KeyP") { this.armDrop(!this.dropping); return; }
     if (!mod && e.code === "KeyH") { this.toggleHitboxes(); return; }
-    if (mod && e.code === "KeyZ") { e.preventDefault(); this.undo(); return; }
+    if (mod && e.code === "KeyZ") { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
+    if (mod && e.code === "KeyY") { e.preventDefault(); this.redo(); return; }
     if (mod && e.code === "KeyD") { e.preventDefault(); this.duplicate(); return; }
     if (mod && e.code === "KeyC") { e.preventDefault(); this.copy(); return; }
     if (mod && e.code === "KeyV") { e.preventDefault(); this.paste(); return; }
@@ -1073,20 +1046,13 @@ export class Editor implements Mode {
     if (this.handles.children.length) {
       this.castFrom(e.clientX, e.clientY);
       const hit = this.ray.intersectObjects(this.handles.children, false)[0];
-      const fence = hit?.object.userData.fence as { key: string; span: number; end: 0 | 1 } | undefined;
-      if (hit && fence) {
-        this.fenceDrag = { plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -hit.object.position.y), ...fence, before: JSON.stringify(this.level) };
-        this.controls.enabled = false;
-        this.ctx.canvas.setPointerCapture(e.pointerId);
-        return;
-      }
       const tp = this.selectedTube();
       if (hit && tp?.smooth && hit.object.userData.tubeMid !== undefined) {
         // Smooth path: pull a new node out of the segment and drag it, all one undo.
         const before = JSON.stringify(this.level);
         this.node = (hit.object.userData.tubeMid as number) - 1;
         this.splitNode();
-        const n = tubeNodeWorld(tp, this.node), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(n.y + TUBE_R)), pt = new THREE.Vector3();
+        const n = tubeNodeWorld(tp, this.node), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(n.y + (tp.type === "fence" ? FENCE_RAIL_Y : TUBE_R))), pt = new THREE.Vector3();
         if (this.ray.ray.intersectPlane(plane, pt)) {
           this.nodeDrag = { plane, off: new THREE.Vector3(n.x - pt.x, 0, n.z - pt.z), before };
           this.controls.enabled = false;
@@ -1141,7 +1107,6 @@ export class Editor implements Mode {
       m.el.style.cssText = `left:${x}px;top:${y}px;width:${Math.abs(e.clientX - m.x0)}px;height:${Math.abs(e.clientY - m.y0)}px`;
       return;
     }
-    if (this.fenceDrag) { this.dragFence(e); return; }
     if (this.nodeDrag) {
       const nd = this.nodeDrag;
       this.castFrom(e.clientX, e.clientY);
@@ -1205,7 +1170,6 @@ export class Editor implements Mode {
       return;
     }
     if (this.nodeDrag) { this.nodeDrag = null; this.controls.enabled = true; return; }
-    if (this.fenceDrag) { this.fenceDrag = null; this.controls.enabled = true; return; }
     if (!this.drag) return;
     const d = this.drag;
     this.drag = null;
@@ -1270,14 +1234,6 @@ export class Editor implements Mode {
     } catch (err) {
       this.flash(`Save failed: ${err instanceof Error ? err.message : String(err)}`, true);
     }
-  }
-
-  private newLevel() {
-    const before = JSON.stringify(this.level);
-    this.level = blankLevel();
-    this.sel.clear();
-    this.undoStack.push(before);
-    this.refresh();
   }
 
   private toggleHitboxes(on = !this.hitboxes) {

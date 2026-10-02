@@ -293,7 +293,7 @@ export const TUBE_BEND = 1.5;
 export interface TubeNode { x: number; y: number; z: number; bend: number; mid?: { x: number; y: number; z: number } }
 export type Tube = Piece & { type: "tube" };
 // Anything laid along a node path: tubes and rails.
-export type PathPiece = Piece & { type: "tube" | "rails" };
+export type PathPiece = Piece & { type: "tube" | "rails" | "fence" };
 type PathLike = { path: TubeNode[]; smooth?: true };
 
 type V3 = [number, number, number];
@@ -542,7 +542,7 @@ export function moverAt(p: Mover, t: number): { x: number; y: number; z: number 
 // What a moving platform carries: every piece standing on its top where the level places it
 // (structures, planks, seesaws and crates; not other platforms, paths, the start or the goal),
 // by index, to the index of the platform. A tilted moving platform carries nothing.
-const RIDES: PieceType[] = ["block", "blockade", "pillar", "bumper", "barrier", "crate", "barrel", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
+const RIDES: PieceType[] = ["fence", "block", "blockade", "pillar", "bumper", "barrier", "crate", "barrel", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
 export function riders(level: Level): Map<number, number> {
   const out = new Map<number, number>();
   level.pieces.forEach((s, si) => {
@@ -561,19 +561,17 @@ export function moverShift(p: Mover, t: number): { x: number; y: number; z: numb
   return { x: a.x - p.x, y: a.y - p.y, z: a.z - p.z };
 }
 
-// A fenced side: true along its whole length, false for none, or [from, to] spans along it
-// (units, or degrees on a curve's arcs), measured clockwise round the platform seen from above.
-export type Fence = boolean | [number, number][];
-export interface Fences4 { n: Fence; e: Fence; s: Fence; w: Fence }
-export interface CurveFences { inner: Fence; outer: Fence; a: Fence; b: Fence }
-export interface RampFences { e: Fence; w: Fence }
+// Older levels fence a platform's sides on the platform itself: per side true along its whole
+// length, false for none, or [from, to] spans along it (units, or degrees on a curve's arcs),
+// measured clockwise round the platform seen from above. Loading turns them into fence pieces.
+type Fence = boolean | [number, number][];
 interface At { x: number; y: number; z: number }
 
 export type Piece =
   | (At & { type: "start" })
-  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; fences: Fences4; move?: Move })
-  | (At & { type: "curve"; inner: number; outer: number; rot: number; fences: CurveFences })
-  | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number; fences: RampFences })
+  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; move?: Move })
+  | (At & { type: "curve"; inner: number; outer: number; rot: number })
+  | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean })
@@ -592,18 +590,19 @@ export type Piece =
   | (At & { type: "spinner"; length: number; speed: number })
   | (At & { type: "goal"; r: number })
   | (At & { type: "tube"; rot: number; path: TubeNode[]; smooth?: true })
+  | (At & { type: "fence"; rot: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "hoop"; rot: number })
   | (At & { type: "column"; h: number })
   | (At & { type: "bumper" })
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "plank", "seesaw", "support", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "crate", "barrel", "stool", "block", "spinner", "tube", "hoop", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "support", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "crate", "barrel", "stool", "block", "spinner", "tube", "hoop", "goal", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
   { name: "sliding kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0, track: KICKER_TRACK, offset: 0 }) },
-  { name: "moving platform", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, fences: { n: false, e: false, s: false, w: false }, move: newMove() }) },
+  { name: "moving platform", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, move: newMove() }) },
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
@@ -679,19 +678,13 @@ export function fenceSides(p: Platform): FenceSide[] {
   return p.type === "ramp" ? sides.filter((s) => s.key === "e" || s.key === "w") : sides;
 }
 
-export const fenceOf = (p: Platform, key: string): Fence => (p.fences as unknown as Record<string, Fence>)[key] ?? false;
-
 // A side's fenced spans, sorted, clipped to the side and with empty ones dropped.
-export function fenceSpans(f: Fence, len: number): [number, number][] {
+function fenceSpans(f: Fence, len: number): [number, number][] {
   if (f === true) return [[0, len]];
   if (!f) return [];
   return f.map(([a, b]): [number, number] => [Math.max(0, Math.min(a, b)), Math.min(len, Math.max(a, b))])
     .filter(([a, b]) => b - a > 1e-6).sort((a, b) => a[0] - b[0]);
 }
-
-// One fenced span's rail: its side (an index into fenceSides), where along the side it runs, its
-// points in local space at rail height, and whether it starts and ends at its side's corners.
-export interface FenceSpanRail { side: number; a: number; b: number; pts: [number, number, number][]; start: boolean; end: boolean }
 
 // Where along a side a rail from a to b bends: evenly along an arc side (and at its knots) or a ramp, else just its ends.
 export function fenceSamples(p: Platform, side: FenceSide, a: number, b: number): number[] {
@@ -701,86 +694,81 @@ export function fenceSamples(p: Platform, side: FenceSide, a: number, b: number)
   return out.sort((x, y) => x - y);
 }
 
-// The fence rails, both as drawn and as props collide with them: spans that meet at a corner join
-// into one run, and a run is closed when it goes all the way round.
-export function fenceRuns(p: Piece): { spans: FenceSpanRail[]; closed: boolean }[] {
-  if (p.type !== "slab" && p.type !== "ramp" && p.type !== "curve") return [];
-  const sides = fenceSides(p), spans: FenceSpanRail[] = [];
-  sides.forEach((side, i) => {
-    for (const [a, b] of fenceSpans(fenceOf(p, side.key), side.len)) {
-      const pts: [number, number, number][] = [];
-      for (const s of fenceSamples(p, side, a, b)) {
-        const q = side.at(s, FENCE_RAIL_INSET), v: [number, number, number] = [q.x, FENCE_RAIL_Y + q.y, q.z];
-        pts.push(p.type === "slab" && p.twist ? twistPoint(p, v) : v);
+// Fence: one rail at fence height (FENCE_RAIL_Y) over a path laid like a tube's: (x, y, z) is its
+// first node and `path` the rest, relative to it before `rot`; a node's y is the surface the fence
+// stands on there. `bend` rounds a corner, `mid` curves a segment, `smooth` makes it one curve.
+// Each end turns straight down on FENCE_RAIL_CORNER, to FENCE_RAIL_FOOT below the surface.
+export type FencePiece = Piece & { type: "fence" };
+export function fenceRings(p: { path: TubeNode[]; smooth?: true }): TubeRing[] {
+  const top = tubeNodes(p, FENCE_RAIL_Y), first = top[0]!, last = top[top.length - 1]!, lastNode = p.path[p.path.length - 1];
+  if (!lastNode) return [];
+  const down = (v: V3): V3 => [v[0], v[1] - FENCE_RAIL_Y - FENCE_RAIL_FOOT, v[2]];
+  const lift = (m?: { x: number; y: number; z: number }) => (m ? { mid: { x: m.x, y: m.y + FENCE_RAIL_Y, z: m.z } } : {});
+  const between: TubeNode[] = p.smooth
+    ? smoothCurve(top).slice(1, -1).map((v) => ({ x: v[0], y: v[1], z: v[2], bend: 0 }))
+    : p.path.slice(0, -1).map((n) => ({ x: n.x, y: n.y + FENCE_RAIL_Y, z: n.z, bend: n.bend, ...lift(n.mid) }));
+  const foot = down(first), rel = (n: TubeNode): TubeNode => ({ ...n, x: n.x - foot[0], y: n.y - foot[1], z: n.z - foot[2], ...(n.mid ? { mid: { x: n.mid.x - foot[0], y: n.mid.y - foot[1], z: n.mid.z - foot[2] } } : {}) });
+  const end = down(last);
+  const path = [
+    { x: first[0], y: first[1], z: first[2], bend: FENCE_RAIL_CORNER },
+    ...between,
+    { x: last[0], y: last[1], z: last[2], bend: FENCE_RAIL_CORNER, ...(p.smooth ? {} : lift(lastNode.mid)) },
+    { x: end[0], y: end[1], z: end[2], bend: 0 },
+  ].map(rel);
+  return tubeRings({ path }, 0).map((q) => ({ ...q, c: add(q.c, foot) }));
+}
+
+// A fence piece along the whole of one side of platform `p` (a key from fenceSides).
+export const platformFence = (p: Platform, key: string): Piece[] => legacyFences(p, { [key]: true });
+
+// An older level's fenced sides on platform `p` as fence pieces: spans that meet at a corner join
+// into one fence, each running clockwise so its inside is on its right. Arc stretches become
+// curved segments, a ramp's side follows the slope node by node, and a tilted slab's are dropped.
+function legacyFences(p: Platform, spec: Record<string, Fence>): Piece[] {
+  if (isTilted(p)) return [];
+  const sides = fenceSides(p), rot = pieceRot(p), r3 = (v: number) => Math.round(v * 1000) / 1000;
+  const base = (side: FenceSide, at: number): V3 => {
+    const q = side.at(at, FENCE_RAIL_INSET);
+    if (p.type !== "slab" || !p.twist) return [q.x, q.y, q.z];
+    const v = twistPoint(p, [q.x, FENCE_RAIL_Y + q.y, q.z]);
+    return [v[0], v[1] - FENCE_RAIL_Y, v[2]];
+  };
+  type Node = { v: V3; mid?: V3 };
+  const spans: { side: number; nodes: Node[]; start: boolean; end: boolean }[] = [];
+  sides.forEach((side, k) => {
+    for (const [a, b] of fenceSpans(spec[side.key] ?? false, side.len)) {
+      const knots = side.knots ?? [];
+      const cuts = side.arc ? [a, ...knots.filter((q) => q > a + 1e-6 && q < b - 1e-6), b] : fenceSamples(p, side, a, b);
+      const nodes: Node[] = [{ v: base(side, cuts[0]!) }];
+      for (let i = 1; i < cuts.length; i++) {
+        const s0 = cuts[i - 1]!, s1 = cuts[i]!, onArc = side.arc && s0 >= knots[0]! - 1e-6 && s1 <= knots[1]! + 1e-6;
+        nodes.push({ v: base(side, s1), ...(onArc ? { mid: base(side, (s0 + s1) / 2) } : {}) });
       }
-      spans.push({ side: i, a, b, pts, start: a < 1e-6, end: b > side.len - 1e-6 });
+      spans.push({ side: k, nodes, start: a < 1e-6, end: b > side.len - 1e-6 });
     }
   });
   const n = spans.length;
   if (!n) return [];
   const links = (i: number) => {
-    const s = spans[i]!, t = spans[(i + 1) % n]!, ps = s.pts[s.pts.length - 1]!, pt = t.pts[0]!;
+    const s = spans[i]!, t = spans[(i + 1) % n]!, ps = s.nodes[s.nodes.length - 1]!.v, pt = t.nodes[0]!.v;
     return s.end && t.start && t.side === (s.side + 1) % sides.length && Math.hypot(ps[0] - pt[0], ps[2] - pt[2]) < 1;
   };
-  if (spans.every((_, i) => links(i))) return [{ spans, closed: true }];
-  const out: { spans: FenceSpanRail[]; closed: boolean }[] = [];
+  const runs: Node[][] = [];
+  const all = spans.every((_, i) => links(i));
   for (let i = 0; i < n; i++) {
-    if (links((i + n - 1) % n)) continue;
-    const run = [spans[i]!];
-    for (let j = i; links(j % n) && run.length < n; j++) run.push(spans[(j + 1) % n]!);
-    out.push({ spans: run, closed: false });
+    if (!all && links((i + n - 1) % n)) continue;
+    const run = [...spans[i]!.nodes];
+    for (let j = i; links(j % n) && j - i < n - 1; j++) run.push(...spans[(j + 1) % n]!.nodes.slice(1));
+    runs.push(run);
+    if (all) break;
   }
-  return out;
-}
-
-// A run's rail as one polyline in local space, with each open end turned straight down past the
-// surface into the platform, as the rail is drawn (its corners drawn rounded by FENCE_RAIL_CORNER).
-export function fenceRunLine(run: { spans: FenceSpanRail[]; closed: boolean }): [number, number, number][] {
-  const pts: [number, number, number][] = [];
-  for (const s of run.spans) for (const q of s.pts) {
-    const l = pts[pts.length - 1];
-    if (!l || Math.hypot(l[0] - q[0], l[1] - q[1], l[2] - q[2]) > 1e-4) pts.push(q);
-  }
-  if (run.closed && pts.length > 1) {
-    const f = pts[0]!, l = pts[pts.length - 1]!;
-    if (Math.hypot(f[0] - l[0], f[1] - l[1], f[2] - l[2]) < 1e-4) pts.pop();
-  }
-  if (!run.closed) {
-    const f = pts[0]!, l = pts[pts.length - 1]!;
-    pts.unshift([f[0], f[1] - FENCE_RAIL_Y - FENCE_RAIL_FOOT, f[2]]);
-    pts.push([l[0], l[1] - FENCE_RAIL_Y - FENCE_RAIL_FOOT, l[2]]);
-  }
-  return pts;
-}
-
-// The rail's centre line, both drawn (a tube of RAIL_R round it) and collided with (capsules of
-// RAIL_R along it): the run's line with every corner rounded by a quadratic curve that starts
-// FENCE_RAIL_CORNER from the corner, or half the shorter leg.
-export function fenceRailPath(run: { spans: FenceSpanRail[]; closed: boolean }): V3[] {
-  const raw = fenceRunLine(run), n = raw.length, out: V3[] = [];
-  const push = (v: V3) => { const l = out[out.length - 1]; if (!l || Math.hypot(l[0] - v[0], l[1] - v[1], l[2] - v[2]) > 1e-5) out.push(v); };
-  for (let i = 0; i < n; i++) {
-    const c = raw[i]!;
-    if (!run.closed && (i === 0 || i === n - 1)) { push(c); continue; }
-    const pa = raw[(i + n - 1) % n]!, pb = raw[(i + 1) % n]!;
-    const da: V3 = [pa[0] - c[0], pa[1] - c[1], pa[2] - c[2]], db: V3 = [pb[0] - c[0], pb[1] - c[1], pb[2] - c[2]];
-    const la = Math.hypot(...da), lb = Math.hypot(...db), r = Math.min(FENCE_RAIL_CORNER, la / 2, lb / 2);
-    const e: V3 = [c[0] + (da[0] / la) * r, c[1] + (da[1] / la) * r, c[2] + (da[2] / la) * r];
-    const x: V3 = [c[0] + (db[0] / lb) * r, c[1] + (db[1] / lb) * r, c[2] + (db[2] / lb) * r];
-    for (let k = 0; k <= 6; k++) {
-      const t = k / 6, u = 1 - t;
-      push([u * u * e[0] + 2 * u * t * c[0] + t * t * x[0], u * u * e[1] + 2 * u * t * c[1] + t * t * x[1], u * u * e[2] + 2 * u * t * c[2] + t * t * x[2]]);
-    }
-  }
-  if (run.closed && out.length > 1) { const f = out[0]!, l = out[out.length - 1]!; if (Math.hypot(f[0] - l[0], f[1] - l[1], f[2] - l[2]) < 1e-5) out.pop(); }
-  return out;
-}
-
-// The tidy form to store: true for one span covering the side, false for none.
-export function fenceValue(spans: [number, number][], len: number): Fence {
-  const s = fenceSpans(spans, len);
-  if (!s.length) return false;
-  return s.length === 1 && s[0]![0] < 1e-6 && s[0]![1] > len - 1e-6 ? true : s;
+  const world = (v: V3): V3 => { const o = rotXZ(v[0], v[2], rot); return [p.x + o.x, p.y + v[1], p.z + o.z]; };
+  return runs.map((run): Piece => {
+    const w = run.map((q) => ({ v: world(q.v), mid: q.mid ? world(q.mid) : undefined })), o = w[0]!.v;
+    const rel = (v: V3) => ({ x: r3(v[0] - o[0]), y: r3(v[1] - o[1]), z: r3(v[2] - o[2]) });
+    return { type: "fence", x: r3(o[0]), y: r3(o[1]), z: r3(o[2]), rot: 0,
+      path: w.slice(1).map((q) => ({ ...rel(q.v), bend: FENCE_RAIL_CORNER, ...(q.mid ? { mid: rel(q.mid) } : {}) })) };
+  });
 }
 
 // Lowest and highest top-surface y of a platform.
@@ -1011,15 +999,16 @@ export function surfaceAt(level: Level, x: number, z: number): number | null {
 }
 
 export function pieceRot(p: Piece): number {
-  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "rails" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "kicker" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "stool" || p.type === "jump" || p.type === "tube" || p.type === "hoop" ? p.rot : 0;
+  return p.type === "slab" || p.type === "curve" || p.type === "ramp" || p.type === "bridge" || p.type === "rails" || p.type === "fence" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "kicker" || p.type === "block" || p.type === "blockade" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "stool" || p.type === "jump" || p.type === "tube" || p.type === "hoop" ? p.rot : 0;
 }
 
 export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
   switch (type) {
     case "start": return { type, x, y, z };
-    case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, fences: { n: false, e: false, s: false, w: false } };
-    case "curve": return { type, x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, fences: { inner: false, outer: false, a: false, b: false } };
-    case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 24, rot: 0, rise: RAMP_RISE, fences: { e: false, w: false } };
+    case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0 };
+    case "curve": return { type, x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0 };
+    case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 24, rot: 0, rise: RAMP_RISE };
+    case "fence": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: FENCE_RAIL_CORNER }] };
     case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
     case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], smooth: true, lines: 2, a: "top", b: "top" };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
@@ -1234,18 +1223,23 @@ export function validateLevel(raw: unknown): Level {
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== "string" || typeof r.name !== "string") throw new Error("level needs string id and name");
   if (!Array.isArray(r.pieces)) throw new Error("level needs a pieces array");
-  const pieces = r.pieces.map((q: unknown, i: number): Piece => {
+  const fenced: [Platform, Record<string, Fence>][] = [];
+  const keep = <T extends Platform>(q: T, f: Record<string, unknown>, keys: string[]): T => {
+    const spec = Object.fromEntries(keys.map((k) => [k, fence(f[k])]));
+    if (Object.values(spec).some((v) => v)) fenced.push([q, spec]);
+    return q;
+  };
+  const parsed = r.pieces.map((q: unknown, i: number): Piece => {
     const p = (q ?? {}) as Record<string, unknown>;
     const at = { x: num(p.x, `piece ${i}.x`), y: num(p.y, `piece ${i}.y`), z: num(p.z, `piece ${i}.z`) };
     const f = (p.fences ?? {}) as Record<string, unknown>;
     switch (p.type) {
       case "start": return { type: "start", ...at };
-      case "slab": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}),
-        fences: { n: fence(f.n), e: fence(f.e), s: fence(f.s), w: fence(f.w) } , ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) };
-      case "curve": return { type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"),
-        fences: { inner: fence(f.inner), outer: fence(f.outer), a: fence(f.a), b: fence(f.b) } };
-      case "ramp": return { type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise"),
-        fences: { e: fence(f.e), w: fence(f.w) } };
+      case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}),
+        ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"]);
+      case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot") }, f, ["a", "outer", "b", "inner"]);
+      case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"]);
+      case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
         lines: p.lines === 1 ? 1 : 2, a: p.a === "side" ? "side" : "top", b: p.b === "side" ? "side" : "top",
@@ -1253,8 +1247,7 @@ export function validateLevel(raw: unknown): Level {
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
       case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}) };
       // Older levels have moving platforms as their own "mover" piece: a slab with its schedule inline.
-      case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0,
-        fences: { n: false, e: false, s: false, w: false }, move: parseMove(p, i) };
+      case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0, move: parseMove(p, i) };
       case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot"),
         ...(p.flat !== undefined && num(p.flat, "flat") > 0 ? { flat: num(p.flat, "flat") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}),
         ...(p.track ? { track: num(p.track, "track"), offset: num(p.offset ?? 0, "offset") } : {}) };
@@ -1282,6 +1275,7 @@ export function validateLevel(raw: unknown): Level {
       default: throw new Error(`piece ${i}: unknown type ${String(p.type)}`);
     }
   });
+  const pieces = [...parsed, ...fenced.flatMap(([q, spec]) => legacyFences(q, spec))];
   const t = r.thumb as Record<string, unknown> | undefined;
   const thumb = t ? { x: num(t.x, "thumb.x"), y: num(t.y, "thumb.y"), z: num(t.z, "thumb.z"), r: num(t.r, "thumb.r"), ...(t.yaw ? { yaw: num(t.yaw, "thumb.yaw") } : {}) } : undefined;
   const level: Level = { id: r.id, name: r.name, ...(thumb ? { thumb } : {}), pieces };
