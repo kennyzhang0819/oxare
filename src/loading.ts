@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { LEVELS } from "./levels/index.ts";
+import { BALL_RADIUS } from "./level.ts";
 import { buildLevel, createScene, initMaterials, makeBall } from "./scene.ts";
 import { createSim, initPhysics } from "./sim.ts";
 import { GlassTitle } from "./title.ts";
@@ -47,7 +48,7 @@ export class Loading implements Mode {
     const env = createScene();
     const built = buildLevel(level, false);
     const ball = makeBall();
-    ball.mesh.position.set(level.pieces[0]!.x, 0.55, level.pieces[0]!.z);
+    ball.mesh.position.set(level.pieces[0]!.x, BALL_RADIUS, level.pieces[0]!.z);
     env.scene.add(built.group, ball.mesh);
     const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth / canvas.clientHeight, 0.1, 500);
     camera.position.set(4, 3, 6);

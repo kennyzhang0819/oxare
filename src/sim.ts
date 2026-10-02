@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BUMPER_H, BUMPER_R, bumperProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -51,6 +51,8 @@ export interface Sim {
   movers: SimMover[];
   // Seconds of play stepped so far: the clock moving platforms run their schedules on.
   readonly time: number;
+  // Below this a fallen ball respawns and a fallen crate goes home (respawnY in level.ts).
+  readonly respawnY: number;
   step(throttle: number, fx: number, fz: number): void;
   respawn(): void;
   free(): void;
@@ -61,6 +63,12 @@ export function yQuat(deg: number): { x: number; y: number; z: number; w: number
   return { x: 0, y: Math.sin(h), z: 0, w: Math.cos(h) };
 }
 type Quat = { x: number; y: number; z: number; w: number };
+// v turned by q (v' = q v q*), and by q's inverse.
+const qrot = (q: Quat, v: { x: number; y: number; z: number }) => {
+  const ix = q.w * v.x + q.y * v.z - q.z * v.y, iy = q.w * v.y + q.z * v.x - q.x * v.z, iz = q.w * v.z + q.x * v.y - q.y * v.x, iw = -q.x * v.x - q.y * v.y - q.z * v.z;
+  return { x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y, y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z, z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x };
+};
+const qunrot = (q: Quat, v: { x: number; y: number; z: number }) => qrot({ x: -q.x, y: -q.y, z: -q.z, w: q.w }, v);
 const xQuat = (deg: number): Quat => { const h = (deg * Math.PI) / 360; return { x: Math.sin(h), y: 0, z: 0, w: Math.cos(h) }; };
 const zQuat = (deg: number): Quat => { const h = (deg * Math.PI) / 360; return { x: 0, y: 0, z: Math.sin(h), w: Math.cos(h) }; };
 // A moving or tilted slab's collider: the convex hull of its drawn mesh, rounded lip and all.
@@ -124,7 +132,18 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   for (const [pi, si] of riders(level)) rides.set(pi, moverOf.get(si)!);
   // The platform a piece is being built on, if it moves: its fixed colliders go on that body.
   let riding: SimMover | undefined;
+  // A rolled prop being built (see pieceRoll): its colliders, laid out unrolled, are turned by `q`
+  // about its base point `o` (the roll about its own front-to-back axis), as it is drawn.
+  let rolled: { o: { x: number; y: number; z: number }; q: Quat } | null = null;
+  const rollFrame = (p: Piece) => {
+    const roll = pieceRoll(p), rot = pieceRot(p);
+    return roll ? { o: { x: p.x, y: p.y, z: p.z }, q: qmul(yQuat(rot), qmul(zQuat(roll), yQuat(-rot))) } : null;
+  };
   const fixed = (desc: RAPIER.ColliderDesc): RAPIER.Collider => {
+    if (rolled) {
+      const { o, q } = rolled, t = desc.translation, d = qrot(q, { x: t.x - o.x, y: t.y - o.y, z: t.z - o.z });
+      desc.setTranslation(o.x + d.x, o.y + d.y, o.z + d.z).setRotation(qmul(q, desc.rotation));
+    }
     if (!riding) return world.createCollider(desc);
     const t = desc.translation, o = riding.piece;
     return world.createCollider(desc.setTranslation(t.x - o.x, t.y - o.y, t.z - o.z), riding.body);
@@ -162,10 +181,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       );
     }
   };
-  const bumpers: RAPIER.Collider[] = [];
+  const bumpers: RAPIER.Collider[] = [], magnets: RAPIER.Collider[] = [];
   level.pieces.forEach((p, index) => {
     const rot = pieceRot(p);
     riding = rides.get(index) ?? moverOf.get(index);
+    rolled = rollFrame(p);
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
       // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
@@ -212,6 +232,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           .setTranslation(p.x, p.y, p.z).setFriction(1),
       ));
     }
+    if (p.type === "magnet") {
+      const m = revolveMesh(magnetProfile().flatMap((band, i) => (i ? band.slice(1) : band)), 48);
+      magnets.push(fixed(
+        RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES)
+          .setTranslation(p.x, p.y, p.z).setFriction(1),
+      ));
+    }
     if (p.type === "goal") {
       const t = torusMesh(p.r + GOAL_RING.gap, GOAL_RING.tube);
       fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setTranslation(p.x, p.y + GOAL_RING.y, p.z).setFriction(1));
@@ -229,6 +256,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     }
   });
   riding = undefined;
+  rolled = null;
 
   const jumps = level.pieces.filter((p): p is Piece & { type: "jump" } => p.type === "jump");
   const spinners: SimSpinner[] = [];
@@ -245,13 +273,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // in the air. Crates and barrels are free bodies under the same gravity as the ball; one that falls
   // off the world comes back to where it started.
   const crates: SimCrate[] = [];
-  const crateHome = new Map<number, { x: number; y: number; z: number; rot: number }>();
+  const crateHome = new Map<number, { x: number; y: number; z: number; q: Quat }>();
   level.pieces.forEach((p, index) => {
     if (p.type !== "crate" && p.type !== "barrel") return;
-    const home = { ...shifted(index, { x: p.x, y: p.y + p.h / 2 + 0.02, z: p.z }), rot: p.rot };
+    const home = { ...shifted(index, { x: p.x, y: p.y + propLift(p) + 0.02, z: p.z }), q: qmul(yQuat(p.rot), zQuat(pieceRoll(p))) };
     crateHome.set(index, home);
     const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(yQuat(p.rot)).setCcdEnabled(true).setGravityScale(TUNING.propGravity).setCanSleep(false),
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(home.q).setCcdEnabled(true).setGravityScale(TUNING.propGravity).setCanSleep(false),
     );
     const cr = p.type === "crate" ? propRound(p.w, p.h, p.d) : propRound(2 * p.r, p.h, 2 * p.r);
     const desc = p.type === "crate" ? RAPIER.ColliderDesc.roundCuboid(p.w / 2 - cr, p.h / 2 - cr, p.d / 2 - cr, cr) : RAPIER.ColliderDesc.roundCylinder(p.h / 2 - cr, p.r - cr, cr);
@@ -400,6 +428,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   });
 
   let time = 0;
+  const fallY = respawnY(level);
+  // After a kicker's kick the ball may keep the horizontal speed it was given, over the speed cap,
+  // until it lands (touches down after leaving the ground); slowing down lowers that allowance.
+  let flight = 0, flown = false;
+  const landRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
   // Jump pads: a fixed convex hull each, base and top outlines, so the ramp all round is seamless.
   for (const p of jumps) {
@@ -416,6 +449,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // Kickers: a fixed rounded convex wedge each, so the slope is one flat face with no seams to catch on.
   // A sliding one is a stool's way: a body on a prismatic link along its x. Its slope reaches below
   // the surface (KICKER_SINK), so it never meets the floor; the link alone holds it up.
+  const kicks: { p: Piece & { type: "kicker" }; body?: RAPIER.RigidBody; mover?: SimMover; last: number | null }[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "kicker") return;
     if (isSliding(p)) {
@@ -431,9 +465,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       joint.limits = [slide.lo - slide.at, slide.hi - slide.at];
       world.createMultibodyJoint(joint, anchor, body, true);
       planks.push({ index, body });
+      kicks.push({ p, body, last: null });
       return;
     }
     riding = rides.get(index);
+    kicks.push({ p, mover: riding, last: null });
     const hull = kickerHull(p);
     const pts = new Float32Array(hull.corners.flatMap((c) => { const r = rollPoint(p.roll ?? 0, c), o = rotXZ(r[0], r[2], p.rot); return [p.x + o.x, p.y + r[1], p.z + o.z]; }));
     const desc = RAPIER.ColliderDesc.roundConvexHull(pts, hull.r);
@@ -471,8 +507,10 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   level.pieces.forEach((p, index) => {
     if (p.type !== "hoop") return;
     riding = rides.get(index);
+    rolled = rollFrame(p);
     railRing(hoopRing(p));
     riding = undefined;
+    rolled = null;
   });
   // Direction along the tube at the ball, when the ball is inside it between the two mouths.
   const tubeDir = (t: SimTube, b: { x: number; y: number; z: number }): [number, number, number] | null => {
@@ -518,13 +556,14 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     movers,
     riders: rides,
     get time() { return time; },
+    respawnY: fallY,
     step(throttle, fx, fz) {
       props ??= [...crates.map((c) => c.body), ...bridges.flatMap((b) => b.planks), ...planks.map((p) => p.body)];
       for (const c of crates) {
-        if (c.body.translation().y >= TUNING.respawnY) continue;
+        if (c.body.translation().y >= fallY) continue;
         const home = crateHome.get(c.index)!;
         c.body.setTranslation({ x: home.x, y: home.y, z: home.z }, true);
-        c.body.setRotation(yQuat(home.rot), true);
+        c.body.setRotation(home.q, true);
         c.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
         c.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       }
@@ -573,6 +612,19 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const k = TUNING.climbAssist * Math.min(1, Math.abs(throttle));
         push = [push[0] - slope[0] * k, push[1] - slope[1] * k, push[2] - slope[2] * k];
       }
+      // Magnets: a pull toward each one's axis, fading out at its reach; its level part is capped below
+      // the throttle so the ball can always be driven off.
+      for (const c of magnets) {
+        // In the magnet's own frame: toward its axis, so one rolled onto a wall pulls up or across.
+        const o = c.translation(), q = c.rotation(), l = qunrot(q, { x: at.x - o.x, y: at.y - o.y, z: at.z - o.z });
+        const d = Math.hypot(l.x, l.z), dy = l.y, w = qrot(q, { x: -l.x, y: 0, z: -l.z }), dx = w.x, dz = w.z, dyw = w.y;
+        if (d < 1e-6 || d >= MAGNET_REACH || dy < -BALL_RADIUS || dy > MAGNET_H + 2 * BALL_RADIUS) continue;
+        // The level part of the pull is held under magnetHold of the throttle, so driving away always
+        // escapes; the throttle can't push up or down, so the upright part is only the magnet's own.
+        const pull = TUNING.magnetForce * Math.min(1, (MAGNET_REACH - d) / (MAGNET_REACH - MAGNET_R - BALL_RADIUS)) / d;
+        const level = Math.hypot(dx, dz) * pull, cap = Math.min(TUNING.magnetHold, 0.9) * TUNING.throttleForce, k = level > cap ? cap / level : 1;
+        push = [push[0] + dx * pull * k, push[1] + dyw * pull, push[2] + dz * pull * k];
+      }
       ball.addForce({ x: push[0], y: push[1], z: push[2] }, true);
       for (const m of movers) m.body.setNextKinematicTranslation(moverAt(m.piece, time + STEP));
       for (const c of carried) {
@@ -590,12 +642,28 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       // Bumpers: a ball that ran into one's side leaves straight out from its axis, at a share of the
       // speed it came in with but never slower than the kick; along the side its speed is kept.
       for (const c of bumpers) {
-        const o = c.translation(), b = ball.translation(), dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz);
-        if (d < 1e-6 || d > BUMPER_R + BALL_RADIUS + 0.05 || b.y < o.y || b.y > o.y + BUMPER_H) continue;
-        const nx = dx / d, nz = dz / d, vin = v0.x * nx + v0.z * nz;
+        // In the bumper's own frame (rolled or not): out from its axis, level in that frame.
+        const o = c.translation(), q = c.rotation(), b = ball.translation(), l = qunrot(q, { x: b.x - o.x, y: b.y - o.y, z: b.z - o.z }), d = Math.hypot(l.x, l.z);
+        if (d < 1e-6 || d > BUMPER_R + BALL_RADIUS + 0.05 || l.y < 0 || l.y > BUMPER_H) continue;
+        const n = qrot(q, { x: l.x / d, y: 0, z: l.z / d }), vin = v0.x * n.x + v0.y * n.y + v0.z * n.z;
         if (vin >= 0) continue;
-        const v = ball.linvel(), vn = v.x * nx + v.z * nz, out = Math.max(TUNING.bumperKick, -vin * TUNING.bumperBounce);
-        if (vn < out) ball.setLinvel({ x: v.x + nx * (out - vn), y: v.y, z: v.z + nz * (out - vn) }, true);
+        const v = ball.linvel(), vn = v.x * n.x + v.y * n.y + v.z * n.z, out = Math.max(TUNING.bumperKick, -vin * TUNING.bumperBounce);
+        if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
+      }
+      // Kickers: the moment the ball goes over a kicker's top edge it is kicked on, kickerBoost faster
+      // along the way the kicker throws it (up its slope, or level off a long kicker's deck).
+      for (const k of kicks) {
+        const p = k.p, s = k.mover ? moverShift(k.mover.piece, time) : { x: 0, y: 0, z: 0 };
+        const o = k.body ? k.body.translation() : { x: p.x + s.x, y: p.y + s.y, z: p.z + s.z };
+        const b = ball.translation(), l = rotXZ(b.x - o.x, b.z - o.z, -p.rot), u = rollPoint(-(p.roll ?? 0), [l.x, b.y - o.y, l.z]);
+        const edge = -(p.d + (p.flat ?? 0)) / 2, last = k.last;
+        k.last = u[2];
+        if (last === null || last <= edge || u[2] > edge || Math.abs(u[0]) > p.w / 2 || u[1] < p.h - 0.2 || u[1] > p.h + BALL_RADIUS + 0.5) continue;
+        const along = p.flat ? 0 : Math.hypot(p.h, p.d), dir = rollPoint(p.roll ?? 0, p.flat ? [0, 0, -1] : [0, p.h / along, -p.d / along]), w = rotXZ(dir[0], dir[2], p.rot);
+        const v = ball.linvel(), kick = TUNING.kickerBoost;
+        ball.setLinvel({ x: v.x + w.x * kick, y: v.y + dir[1] * kick, z: v.z + w.z * kick }, true);
+        flight = Math.hypot(v.x + w.x * kick, v.z + w.z * kick);
+        flown = false;
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
       // Jump pads: in a launch zone the ball's speed out of the pad (straight up, or along a rolled
@@ -612,12 +680,21 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       ball.resetForces(true);
       const v = ball.linvel();
       const h = Math.hypot(v.x, v.z);
-      if (h > TUNING.maxSpeed) {
-        const k = TUNING.maxSpeed / h;
+      if (flight > 0) {
+        landRay.origin = ball.translation();
+        const ground = world.castRay(landRay, BALL_RADIUS + 0.06, true, undefined, undefined, ballCollider, ball);
+        if (!ground) flown = true;
+        else if (flown) flight = 0;
+        flight = Math.min(flight, h);
+      }
+      const cap = Math.max(TUNING.maxSpeed, flight);
+      if (h > cap) {
+        const k = cap / h;
         ball.setLinvel({ x: v.x * k, y: v.y, z: v.z * k }, true);
       }
     },
     respawn() {
+      flight = 0;
       ball.setTranslation(spawn, true);
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
       ball.setAngvel({ x: 0, y: 0, z: 0 }, true);

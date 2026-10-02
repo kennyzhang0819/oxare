@@ -1,10 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { platformMesh } from "../src/platform.ts";
-import { DEFAULT_TUNING, TUNING } from "../src/tuning.ts";
+import { DEFAULT_TUNING, TUNING, TUNING_RANGES } from "../src/tuning.ts";
 
 // A hand-built test level: its goal is solid like everything else, so it is moved far off to the
 // side, out of the path the test rolls the ball along.
@@ -257,6 +257,63 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
   if (minZ < -8 || maxY > 1.2) { failed = true; console.error(`FAIL stop-${piece.type}: ball passed the ${piece.type} (z ${minZ.toFixed(2)}, y ${maxY.toFixed(2)})`); }
   else console.log(`ok stop-${piece.type}: ${piece.type} holds the ball`);
 }
+// The kick at a kicker's top edge carries the ball further: from full speed with forward held, a
+// 1-high kicker on the end of a platform lands the ball over 7 past its edge (6.2 without the kick).
+{
+  const level = testLevel({ id: "kick-gap", name: "kick-gap", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -20, w: 12, d: 40, rot: 0 },
+    { type: "kicker", x: 0, y: 0, z: -38.5, w: 2.5, d: 3, h: 1, rot: 0 },
+    { type: "slab", x: 0, y: 0, z: -64, w: 12, d: 32, rot: 0 },
+    { type: "goal", x: 0, y: 0, z: -70, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  let land: number | null = null;
+  for (let i = 0; i < 120 * 14 && land === null; i++) {
+    const b = sim.ball.translation(), v = sim.ball.linvel();
+    sim.step(1, 0, -1);
+    const a = sim.ball.translation();
+    if (a.y < -1) break;
+    if (a.z < -40.5 && sim.ball.linvel().y <= 0 && a.y < 0.6) land = -40 - a.z;
+  }
+  sim.free();
+  if (land === null || land < 7) { failed = true; console.error(`FAIL kick-gap: touched down ${land?.toFixed(2) ?? "never"} past the kicker (want 7+)`); }
+  else console.log(`ok kick-gap: a 1-high kicker at full speed carries the ball ${land.toFixed(2)} past its edge`);
+}
+// Rolled props turn about their own front-to-back axis through their base, behaviour included: a
+// magnet rolled 90 onto a wall pulls a ball near the wall's foot up toward its axis, and a bumper
+// rolled onto a wall still throws back a ball rolling into its round side.
+{
+  const L = (pieces: unknown[], start: [number, number]) => testLevel({ id: "rolled", name: "rolled", pieces: [
+    { type: "start", x: start[0], y: 0, z: start[1] }, { type: "slab", x: 0, y: 0, z: 0, w: 16, d: 16, rot: 0 },
+    { type: "block", x: 3, y: 0, z: 0, w: 1, h: 6, d: 16, rot: 0 }, ...pieces, { type: "goal", x: -6, y: 0, z: -6, r: 1 },
+  ] });
+  let sim = await createSim(L([{ type: "magnet", x: 2.5, y: 2.5, z: 0, roll: 90 }], [1.2, 0]));
+  let top = 0;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(0, 0, -1); top = Math.max(top, sim.ball.translation().y); }
+  sim.free();
+  sim = await createSim(L([{ type: "bumper", x: 2.5, y: 1, z: -3, roll: 90 }], [1.6, 4]));
+  let back = 0;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(back > 0 ? 0 : 1, 0, -1); back = Math.max(back, sim.ball.linvel().z); }
+  sim.free();
+  if (top < 1.5 || back < TUNING.bumperKick - 1) { failed = true; console.error(`FAIL rolled: a wall magnet lifted the ball to y ${top.toFixed(2)} (want 1.5+), a wall bumper threw it back at ${back.toFixed(2)}`); }
+  else console.log(`ok rolled: a wall magnet lifts the ball to y ${top.toFixed(2)}, a wall bumper throws it back at ${back.toFixed(2)} m/s`);
+}
+// A fence stops a ball rolling into it: at full speed, head-on and at 30 degrees, it never gets over.
+for (const deg of [0, 30]) {
+  const a = (deg * Math.PI) / 180;
+  const level = testLevel({ id: "fence-hold", name: "fence-hold", pieces: [
+    { type: "start", x: -12, y: 0, z: 0 }, { type: "slab", x: 0, y: 0, z: -40, w: 40, d: 140, rot: 0 },
+    { type: "fence", x: 4, y: 0, z: 25, rot: 0, path: [{ x: 0, y: 0, z: -130, bend: 0.2 }] },
+    { type: "goal", x: -12, y: 0, z: 20, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  let over = 0;
+  for (let i = 0; i < 120 * 8 && !over; i++) { sim.step(1, Math.cos(a), -Math.sin(a)); if (sim.ball.translation().x > 4.5) over = i; }
+  sim.free();
+  if (over) { failed = true; console.error(`FAIL fence-hold: a full-speed ball ${deg}° off straight-on got over the fence`); }
+  else console.log(`ok fence-hold: a full-speed ball ${deg}° off straight-on is held`);
+}
 // A bumper must throw back a ball that runs into it, at least as fast as the kick.
 {
   const level = testLevel({ id: "bumper", name: "bumper", pieces: [
@@ -276,6 +333,27 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
   sim.free();
   if (minZ < -7 || back < TUNING.bumperKick - 0.5 || maxY > 1.2) { failed = true; console.error(`FAIL bumper: z ${minZ.toFixed(2)}, thrown back at ${back.toFixed(2)}, y ${maxY.toFixed(2)}`); }
   else console.log(`ok bumper: thrown back at ${back.toFixed(2)} m/s`);
+}
+// A magnet must draw in a resting ball from inside its reach, leave one outside it alone, and let
+// full throttle pull the ball back off it, even at the strongest pull and hold the tuning allows.
+{
+  const level = testLevel({ id: "magnet", name: "magnet", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -10, w: 10, d: 30, rot: 0, fences: {} },
+    { type: "magnet", x: 0, y: 0, z: -10 },
+    { type: "goal", x: 0, y: 0, z: -18, r: 2 },
+  ] });
+  const gap = (sim: Awaited<ReturnType<typeof createSim>>) => Math.hypot(sim.ball.translation().x, sim.ball.translation().z + 10);
+  const near = await createSim(level, { x: 0, y: 0, z: -14 }), far = await createSim(level, { x: 0, y: 0, z: -16 });
+  for (let i = 0; i < 120 * 3; i++) { near.step(0, 0, 0); far.step(0, 0, 0); }
+  const held = gap(near), still = gap(far);
+  TUNING.magnetForce = TUNING_RANGES.magnetForce[1]; TUNING.magnetHold = TUNING_RANGES.magnetHold[1];
+  let away = 0, t = 0;
+  for (; t < 120 * 8 && away < MAGNET_REACH; t++) { near.step(1, 0, -1); away = gap(near); }
+  TUNING.magnetForce = DEFAULT_TUNING.magnetForce; TUNING.magnetHold = DEFAULT_TUNING.magnetHold;
+  near.free(); far.free();
+  if (held > MAGNET_R + BALL_RADIUS + 0.1 || Math.abs(still - 6) > 0.05 || away < MAGNET_REACH) { failed = true; console.error(`FAIL magnet: held at ${held.toFixed(2)}, outside rests at ${still.toFixed(2)}, pulled off to ${away.toFixed(2)}`); }
+  else console.log(`ok magnet: draws the ball in to ${held.toFixed(2)}; at full strength, full throttle escapes in ${(t * STEP).toFixed(2)} s`);
 }
 // A sliding kicker must still launch a ball rolled up it, and give way sideways to one hitting its side.
 for (const side of [false, true]) {
@@ -333,21 +411,23 @@ for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, fa
   if (fell !== falls) { failed = true; console.error(`FAIL hole-${name}: ball ${fell ? "fell" : "stayed up"} (min y ${minY.toFixed(2)})`); }
   else console.log(`ok hole-${name}: ball ${fell ? "falls through the hole" : "rolls past the hole"}`);
 }
-// A raised slab's side wall must stop a ball rolling along the slab beneath it.
-{
+// A raised slab's side wall stops a ball rolling along the slab beneath it when the gap under it is
+// less than the ball is tall (a slab 1.5 up, its underside 0.5 up); the 1.0 tall ball rolls under one
+// whose underside is a whole unit up (a slab 2 up).
+for (const [y, under] of [[1.5, false], [2, true]] as [number, boolean][]) {
   const level = testLevel({ id: "side", name: "side", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
-    { type: "slab", x: 0, y: 0, z: -15, w: 10, d: 30, rot: 0, fences: {} },
-    { type: "slab", x: 0, y: 2, z: -20, w: 10, d: 20, rot: 0, fences: {} },
-    { type: "goal", x: 0, y: 2, z: -25, r: 2 },
+    { type: "slab", x: 0, y: 0, z: -15, w: 10, d: 30, rot: 0 },
+    { type: "slab", x: 0, y, z: -20, w: 10, d: 20, rot: 0 },
+    { type: "goal", x: 0, y, z: -25, r: 2 },
   ] });
   const sim = await createSim(level);
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
   let minZ = 0;
   for (let i = 0; i < 120 * 4; i++) { sim.step(1, 0, -1); minZ = Math.min(minZ, sim.ball.translation().z); }
   sim.free();
-  if (minZ < -10) { failed = true; console.error(`FAIL side: ball went through a slab's side wall (z ${minZ.toFixed(2)})`); }
-  else console.log(`ok side: slab side wall holds (stopped at z ${minZ.toFixed(2)})`);
+  if ((minZ < -10.5) !== under) { failed = true; console.error(`FAIL side: with a slab ${y} up the ball ${minZ < -10.5 ? "got under it" : "was stopped"} (z ${minZ.toFixed(2)})`); }
+  else console.log(`ok side: a slab ${y} up ${under ? "lets the ball roll under it" : "stops it with its side wall"} (z ${minZ.toFixed(2)})`);
 }
 // A barrier stops the ball; a crate gets shoved along and stays on the floor.
 {
@@ -739,7 +819,8 @@ for (const side of [false, true]) {
   let maxX = 0, minY = Infinity;
   for (let i = 0; i < 120 * 4; i++) { sim.step(1, 1, 0); const q = sim.ball.translation(); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); }
   sim.free();
-  if (maxX > 5 || minY < 0) { failed = true; console.error(`FAIL support: ball went through the support pillar (x ${maxX.toFixed(2)}, min y ${minY.toFixed(2)})`); }
+  // The pillar's face is SUPPORT_GAP past the platform's edge at x 5, so a ball held against it has its centre no further than that, less its radius.
+  if (maxX > 5 + SUPPORT_GAP - BALL_RADIUS + 0.02 || minY < 0) { failed = true; console.error(`FAIL support: ball went through the support pillar (x ${maxX.toFixed(2)}, min y ${minY.toFixed(2)})`); }
   else console.log(`ok support: pillar stops the ball at x ${maxX.toFixed(2)}`);
 }
 // A kicker is rolled straight over at any speed: the ball rides up, leaves the high edge and
@@ -769,8 +850,8 @@ for (const [cap, kicker] of [
   if (p.z > -16 || Math.abs(p.y - BALL_RADIUS) > 0.1 || maxY < kicker.h + BALL_RADIUS - 0.1) { failed = true; console.error(`FAIL ${name} at ${cap}: ball ended z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak y ${maxY.toFixed(2)}`); }
   else console.log(`ok ${name} at ${cap} m/s: rolled over (peak y ${maxY.toFixed(2)}) and landed at z ${p.z.toFixed(2)}`);
 }
-// A hoop has the tube's bore with its bottom flush with the floor: rolled straight at it, the ball
-// goes clean through without lifting and carries on beyond.
+// A hoop has exactly the tube's bore, standing a hair off the floor: rolled straight at it, the ball
+// goes through (brushing its rim, with only a hair to spare) without lifting or being knocked off line.
 for (const cap of [2.5, 6.5]) {
   TUNING.maxSpeed = cap;
   const level = testLevel({ id: "hoop", name: "hoop", pieces: [
@@ -784,8 +865,8 @@ for (const cap of [2.5, 6.5]) {
   let p = sim.ball.translation(), maxY = 0, maxX = 0;
   for (let i = 0; i < 120 * 10 && p.z > -16; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); if (p.z < -5) { maxY = Math.max(maxY, p.y); maxX = Math.max(maxX, Math.abs(p.x)); } }
   sim.free();
-  if (p.z > -16 || maxY > BALL_RADIUS + 0.05 || maxX > 0.05) { failed = true; console.error(`FAIL hoop at ${cap}: ball ended z ${p.z.toFixed(2)}, highest y ${maxY.toFixed(3)}, widest x ${maxX.toFixed(3)}`); }
-  else console.log(`ok hoop at ${cap} m/s: rolled clean through (highest y ${maxY.toFixed(3)}, widest x ${maxX.toFixed(3)})`);
+  if (p.z > -16 || maxY > BALL_RADIUS + 0.05 || maxX > 0.25) { failed = true; console.error(`FAIL hoop at ${cap}: ball ended z ${p.z.toFixed(2)}, highest y ${maxY.toFixed(3)}, widest x ${maxX.toFixed(3)}`); }
+  else console.log(`ok hoop at ${cap} m/s: rolled through (highest y ${maxY.toFixed(3)}, widest x ${maxX.toFixed(3)})`);
 }
 TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
 // A seesaw starts at its set angle, near end down; the ball rolls up it, tips it past level so
@@ -1024,7 +1105,8 @@ for (const reversed of [false, true]) {
   const inWall = (b: { x: number; y: number; z: number }) => {
     if (b.z > z0 + 0.05 || b.z < z1 - 0.05) return false;
     const r = Math.hypot(b.x, b.y - TUBE_R);
-    return r > 0.1 && r < TUBE_R + TUBE_SOLID_WALL + BALL_RADIUS - 0.05;
+    // A hard landing on top may squash in a little for a step (the solver's overlap, under 0.06 at 10 m/s).
+    return r > 0.1 && r < TUBE_R + TUBE_SOLID_WALL + BALL_RADIUS - 0.08;
   };
   const shots: { from: [number, number, number]; v: [number, number, number] }[] = [];
   for (const speed of [3, 6, 10]) {

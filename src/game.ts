@@ -3,7 +3,7 @@ import { Input } from "./input.ts";
 import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./level.ts";
 import { buildLevel, createScene, fitSun, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
-import { DEFAULT_TUNING, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
+import { DEFAULT_TUNING, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -159,7 +159,7 @@ export class Game implements Mode {
       if (panel && piece) posePlank(piece, panel, pl.body.translation(), pl.body.rotation());
     }
     if (!this.done) {
-      if (p.y < TUNING.respawnY) this.fall();
+      if (p.y < sim.respawnY) this.fall();
       const goal = this.built.goal;
       if (goal) {
         const gp = this.level.pieces[goal.index]!;
@@ -233,20 +233,27 @@ export class Game implements Mode {
     );
   }
 
-  // The in-game menu pauses the run (the clock and physics stop) and holds the player's settings.
+  // The in-game menu pauses the run (the clock and physics stop): Resume, Restart, Settings (the
+  // player's settings, with Back to the menu) and Quit.
   private togglePause() {
     if (this.pauseMenu) { this.pauseMenu.remove(); this.pauseMenu = null; this.yawVel = 0; return; }
-    this.pauseMenu = h("div", { class: "banner" },
-      h("div", { class: "card pause" },
-        h("h2", {}, "Paused"),
-        playerSettings(),
-        h("div", { class: "row" },
-          h("button", { onclick: () => this.togglePause() }, "Resume"),
-          h("button", { class: "ghost", onclick: () => this.opts.onRetry() }, "Restart"),
-          h("button", { class: "ghost", onclick: () => this.opts.onExit() }, "Quit"),
-        ),
+    const card = h("div", { class: "card pause" });
+    const menu = () => card.replaceChildren(
+      h("h2", {}, "Paused"),
+      h("div", { class: "stack" },
+        h("button", { onclick: () => this.togglePause() }, "Resume"),
+        h("button", { class: "ghost", onclick: () => this.opts.onRetry() }, "Restart"),
+        h("button", { class: "ghost", onclick: settings }, "Settings"),
+        h("button", { class: "ghost", onclick: () => this.opts.onExit() }, "Quit"),
       ),
     );
+    const settings = () => card.replaceChildren(
+      h("h2", {}, "Settings"),
+      playerSettings(),
+      h("div", { class: "row" }, h("button", { class: "ghost", onclick: menu }, "Back")),
+    );
+    menu();
+    this.pauseMenu = h("div", { class: "banner" }, card);
     this.ctx.overlay.append(this.pauseMenu);
   }
 
@@ -254,7 +261,7 @@ export class Game implements Mode {
     if (this.tunePanel) { this.tunePanel.remove(); this.tunePanel = null; return; }
     const out = h("textarea", { readOnly: true });
     const refresh = () => { out.value = JSON.stringify(TUNING, null, 1); };
-    const rows = (Object.keys(TUNING) as TuningKey[]).map((k) => {
+    const rows = (Object.keys(TUNING) as TuningKey[]).filter((k) => !PLAYER_KEYS.includes(k)).map((k) => {
       const [min, max, step] = TUNING_RANGES[k];
       const val = h("span", {}, String(TUNING[k]));
       const range = h("input", { type: "range", min, max, step, value: TUNING[k],
@@ -287,12 +294,13 @@ export class Game implements Mode {
 
 // The player's own settings, shown in the pause menu and under Options on the home screen.
 export function playerSettings(): HTMLElement {
-  const slider = (label: string, key: "yawRate" | "mouseSens") => {
+  // Speeds read as a share of their default; camera distances in units.
+  const slider = (label: string, key: TuningKey, units = false) => {
     const [min, max, step] = TUNING_RANGES[key];
-    const pct = () => `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`;
-    const val = h("span", {}, pct());
+    const show = () => (units ? TUNING[key].toFixed(2).replace(/\.?0+$/, "") : `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`);
+    const val = h("span", {}, show());
     const range = h("input", { type: "range", min, max, step, value: TUNING[key],
-      oninput: () => { TUNING[key] = Number(range.value); val.textContent = pct(); saveTuning(); } }) as HTMLInputElement;
+      oninput: () => { TUNING[key] = Number(range.value); val.textContent = show(); saveTuning(); } }) as HTMLInputElement;
     return h("label", {}, h("span", {}, label), val, range);
   };
   // Tilt steering: on asks for motion access where the device needs it; refused, it stays off.
@@ -306,6 +314,8 @@ export function playerSettings(): HTMLElement {
   return h("div", { class: "settings" },
     slider("Turn speed (keys)", "yawRate"),
     slider("Mouse sensitivity", "mouseSens"),
+    slider("Camera distance", "camDist", true),
+    slider("Camera height", "camHeight", true),
     h("label", { class: "toggle", title: "Steer and throttle by tilting a phone or tablet; the angle it is held at when switched on is level" }, h("span", {}, "Tilt to steer"), tilt),
     Input.tiltAvailable() ? note : h("div", { class: "hint" }, "Tilt needs a phone or tablet."),
   );

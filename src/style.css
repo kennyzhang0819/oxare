@@ -59,6 +59,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
   color: #10233a; padding: 24px 32px; border-radius: 14px; text-align: center; box-shadow: 0 6px 24px rgba(16,35,58,0.12); }
 .card h2 { margin: 0 0 8px; font-family: var(--display); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 22px; }
 .card .row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+.card .stack { display: flex; flex-direction: column; gap: 10px; width: 200px; margin: 16px auto 0; }
 .banner:has(.pause) { background: rgba(16, 35, 58, 0.25); }
 .settings { width: 260px; text-align: left; font-size: 14px; }
 .settings label { display: grid; grid-template-columns: 1fr 3.5em; align-items: center; gap: 6px; margin: 10px 0; }

@@ -1,0 +1,28 @@
+{
+  "id": "11",
+  "name": "Magnetic",
+  "pieces": [
+    {"type": "start", "x": 0, "y": 0, "z": 0},
+    {"type": "goal", "x": 30, "y": 0, "z": 14, "r": 1},
+    {"type": "slab", "x": 30, "y": 0, "z": 14, "w": 8, "d": 8, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -4, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -36, "w": 8, "d": 8, "rot": 180, "tilt": 0, "move": {"speed": 3, "wait": 1, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -20, "wait": 1}]}},
+    {"type": "slab", "x": 6, "y": 0, "z": -26, "w": 4, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": -6, "y": 0, "z": -26, "w": 4, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "fence", "x": -5, "y": 0, "z": -26, "rot": 0, "path": [{"x": 10, "y": 0, "z": 0, "bend": 0.2}]},
+    {"type": "slab", "x": 0, "y": 0, "z": -48, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "kicker", "x": 0, "y": 0, "z": -54, "w": 2.5, "d": 3, "h": 1, "rot": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -62, "w": 8, "d": 4, "rot": 0, "tilt": 0},
+    {"type": "plank", "x": 0, "y": 0, "z": -62, "w": 4, "h": 8, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": 0, "y": 4, "z": -76, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "curve", "x": 12, "y": 4, "z": -84, "inner": 8, "outer": 16, "rot": 90},
+    {"type": "slab", "x": 20, "y": 4, "z": -96, "w": 8, "d": 16, "rot": 90, "tilt": 0},
+    {"type": "magnet", "x": 0, "y": 4, "z": -78},
+    {"type": "slab", "x": 85, "y": 4, "z": -61, "w": 8, "d": 16, "rot": 180, "tilt": 0},
+    {"type": "slab", "x": 81, "y": 7.5, "z": -49, "w": 8, "d": 16, "rot": 180, "tilt": 0, "roll": 90},
+    {"type": "slab", "x": 85, "y": 4, "z": -37, "w": 8, "d": 16, "rot": 180, "tilt": 0},
+    {"type": "slab", "x": 85, "y": 4, "z": -77, "w": 8, "d": 16, "rot": 180, "tilt": 0},
+    {"type": "kicker", "x": 81.5, "y": 4, "z": -55, "w": 1, "d": 3, "h": 1, "rot": 180, "top": 0.4, "wall": "right"},
+    {"type": "magnet", "x": 81, "y": 7.5, "z": -47, "roll": -90}
+  ]
+}

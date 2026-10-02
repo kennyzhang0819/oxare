@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, barrelProfile, bumperProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
-import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
+import { BALL_RADIUS, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { TILE, ballTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { platformMesh } from "./platform.ts";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
@@ -63,13 +63,13 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     padTop: new THREE.MeshStandardMaterial({ map: st.padTop, emissiveMap: st.padGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 }),
     padCentre: new THREE.MeshStandardMaterial({ map: st.padCentre, roughness: 0.6 }),
     padSkirt: new THREE.MeshStandardMaterial({ map: st.padSkirt, roughness: 0.7 }),
-    barrierPanel: new THREE.MeshStandardMaterial({ map: st.barrierPanel, emissiveMap: st.barrierGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
+    barrierPanel: new THREE.MeshStandardMaterial({ map: st.barrierPanel, roughness: 0.55 }),
     grille: new THREE.MeshStandardMaterial({ map: st.grille, roughness: 0.7 }),
     plank: new THREE.MeshStandardMaterial({ map: tiles, color: 0xbac3cb, roughness: 0.85 }),
     plankGlow: new THREE.MeshStandardMaterial({ color: 0x3fe87a, emissive: 0x3fe87a, emissiveIntensity: 0.8, roughness: 0.4 }),
-    stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, emissiveMap: st.stoolTopGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
-    barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, emissiveMap: st.barrelPanelGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
-    bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, emissiveMap: st.bumperTopGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
+    stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, roughness: 0.55 }),
+    barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, roughness: 0.55 }),
+    bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, roughness: 0.55 }),
     hinge: new THREE.MeshStandardMaterial({ color: 0x4a535d, roughness: 0.5, metalness: 0.3 }),
     // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
     tread: new THREE.MeshStandardMaterial({ color: 0x5f6975, roughness: 0.6, metalness: 0.15 }),
@@ -188,6 +188,34 @@ function buildBumper(g: THREE.Group) {
   const m = new THREE.Mesh(geo, [st.body, BUMPER_RUBBER, st.body, st.bumperTop]);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
+}
+
+// Magnet: the revolved profile, a material per band (see magnetProfile), the top carrying the
+// bumper's round circuit board, and the red aura lying on the surface out to its reach.
+const MAGNET_GLOW = new THREE.MeshStandardMaterial({ color: 0xff2b2b, emissive: 0xff2b2b, emissiveIntensity: 0.9, roughness: 0.4 });
+const MAGNET_LOWER = new THREE.MeshStandardMaterial({ color: 0x6e2630, roughness: 0.35, metalness: 0.4 });
+const MAGNET_GROOVE = new THREE.MeshStandardMaterial({ color: 0x22272d, roughness: 0.6 });
+const MAGNET_UPPER = new THREE.MeshStandardMaterial({ color: 0x3b434c, roughness: 0.35, metalness: 0.4 });
+let AURA_MAT: THREE.MeshBasicMaterial | null = null;
+function buildMagnet(g: THREE.Group) {
+  const st = STRUCT!, bands = magnetProfile(), dish = bands[bands.length - 1]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
+  for (const band of bands) {
+    const m = revolveMesh(band, 48), base = pos.length / 3;
+    geo.addGroup(idx.length, m.indices.length, geo.groups.length);
+    for (let i = 0; i < m.positions.length; i += 3) uv.push(0.5 + m.positions[i]! / (2 * dish), 0.5 - m.positions[i + 2]! / (2 * dish));
+    pos.push(...m.positions);
+    idx.push(...m.indices.map((k) => k + base));
+  }
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  g.add(new THREE.Mesh(geo, [MAGNET_GLOW, MAGNET_LOWER, MAGNET_GROOVE, MAGNET_UPPER, MAGNET_GLOW, st.body, st.bumperTop]));
+  AURA_MAT ??= new THREE.MeshBasicMaterial({ map: magnetAuraTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const aura = new THREE.Mesh(new THREE.PlaneGeometry(2 * MAGNET_REACH, 2 * MAGNET_REACH).rotateX(-Math.PI / 2), AURA_MAT);
+  aura.position.y = PAINT;
+  aura.raycast = () => {}; // never picked, so the floor under it stays clickable in the editor
+  g.add(aura);
 }
 
 // Hanging bridge: each plank is a tiled slat with a green light strip round its rim and a hinge
@@ -393,19 +421,25 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   const body = new THREE.Mesh(new ConvexGeometry(pts), st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
-  const tw = p.w - 0.5;
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
-  // plate in view: plate, then slats, then strips.
+  // plate in view: plate, then slats, then strips. `at(z)` is the height fraction (see kickerSpan) of
+  // the slope at tread z, so on a side kicker the tread narrows with the solid, 0.25 in from its edges.
   // `marks` keeps the low end (local +z) clear of slats for the < > chevrons.
-  const tread = (len: number, marks = false) => {
+  const tread = (len: number, at: (z: number) => number, marks = false) => {
     const t = new THREE.Group(), tl = len - 0.5, ml = marks ? Math.min(0.8, tl * 0.35) : 0, sl = tl - ml;
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.001, tl), st.tread);
+    // Margins are a standard kicker's (2.5 wide), shrunk in proportion where the solid is narrower.
+    const edge = (z: number, k: number): [number, number] => { const [a, b] = kickerSpan(p, at(z)), m = k * Math.min(1, (b - a) / KICKER_W); return [a + m, b - m]; };
+    const shape = new THREE.Shape(), [a0, b0] = edge(-tl / 2, 0.25), [a1, b1] = edge(tl / 2, 0.25);
+    shape.moveTo(a0, tl / 2); shape.lineTo(b0, tl / 2); shape.lineTo(b1, -tl / 2); shape.lineTo(a1, -tl / 2); shape.closePath();
+    const plate = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2), st.tread);
     plate.position.y = LAYER;
     t.add(plate);
     const n = Math.max(3, Math.round(sl / 0.32));
     for (let i = 0; i < n; i++) {
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(tw - 0.5, 0.001, 0.09), st.top);
-      slat.position.set(0, 2 * LAYER, -tl / 2 + ((i + 0.5) * sl) / n);
+      const z = -tl / 2 + ((i + 0.5) * sl) / n, [a, b] = edge(z, 0.5);
+      if (b - a < 0.05) continue;
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(b - a, 0.001, 0.09), st.top);
+      slat.position.set((a + b) / 2, 2 * LAYER, z);
       t.add(slat);
     }
     if (marks) {
@@ -417,28 +451,36 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
         t.add(arm);
       }
     }
-    for (const x of [tw / 2 - 0.08, -(tw / 2 - 0.08)]) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.001, tl), stripMat);
-      strip.position.set(x, 3 * LAYER, 0);
+    // A strip along each edge, slanting with a side kicker's narrowing side.
+    for (const side of [0, 1] as const) {
+      const x0 = edge(-tl / 2, 0.33)[side], x1 = edge(tl / 2, 0.33)[side], l = Math.hypot(x1 - x0, tl);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.001, l), stripMat);
+      strip.position.set((x0 + x1) / 2, 3 * LAYER, 0);
+      strip.rotation.y = Math.atan2(x1 - x0, tl);
       t.add(strip);
     }
     return t;
   };
   // The slope's tread at the slope's centre, tilted down toward local +z.
-  const slope = tread(Math.hypot(p.d, p.h), sliding);
+  const along = Math.hypot(p.d, p.h);
+  const slope = tread(along, (z) => 0.5 - z / along, sliding);
   slope.position.set(0, p.h / 2, f / 2);
   slope.rotation.x = Math.atan2(p.h, p.d);
   g.add(slope);
   paint(slope, "y");
   if (f > 0.5) {
-    const deck = tread(f);
+    const deck = tread(f, () => 1);
     deck.position.set(0, p.h, -p.d / 2);
     g.add(deck);
     paint(deck, "y");
   }
-  const back = new THREE.Mesh(new THREE.BoxGeometry(p.w - 0.4, Math.max(0.1, p.h - 0.3), 0.08), [st.top, st.top, st.top, st.top, st.barrierPanel, st.barrierPanel]);
-  back.position.set(0, p.h / 2, -(D / 2 - 0.04 + PAINT));
-  g.add(back);
+  // The back panel fits the back face where it is narrowest, under the top edge.
+  const [ba, bb] = kickerSpan(p, (p.h - 0.15) / p.h);
+  if (bb - ba > 0.6) {
+    const back = new THREE.Mesh(new THREE.BoxGeometry(bb - ba - 0.4, Math.max(0.1, p.h - 0.3), 0.08), [st.top, st.top, st.top, st.top, st.barrierPanel, st.barrierPanel]);
+    back.position.set((ba + bb) / 2, p.h / 2, -(D / 2 - 0.04 + PAINT));
+    g.add(back);
+  }
   return sliding ? g : undefined;
 }
 
@@ -1197,14 +1239,16 @@ export function buildLevel(level: Level, editor: boolean): Built {
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
     if (p.type === "slab") { g.rotation.x = (p.tilt * Math.PI) / 180; g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180; }
     if (p.type === "kicker" || p.type === "jump") g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180;
+    else if (pieceRoll(p)) g.rotation.z = (pieceRoll(p) * Math.PI) / 180;
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g);
     if (p.type === "barrier") buildBarrier(g);
     if (p.type === "pillar") buildPillar(g);
     if (p.type === "bumper") buildBumper(g);
+    if (p.type === "magnet") buildMagnet(g);
     if (p.type === "column") buildColumn(g, p.h);
-    if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += p.h / 2 + 0.02; crates.set(index, g); }
-    if (p.type === "barrel") { buildBarrel(g, p.r, p.h); g.position.y += p.h / 2 + 0.02; crates.set(index, g); }
+    if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
+    if (p.type === "barrel") { buildBarrel(g, p.r, p.h); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
     if (p.type === "bridge") bridges.set(index, buildBridge(g, p));
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));

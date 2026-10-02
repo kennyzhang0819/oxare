@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs } from "./thumbs.ts";
@@ -23,7 +23,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "bridge", "hole"]],
-  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "blockade", "barrier", "pillar", "hoop"]],
+  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -47,27 +47,28 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
-  blockade: [["rot", 15]],
-  barrier: [["rot", 15]],
-  crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15]],
-  barrel: [["r", 0.1], ["h", 0.1], ["rot", 15]],
+  blockade: [["rot", 15], ["roll", 15]],
+  barrier: [["rot", 15], ["roll", 15]],
+  crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["roll", 15]],
+  barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
   jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
-  pillar: [],
-  column: [["h", 0.5]],
-  bumper: [],
+  pillar: [["rot", 15], ["roll", 15]],
+  column: [["h", 0.5], ["rot", 15], ["roll", 15]],
+  bumper: [["rot", 15], ["roll", 15]],
+  magnet: [["rot", 15], ["roll", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
   goal: [],
   tube: [["rot", 15]],
-  hoop: [["rot", 15]],
+  hoop: [["rot", 15], ["roll", 15]],
   fence: [["rot", 15]],
 };
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
-  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius",
+  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width",
 };
 const label = (key: string) => LABELS[key] ?? key;
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
@@ -153,6 +154,8 @@ function settle(level: Level, p: Piece) {
   p.x = gridSnap(p.x); p.z = gridSnap(p.z);
   // A column keeps the y it is given: it often stands under the platform it holds up.
   if (p.type === "column") return;
+  // So does a rolled prop: one stood out of a wall is placed by hand.
+  if (pieceRoll(p) % 360 !== 0) return;
   const y = surfaceAt(level, p.x, p.z);
   if (y !== null) p.y = y;
 }
@@ -287,6 +290,8 @@ export class Editor implements Mode {
   private undoStack: string[] = [];
   // What undo took back, newest last; any new edit clears it.
   private redoStack: string[] = [];
+  // The selection the side panel was last built for (see renderPanel).
+  private panelShows = "";
   private raf = 0;
   private panel: HTMLElement;
   private body = h("div", { class: "body" });
@@ -440,6 +445,10 @@ export class Editor implements Mode {
   }
 
   private renderPanel() {
+    // Rebuilding the panel keeps it scrolled where it was while the same pieces stay selected.
+    const shows = [...this.sel].sort((x, y) => x - y).join(","), top = shows === this.panelShows ? this.body.scrollTop : 0;
+    this.panelShows = shows;
+    queueMicrotask(() => { this.body.scrollTop = top; });
     clear(this.body);
     const name = h("input", { type: "text", value: this.level.name, oninput: () => { this.level.name = name.value; } });
     const id = h("input", { type: "text", value: this.level.id, oninput: () => { this.level.id = id.value.replace(/[^a-z0-9-]/g, "-"); } });
@@ -489,6 +498,15 @@ export class Editor implements Mode {
         } });
         props.append(h("div", { class: "checks", title: "Let the ball push it left and right along an invisible track" }, h("label", {}, cb, "slides sideways")));
         if (isSliding(p)) props.append(field("track", 1), field("offset", 0.5));
+        if (p.top !== undefined) {
+          const right = p.wall !== "left";
+          props.append(field("top", 0.1), h("div", { class: "checks" }, h("label", {}, "wall side",
+            h("button", { title: "Which side stays straight against the wall; the other narrows toward the top", onclick: () => {
+              const before = JSON.stringify(this.level);
+              p.wall = right ? "left" : "right";
+              this.commit(before);
+            } }, right ? "right" : "left"))));
+        }
       }
       if (p.type === "stool") {
         const alongZ = p.slide === "z";
@@ -730,7 +748,7 @@ export class Editor implements Mode {
         const last = m.stops[m.stops.length - 1] ?? { x: 0, y: 0, z: 0, wait: m.wait };
         const prev = m.stops[m.stops.length - 2] ?? { x: 0, y: 0, z: 0 };
         const dx = last.x - prev.x, dy = last.y - prev.y, dz = last.z - prev.z, l = Math.hypot(dx, dy, dz);
-        m.stops.push(l > 1e-6 ? { x: last.x + (dx / l) * 8, y: last.y + (dy / l) * 8, z: last.z + (dz / l) * 8, wait: 1 } : { x: 0, y: 0, z: -8, wait: 1 });
+        m.stops.push(l > 1e-6 ? { x: last.x + (dx / l) * 8, y: last.y + (dy / l) * 8, z: last.z + (dz / l) * 8, wait: 0 } : { x: 0, y: 0, z: -8, wait: 0 });
       }) }, "Add stop"),
     ), h("div", { class: "hint" }, "Stops are offsets from the platform's start (before rotate). It eases in and out of every stop at up to its speed; the start offset starts it that many seconds into its schedule. Everything standing on it where the level places it rides with it."));
     return wrap;
@@ -996,9 +1014,9 @@ export class Editor implements Mode {
       case "ArrowDown": nudge(0, 1); break;
       case "PageUp": case "KeyE": for (const p of pieces) p.y += rise; break;
       case "PageDown": case "KeyQ": for (const p of pieces) p.y -= rise; break;
-      case "KeyR": for (const p of pieces) if ("rot" in p) p.rot = (p.rot + (e.shiftKey ? -90 : 90) + 360) % 360; break;
+      case "KeyR": for (const p of pieces) if ("rot" in p || ROLLED_PROPS.includes(p.type)) { const q = p as { rot?: number }; q.rot = ((q.rot ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; } break;
       case "KeyT": for (const p of pieces) if (p.type === "slab") p.tilt = (p.tilt + (e.shiftKey ? -90 : 90) + 360) % 360; break;
-      case "KeyY": for (const p of pieces) if (p.type === "slab") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; break;
+      case "KeyY": for (const p of pieces) if (p.type === "slab") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; else if (ROLLED_PROPS.includes(p.type)) { const q = p as { roll?: number }; q.roll = ((q.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
       default: return;
     }
     e.preventDefault();
@@ -1140,7 +1158,7 @@ export class Editor implements Mode {
       q.x = snapFor(q)(s0.x + dx); q.z = snapFor(q)(s0.z + dz);
       settle(this.level, q);
       const g = this.built.pieceGroups[k];
-      if (g) { g.position.set(q.x, (q.type === "crate" || q.type === "barrel") ? q.y + q.h / 2 + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
+      if (g) { g.position.set(q.x, (q.type === "crate" || q.type === "barrel") ? q.y + propLift(q) + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
     }
     for (const hl of this.helpers) hl.update();
     d.moved = true;

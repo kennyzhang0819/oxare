@@ -14,12 +14,17 @@ export const TUNING = {
   camDist: 4,
   camHeight: 2,
   camBallGap: 0.9,
-  respawnY: -12,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
   propGravity: 0.5,
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
   bumperBounce: 0.8,
   bumperKick: 5,
+  // Kicker: speed added along the way a kicker throws the ball as it goes over the top edge.
+  kickerBoost: 1.5,
+  // Magnet: its pull, fading to nothing at its reach (compare throttleForce), but never more than
+  // magnetHold of throttleForce, so full throttle away always escapes.
+  magnetForce: 21,
+  magnetHold: 0.8,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -36,16 +41,20 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   tiltPitchRange: [5, 45, 1],
   mouseSens: [0.0005, 0.01, 0.0005],
   yawEase: [0, 0.5, 0.01],
-  camDist: [3, 16, 0.5],
-  camHeight: [1, 12, 0.25],
+  camDist: [3, 7, 0.25],
+  camHeight: [1, 4, 0.25],
   camBallGap: [0, 3, 0.1],
-  respawnY: [-40, -2, 1],
   propGravity: [0.1, 2, 0.05],
   bumperBounce: [0, 2, 0.05],
   bumperKick: [0, 15, 0.5],
+  kickerBoost: [0, 10, 0.25],
+  magnetForce: [0, 30, 0.5],
+  magnetHold: [0, 0.9, 0.05],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };
+// The player's own settings (Options and the pause menu), kept out of the tune panel and its Reset.
+export const PLAYER_KEYS: TuningKey[] = ["yawRate", "mouseSens", "camDist", "camHeight"];
 const KEY = "balling.tuning";
 
 export function loadTuning(): void {
@@ -54,7 +63,9 @@ export function loadTuning(): void {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Tuning>;
     for (const k of Object.keys(TUNING) as TuningKey[]) {
       const v = saved[k];
-      if (typeof v === "number" && Number.isFinite(v)) TUNING[k] = v;
+      if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const [lo, hi] = TUNING_RANGES[k];
+      TUNING[k] = PLAYER_KEYS.includes(k) ? Math.max(lo, Math.min(hi, v)) : v;
     }
   } catch { /* ignore */ }
 }
@@ -68,6 +79,6 @@ export function saveTuning(): void {
 }
 
 export function resetTuning(): void {
-  Object.assign(TUNING, DEFAULT_TUNING);
+  for (const k of Object.keys(TUNING) as TuningKey[]) if (!PLAYER_KEYS.includes(k)) TUNING[k] = DEFAULT_TUNING[k];
   saveTuning();
 }
