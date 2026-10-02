@@ -33,7 +33,6 @@ export class Game implements Mode {
   private prevPos = new THREE.Vector3();
   private prevRot = new THREE.Quaternion();
   private shown = new THREE.Vector3();
-  private anchor = new THREE.Vector3(); // eased ball position the camera orbits
   private yaw = 0;
   private yawVel = 0;
   private acc = 0;
@@ -163,7 +162,7 @@ export class Game implements Mode {
         if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r * 0.7 + BALL_RADIUS && p.y > gp.y - BALL_RADIUS && p.y < gp.y + GOAL_BEAM_H) this.finish();
       }
     }
-    this.updateCamera(dt);
+    this.updateCamera();
     // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
     // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
     if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
@@ -180,7 +179,6 @@ export class Game implements Mode {
 
   private snapCamera() {
     const p = this.shown.set(this.prevPos.x, this.prevPos.y, this.prevPos.z);
-    this.anchor.copy(p);
     this.camera.position.set(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
     this.aim(p);
   }
@@ -195,11 +193,10 @@ export class Game implements Mode {
     this.camera.lookAt(c.x + (hx / d) * Math.cos(pitch), c.y + Math.sin(pitch), c.z + (hz / d) * Math.cos(pitch));
   }
 
-  private updateCamera(dt: number) {
+  private updateCamera() {
     const p = this.shown;
-    // Only the follow eases; the orbit angle is applied rigidly so the view stops the instant steering does.
-    const o = this.anchor.lerp(p, 1 - Math.exp(-10 * dt));
-    this.camera.position.set(o.x + Math.sin(this.yaw) * TUNING.camDist, o.y + TUNING.camHeight, o.z + Math.cos(this.yaw) * TUNING.camDist);
+    // Locked to the ball, no easing: the ball holds one spot in the frame however it moves.
+    this.camera.position.set(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
     this.aim(p);
     // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
     const sc = this.sun.shadow.camera;

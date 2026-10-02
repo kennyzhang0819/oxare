@@ -150,31 +150,36 @@ Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_
   else console.log(`ok curve-straight: both ends run ${S} straight before the arc`);
 }
 // A stool slides along its track when pushed that way and stops at the track's end; pushed from
-// the side it does not move at all and stops the ball like a wall.
-for (const [name, rot, from, dir, expect] of [
-  ["along", 0, [-6, -6], [1, 0], { x: 3, z: -6, slid: true }],
-  ["across", 0, [0, -2], [0, -1], { x: 0, z: -6, slid: false }],
-  ["rotated", 90, [0, -2], [0, -1], { x: 0, z: -9, slid: true }],
+// the side it does not move at all and stops the ball like a wall. `slide` "z" turns the track to
+// run front and back, across the block's depth.
+for (const [name, rot, slide, from, dir, expect] of [
+  ["along", 0, "x", [-6, -6], [1, 0], { x: 3, z: -6, slid: true }],
+  ["across", 0, "x", [0, -2], [0, -1], { x: 0, z: -6, slid: false }],
+  ["rotated", 90, "x", [0, -2], [0, -1], { x: 0, z: -9, slid: true }],
+  ["front-back", 0, "z", [0, -2], [0, -1], { x: 0, z: -9.5, slid: true }],
+  ["front-back-across", 0, "z", [-6, -6], [1, 0], { x: 0, z: -6, slid: false }],
 ] as const) {
   const level = testLevel({ id: `stool-${name}`, name, pieces: [
     { type: "start", x: -6, y: 0, z: -14 },
     { type: "slab", x: 0, y: 0, z: -8, w: 16, d: 16, rot: 0, fences: {} },
-    { type: "stool", x: 0, y: 0, z: -6, w: 2, h: 1.2, d: 1, rot, track: 8, offset: 0 },
+    { type: "stool", x: 0, y: 0, z: -6, w: 2, h: 1.2, d: 1, rot, track: 8, offset: 0, ...(slide === "z" ? { slide } : {}) },
     { type: "goal", x: 6, y: 0, z: -14, r: 1 },
   ] });
   const sim = await createSim(level, { x: from[0], y: 0, z: from[1] });
   const stool = sim.planks[0]!.body, y0 = stool.translation().y;
+  // The world axis the track runs along; any motion off it is drift.
+  const trackZ = (rot === 90) !== (slide === "z");
   let ball = sim.ball.translation(), drift = 0;
   for (let i = 0; i < 120 * 4; i++) {
     sim.step(1, dir[0], dir[1]);
     ball = sim.ball.translation();
     const t = stool.translation(), q = stool.rotation();
-    drift = Math.max(drift, Math.abs(t.y - y0), name === "across" ? Math.abs(t.z + 6) + Math.abs(t.x) : rot ? Math.abs(t.x) : Math.abs(t.z + 6), Math.hypot(q.x, q.z));
+    drift = Math.max(drift, Math.abs(t.y - y0), !expect.slid ? Math.abs(t.z + 6) + Math.abs(t.x) : trackZ ? Math.abs(t.x) : Math.abs(t.z + 6), Math.hypot(q.x, q.z));
   }
   const t = stool.translation();
   sim.free();
   const atEnd = Math.abs(t.x - expect.x) < 0.05 && Math.abs(t.z - expect.z) < 0.05;
-  const blocked = name !== "across" || ball.z > -6 + 0.5 + BALL_RADIUS - 0.1;
+  const blocked = expect.slid || (dir[0] ? ball.x < -1 - BALL_RADIUS + 0.1 : ball.z > -6 + 0.5 + BALL_RADIUS - 0.1);
   if (!atEnd || drift > 0.01 || !blocked) { failed = true; console.error(`FAIL stool-${name}: stool at x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)}, ball z ${ball.z.toFixed(2)}`); }
   else console.log(`ok stool-${name}: ${expect.slid ? "slid to the track end" : "held still and stopped the ball"} (x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)})`);
 }
@@ -658,13 +663,19 @@ for (const side of [false, true]) {
   else console.log(`ok support: pillar stops the ball at x ${maxX.toFixed(2)}`);
 }
 // A kicker is rolled straight over at any speed: the ball rides up, leaves the high edge and
-// lands beyond it on the platform.
-for (const cap of [2.5, 6.5]) {
+// lands beyond it on the platform. The long kicker (a 6 long deck past a 1.5 high slope) is ridden
+// up, along its deck and off its end the same way.
+for (const [cap, kicker] of [
+  [2.5, { type: "kicker", x: 0, y: 0, z: -9, w: 3, d: 4, h: 0.7, rot: 0 }],
+  [6.5, { type: "kicker", x: 0, y: 0, z: -9, w: 3, d: 4, h: 0.7, rot: 0 }],
+  [2.5, { type: "kicker", x: 0, y: 0, z: -10, w: 2.5, d: 3, h: 1.5, flat: 6, rot: 0 }],
+  [6.5, { type: "kicker", x: 0, y: 0, z: -10, w: 2.5, d: 3, h: 1.5, flat: 6, rot: 0 }],
+] as const) {
   TUNING.maxSpeed = cap;
   const level = testLevel({ id: "kicker", name: "kicker", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -12, w: 10, d: 30, rot: 0, fences: {} },
-    { type: "kicker", x: 0, y: 0, z: -9, w: 3, d: 4, h: 0.7, rot: 0 },
+    kicker,
     { type: "goal", x: 0, y: 0, z: -24, r: 2 },
   ] });
   const sim = await createSim(level);
@@ -674,8 +685,9 @@ for (const cap of [2.5, 6.5]) {
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
   p = sim.ball.translation();
   sim.free();
-  if (p.z > -16 || Math.abs(p.y - BALL_RADIUS) > 0.1 || maxY < 0.7 + BALL_RADIUS - 0.1) { failed = true; console.error(`FAIL kicker at ${cap}: ball ended z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak y ${maxY.toFixed(2)}`); }
-  else console.log(`ok kicker at ${cap} m/s: rolled over (peak y ${maxY.toFixed(2)}) and landed at z ${p.z.toFixed(2)}`);
+  const name = "flat" in kicker ? "long kicker" : "kicker";
+  if (p.z > -16 || Math.abs(p.y - BALL_RADIUS) > 0.1 || maxY < kicker.h + BALL_RADIUS - 0.1) { failed = true; console.error(`FAIL ${name} at ${cap}: ball ended z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, peak y ${maxY.toFixed(2)}`); }
+  else console.log(`ok ${name} at ${cap} m/s: rolled over (peak y ${maxY.toFixed(2)}) and landed at z ${p.z.toFixed(2)}`);
 }
 TUNING.maxSpeed = DEFAULT_TUNING.maxSpeed;
 // A seesaw starts at its set angle, near end down; the ball rolls up it, tips it past level so

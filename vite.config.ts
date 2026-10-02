@@ -1,8 +1,9 @@
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 // Dev-only: the editor's Save button POSTs a level here and it replaces src/levels/<id>.json;
-// the admin panel's Delete POSTs {id} to /__level/delete, which removes that file.
+// the admin panel's Delete POSTs {id} to /__level/delete, which removes that file; GET
+// /__level/all returns every level as it is on disk right now, in file order.
 function levelSaver(): Plugin {
   return {
     name: "level-saver",
@@ -27,6 +28,12 @@ function levelSaver(): Plugin {
             res.end(String(err instanceof Error ? err.message : err));
           }
         });
+      });
+      server.middlewares.use("/__level/all", (_req, res) => {
+        const files = readdirSync("src/levels").filter((f) => f.endsWith(".json")).sort();
+        res.setHeader("content-type", "application/json");
+        res.setHeader("cache-control", "no-store");
+        res.end(`[${files.map((f) => readFileSync(`src/levels/${f}`, "utf8")).join(",")}]`);
       });
       server.middlewares.use("/__level/delete", (req, res) => {
         if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }

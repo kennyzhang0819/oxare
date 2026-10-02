@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { cloneLevel, type Level } from "./level.ts";
 import { LEVELS } from "./levels/index.ts";
-import { DRAFT_KEY, blankLevel, loadDraft } from "./editor.ts";
+import { blankLevel } from "./editor.ts";
 import { loadProgress, playerSettings } from "./game.ts";
 import { createScene, type SceneEnv } from "./scene.ts";
 import { levelThumb } from "./thumbs.ts";
@@ -11,7 +11,7 @@ import type { Ctx, Mode } from "./main.ts";
 
 // `admin` swaps the player's level list for the admin panel (levels, editors); Ctrl+Shift+S
 // flips between them. It only hides the tools, it is not access control.
-export interface MenuOpts { admin: boolean; onPlay(index: number): void; onPlayLevel(level: Level): void; onEdit(level: Level): void; onChanged(): void; onToggleAdmin(): void }
+export interface MenuOpts { admin: boolean; onPlay(index: number): void; onEdit(level: Level): void; onChanged(): void; onToggleAdmin(): void }
 
 export class Menu implements Mode {
   private ctx: Ctx;
@@ -72,9 +72,6 @@ export class Menu implements Mode {
       home();
       return;
     }
-    // The editor's working copy gets its own card while it differs from every saved level.
-    const draft = loadDraft();
-    const unsaved = draft && !LEVELS.some((l) => JSON.stringify(l) === JSON.stringify(draft)) ? draft : null;
     const card = (level: Level, label: string, sub: string, play: () => void, remove: () => void) => h("div", { class: "level-card" },
       h("button", { class: "thumb", title: "Play", onclick: play }, h("img", { src: levelThumb(ctx.renderer, level), alt: "" })),
       h("span", { class: "name" }, label),
@@ -98,16 +95,10 @@ export class Menu implements Mode {
         alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
-    const discardDraft = () => {
-      if (!confirm("Discard the unsaved editor draft?")) return;
-      try { localStorage.removeItem(DRAFT_KEY); } catch { /* nothing kept */ }
-      opts.onChanged();
-    };
     ctx.overlay.append(
       h("div", { class: "menu" },
         h("div", { class: "level-grid" },
           ...LEVELS.map((l, i) => card(l, `${i + 1}. ${l.name}`, `${l.id}.json`, () => opts.onPlay(i), () => void deleteLevel(l))),
-          unsaved ? card(unsaved, unsaved.name, `draft · ${unsaved.id}`, () => opts.onPlayLevel(cloneLevel(unsaved)), discardDraft) : null,
           h("button", { class: "level-card plus", title: "New level", onclick: () => opts.onEdit(blankLevel()) },
             h("span", { class: "plus-mark" }, "+"),
             h("span", { class: "name" }, "New level"),

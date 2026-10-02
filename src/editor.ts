@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs } from "./thumbs.ts";
@@ -8,12 +8,8 @@ import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 import type { PlayFrom } from "./game.ts";
 
-export const DRAFT_KEY = "balling.draft";
 const HITBOX_KEY = "balling.hitboxes";
 const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.8, depthTest: false });
-export function loadDraft(): Level | null {
-  try { const s = localStorage.getItem(DRAFT_KEY); return s ? validateLevel(JSON.parse(s)) : null; } catch { return null; }
-}
 
 export function blankLevel(): Level {
   const open = { n: false, e: false, s: false, w: false };
@@ -35,7 +31,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
-  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15]],
+  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["rot", 15]],
   barrier: [["rot", 15]],
@@ -309,7 +305,10 @@ export class Editor implements Mode {
         this.hitboxBtn = h("button", { class: "ghost", title: "Show every collider exactly as the physics has it (H)", onclick: () => this.toggleHitboxes() }, "Hitboxes") as HTMLButtonElement,
       ),
       h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle(), this.gridLevel()),
-      h("div", { class: "bar add" }, ...PIECE_TYPES.filter((t) => t !== "spinner").map((t) => h("button", { class: "pick", title: t, onclick: () => this.add(t) }, h("img", { src: thumbs.get(t), alt: t })))),
+      h("div", { class: "bar add" }, ...PIECE_TYPES.filter((t) => t !== "spinner").flatMap((t) => [
+        { name: t as string, make: (x: number, y: number, z: number) => newPiece(t, x, y, z) },
+        ...PIECE_VARIANTS.filter((v) => v.base === t),
+      ]).map((e) => h("button", { class: "pick", title: e.name, onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: e.name })))),
       this.problems,
       this.notice,
       this.body,
@@ -379,7 +378,6 @@ export class Editor implements Mode {
   }
 
   private refresh() {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(this.level));
     this.scene.remove(this.built.group);
     this.built = buildLevel(this.level, true);
     markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
@@ -409,8 +407,8 @@ export class Editor implements Mode {
 
   private renderPanel() {
     clear(this.body);
-    const name = h("input", { type: "text", value: this.level.name, oninput: () => { this.level.name = name.value; localStorage.setItem(DRAFT_KEY, JSON.stringify(this.level)); } });
-    const id = h("input", { type: "text", value: this.level.id, oninput: () => { this.level.id = id.value.replace(/[^a-z0-9-]/g, "-"); localStorage.setItem(DRAFT_KEY, JSON.stringify(this.level)); } });
+    const name = h("input", { type: "text", value: this.level.name, oninput: () => { this.level.name = name.value; } });
+    const id = h("input", { type: "text", value: this.level.id, oninput: () => { this.level.id = id.value.replace(/[^a-z0-9-]/g, "-"); } });
     this.body.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id)));
     if (this.sel.size > 1) {
       this.body.append(
@@ -448,6 +446,16 @@ export class Editor implements Mode {
           this.commit(before);
         } });
         props.append(h("div", { class: "checks", title: "Hang it on the side wall of the nearest platform edge, so it falls out across the gap" }, h("label", {}, cb, "side")));
+      }
+      if (p.type === "stool") {
+        const alongZ = p.slide === "z";
+        props.append(h("div", { class: "checks" }, h("label", {}, "slides",
+          h("button", { title: "Switch between sliding left and right (its width) and front and back (its depth)", onclick: () => {
+            const before = JSON.stringify(this.level);
+            if (alongZ) delete p.slide; else p.slide = "z";
+            p.track = Math.max(p.track, alongZ ? p.w : p.d);
+            this.commit(before);
+          } }, alongZ ? "front ↕ back" : "left ↔ right"))));
       }
       if (p.type === "plank" || p.type === "seesaw") {
         const cb = h("input", { type: "checkbox", checked: !!p.freeze, onchange: () => {
@@ -834,12 +842,12 @@ export class Editor implements Mode {
     this.refresh();
   }
 
-  private add(type: PieceType) {
+  private add(make: (x: number, y: number, z: number) => Piece) {
     const before = JSON.stringify(this.level);
     const t = this.controls.target;
     const sel = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
     const base = sel ?? { x: snap(t.x), y: gridY, z: snap(t.z) };
-    const piece = newPiece(type, base.x + (sel ? 2 : 0), base.y, base.z);
+    const piece = make(base.x + (sel ? 2 : 0), base.y, base.z);
     this.placeFree(piece);
     settle(this.level, piece);
     this.level.pieces.push(piece);
@@ -1192,7 +1200,7 @@ export class Editor implements Mode {
   // Writes src/levels/<id>.json through the dev server, replacing that level outright.
   private async save() {
     // Level files are only written by `npm run dev`; a deployed build never sends a save.
-    if (!import.meta.env.DEV) { this.flash("Saving levels only works in local dev (npm run dev). Your draft is kept in this browser.", true); return; }
+    if (!import.meta.env.DEV) { this.flash("Saving levels only works in local dev (npm run dev). Nothing is kept until it is saved.", true); return; }
     const probs = levelProblems(this.level);
     if (probs.length) { alert(`Fix these before saving:\n${probs.join("\n")}`); return; }
     if (!this.level.id) { alert("Give the level an id first."); return; }

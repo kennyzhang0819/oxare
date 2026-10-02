@@ -1,13 +1,13 @@
 import * as THREE from "three";
-import { PIECE_TYPES, newPiece, type Level, type PieceType } from "./level.ts";
+import { PIECE_TYPES, PIECE_VARIANTS, newPiece, type Level, type Piece, type PieceType } from "./level.ts";
 import { SUN_OFFSET, buildLevel } from "./scene.ts";
 
 const W = 112, H = 84;
-let cache: Map<PieceType, string> | null = null;
+let cache: Map<string, string> | null = null;
 
-// One picture per piece type for the editor's add buttons, rendered once from the real
-// piece builders so the buttons always show what the piece currently looks like.
-export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<PieceType, string> {
+// One picture per piece type and variant (by name) for the editor's add buttons, rendered once
+// from the real piece builders so the buttons always show what the piece currently looks like.
+export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> {
   if (cache) return cache;
   cache = new Map();
   const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, colorSpace: THREE.SRGBColorSpace });
@@ -25,8 +25,9 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<PieceType, strin
   const img = ctx.createImageData(W, H);
   const prevTarget = renderer.getRenderTarget();
 
-  for (const type of PIECE_TYPES) {
-    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [newPiece(type, 0, 0, 0)] }, true);
+  const entries: [string, Piece][] = [...PIECE_TYPES.map((t): [string, Piece] => [t, newPiece(t, 0, 0, 0)]), ...PIECE_VARIANTS.map((v): [string, Piece] => [v.name, v.make(0, 0, 0)])];
+  for (const [type, piece] of entries) {
+    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, true);
     scene.add(built.group);
     const box = new THREE.Box3().setFromObject(built.group);
     if (type === "goal") box.max.y = Math.min(box.max.y, 2.5); // frame the disc, not the whole beam
@@ -49,7 +50,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<PieceType, strin
 }
 
 const LW = 360, LH = 225;
-const FEATURED: PieceType[] = ["tube", "rails", "mover", "seesaw", "bridge", "ramp", "plank", "kicker", "spinner", "crate", "curve", "goal"];
+const FEATURED: PieceType[] = ["tube", "rails", "mover", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
 const levelCache = new Map<string, string>();
 
 // Menu card picture: a close shot of the level's most telling piece, first match in FEATURED.

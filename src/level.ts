@@ -22,7 +22,7 @@ export const BARRIER_W = 3, BARRIER_H = 1.4, BARRIER_D = 0.5;
 export const BARRIER_LEG = 0.16, BARRIER_R = 0.2, BARRIER_LEG_R = 0.12, BARRIER_LEG_X = BARRIER_W / 2 - 0.85;
 // Corner rounding of a block and a blockade, drawn and solid alike.
 export const BLOCK_R = 0.3, BLOCKADE_R = 0.18;
-export const CRATE_S = 1.2;
+export const CRATE_W = 2, CRATE_H = 1.2, CRATE_D = 1.5;
 // Corner rounding of a crate or stool of the given size, drawn and solid alike.
 export const propRound = (w: number, h: number, d: number): number => Math.min(0.08, w / 2, h / 2, d / 2) * 0.99;
 // The spinner's fixed hub, the goal's disc and the glow ring round it, and the bridge's hinge
@@ -171,13 +171,31 @@ export const seesawTilt = (p: Piece & { type: "seesaw" }): number => Math.max(-s
 // just outside that edge on local +z, from the lower platform's side wall up to the upper one's
 // underside.
 // Kicker: a small solid wedge sitting on a platform, rising `h` toward local -z over its depth
-// `d`. The default 1 over 3 is an 18 degree slope.
+// `d`. The default 1 over 3 is an 18 degree slope. `flat` adds a level deck that long past the
+// high edge, at the top's height; the piece is centred on slope and deck together.
 export const KICKER_W = 2.5, KICKER_D = 3, KICKER_H = 1;
-// A kicker's six corners in local space: the low front edge at local +z on the surface, the
-// high back edge `h` up at local -z.
-export function kickerCorners(p: Piece & { type: "kicker" }): [number, number, number][] {
-  const x = p.w / 2, z = p.d / 2;
-  return [[-x, 0, z], [x, 0, z], [x, 0, -z], [-x, 0, -z], [x, p.h, -z], [-x, p.h, -z]];
+// A kicker's solid, drawn and in the physics alike: its corners pulled in by `r` and rounded back
+// out by `r`, so the edges are rounded like a stool's and the outside is the full shape. Seen
+// from the side it is the polygon low front edge (local +z, on the surface), slope top, back top,
+// back bottom; every edge line moves in by `r` and the new corners are where they meet.
+export function kickerHull(p: Piece & { type: "kicker" }): { corners: [number, number, number][]; r: number } {
+  const r = propRound(p.w, p.h, p.d), f = p.flat ?? 0, front = (p.d + f) / 2, back = -front;
+  const prof: [number, number][] = f > 0 ? [[front, 0], [front - p.d, p.h], [back, p.h], [back, 0]] : [[front, 0], [back, p.h], [back, 0]];
+  let area = 0;
+  prof.forEach(([z, y], i) => { const [z2, y2] = prof[(i + 1) % prof.length]!; area += z * y2 - z2 * y; });
+  // Each edge as a point moved inward by r and its direction.
+  const lines = prof.map(([z, y], i) => {
+    const [z2, y2] = prof[(i + 1) % prof.length]!, l = Math.hypot(z2 - z, y2 - y), dz = (z2 - z) / l, dy = (y2 - y) / l;
+    const nz = area > 0 ? -dy : dy, ny = area > 0 ? dz : -dz;
+    return { z: z + nz * r, y: y + ny * r, dz, dy };
+  });
+  const inner = lines.map((b, i) => {
+    const a = lines[(i + prof.length - 1) % prof.length]!, den = a.dz * b.dy - a.dy * b.dz;
+    const t = ((b.z - a.z) * b.dy - (b.y - a.y) * b.dz) / den;
+    return [a.z + a.dz * t, a.y + a.dy * t] as [number, number];
+  });
+  const x = p.w / 2 - r;
+  return { corners: inner.flatMap(([z, y]): [number, number, number][] => [[-x, y, z], [x, y, z]]), r };
 }
 export const SUPPORT_W = 0.8, SUPPORT_D = 0.7, SUPPORT_RISE = 4;
 // Each pillar stands SUPPORT_GAP off the lower platform's side wall; its foot bends inward on
@@ -440,13 +458,13 @@ export type Piece =
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean })
   | (At & { type: "seesaw"; w: number; d: number; rot: number; tilt: number; freeze?: boolean })
   | (At & { type: "support"; w: number; h: number; rot: number })
-  | (At & { type: "kicker"; w: number; d: number; h: number; rot: number })
+  | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number })
   | (At & { type: "block"; w: number; h: number; d: number; rot: number })
   | (At & { type: "blockade"; rot: number })
   | (At & { type: "pillar" })
   | (At & { type: "barrier"; rot: number })
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number })
-  | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number })
+  | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number; slide?: "z" })
   | (At & { type: "jump"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
@@ -456,6 +474,10 @@ export type Piece =
 
 export type PieceType = Piece["type"];
 export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "mover", "bridge", "rails", "plank", "seesaw", "support", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "crate", "stool", "block", "spinner", "tube", "goal", "start"];
+// Extra add buttons in the editor: a named preset of an existing type, listed after that type.
+export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
+  { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
+];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
   p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "stool" || p.type === "kicker" || p.type === "jump";
@@ -681,10 +703,12 @@ export function pieceBoxes(p: Piece): Box[] {
   return [];
 }
 
-// How far a stool's centre can slide each way from its track's centre along local x, and where
+// The local axis a stool slides along: x (left and right) unless `slide` is "z" (front and back).
+export const stoolAxis = (p: Piece & { type: "stool" }): "x" | "z" => (p.slide === "z" ? "z" : "x");
+// How far a stool's centre can slide each way from its track's centre along its axis, and where
 // it starts.
 export function stoolSlide(p: Piece & { type: "stool" }): { lo: number; hi: number; at: number } {
-  const half = Math.max(0, (p.track - p.w) / 2);
+  const half = Math.max(0, (p.track - (stoolAxis(p) === "z" ? p.d : p.w)) / 2);
   return { lo: -half, hi: half, at: Math.max(-half, Math.min(half, p.offset)) };
 }
 
@@ -855,7 +879,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "blockade": return { type, x, y, z, rot: 0 };
     case "pillar": return { type, x, y, z };
     case "barrier": return { type, x, y, z, rot: 0 };
-    case "crate": return { type, x, y, z, w: CRATE_S, h: CRATE_S, d: CRATE_S, rot: 0 };
+    case "crate": return { type, x, y, z, w: CRATE_W, h: CRATE_H, d: CRATE_D, rot: 0 };
     case "jump": return { type, x, y, z, w: JUMP_W, d: JUMP_D, rot: 0, rise: JUMP_RISE };
     case "stool": return { type, x, y, z, w: STOOL_W, h: STOOL_H, d: STOOL_D, rot: 0, track: STOOL_TRACK, offset: 0 };
     case "spinner": return { type, x, y, z, length: 8, speed: 1.2 };
@@ -991,7 +1015,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
     if (p.type === "jump" && Math.min(p.w, p.d) < 2 * JUMP_RUN + 1) out.push(`piece ${i}: jump pad w and d must be at least ${2 * JUMP_RUN + 1}`);
     if (p.type === "jump" && p.rise <= 0) out.push(`piece ${i}: jump pad rise must be positive`);
-    if (p.type === "stool" && p.track < p.w) out.push(`piece ${i}: stool track must be at least its width`);
+    if (p.type === "stool" && p.track < (stoolAxis(p) === "z" ? p.d : p.w)) out.push(`piece ${i}: stool track must be at least its ${stoolAxis(p) === "z" ? "depth" : "width"}`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
   });
   for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
@@ -1066,7 +1090,8 @@ export function validateLevel(raw: unknown): Level {
         return { type: "mover", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), speed: num(p.speed ?? MOVER_SPEED, "speed"),
           wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", stops };
       }
-      case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot") };
+      case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot"),
+        ...(p.flat !== undefined && num(p.flat, "flat") > 0 ? { flat: num(p.flat, "flat") } : {}) };
       case "support": return { type: "support", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot") };
       case "block": return { type: "block", ...at, w: num(p.w, "w"), h: num(p.h, "h"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "blockade": return { type: "blockade", ...at, rot: num(p.rot ?? 0, "rot") };
@@ -1074,12 +1099,12 @@ export function validateLevel(raw: unknown): Level {
       case "barrier": return { type: "barrier", ...at, rot: num(p.rot ?? 0, "rot") };
       case "crate": {
         // Older levels give a cube's side as `s`.
-        const s = num(p.s ?? CRATE_S, "s");
-        return { type: "crate", ...at, w: num(p.w ?? s, "w"), h: num(p.h ?? s, "h"), d: num(p.d ?? s, "d"), rot: num(p.rot ?? 0, "rot") };
+        const s = p.s === undefined ? undefined : num(p.s, "s");
+        return { type: "crate", ...at, w: num(p.w ?? s ?? CRATE_W, "w"), h: num(p.h ?? s ?? CRATE_H, "h"), d: num(p.d ?? s ?? CRATE_D, "d"), rot: num(p.rot ?? 0, "rot") };
       }
       case "jump": return { type: "jump", ...at, w: num(p.w ?? JUMP_W, "w"), d: num(p.d ?? JUMP_D, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise ?? JUMP_RISE, "rise") };
       case "stool": return { type: "stool", ...at, w: num(p.w ?? STOOL_W, "w"), h: num(p.h ?? STOOL_H, "h"), d: num(p.d ?? STOOL_D, "d"), rot: num(p.rot ?? 0, "rot"),
-        track: num(p.track ?? STOOL_TRACK, "track"), offset: num(p.offset ?? 0, "offset") };
+        track: num(p.track ?? STOOL_TRACK, "track"), offset: num(p.offset ?? 0, "offset"), ...(p.slide === "z" ? { slide: "z" as const } : {}) };
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: num(p.r, "r") };

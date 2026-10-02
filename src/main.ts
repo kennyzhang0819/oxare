@@ -8,7 +8,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import "./style.css";
 import { Editor } from "./editor.ts";
 import { Game } from "./game.ts";
-import { LEVELS } from "./levels/index.ts";
+import { LEVELS, refreshLevels } from "./levels/index.ts";
 import { Loading } from "./loading.ts";
 import { Menu } from "./menu.ts";
 import { loadTuning } from "./tuning.ts";
@@ -33,9 +33,13 @@ function show(next: () => Mode) {
   mode = next();
 }
 
+// Levels have no drafts: only what Save wrote to disk exists. Clears what older builds kept.
+try { localStorage.removeItem("balling.draft"); } catch { /* nothing kept */ }
+
 let admin = false;
+// The menu always reads the level files fresh first.
 function menu() {
-  show(() => new Menu(ctx, { admin, onPlay: playLevel, onPlayLevel: playDraft, onEdit: edit, onChanged: menu, onToggleAdmin: () => { admin = !admin; menu(); } }));
+  void refreshLevels().then(() => show(() => new Menu(ctx, { admin, onPlay: playLevel, onEdit: edit, onChanged: menu, onToggleAdmin: () => { admin = !admin; menu(); } })));
 }
 
 function playLevel(i: number) {
@@ -47,10 +51,6 @@ function playLevel(i: number) {
     onRetry: () => playLevel(i),
     onNext: LEVELS[i + 1] ? () => playLevel(i + 1) : undefined,
   }));
-}
-
-function playDraft(level: Level) {
-  show(() => new Game(ctx, level, { admin: true, onExit: menu, onRetry: () => playDraft(level) }));
 }
 
 function edit(level: Level) {

@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolvePoints, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfiles, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerCorners, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfiles, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_H, START_PAD_R, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, type Mover, tubeRingsWorld, bridgeChain, fenceRailPath, fenceRuns, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, pieceBoxes, pieceCylinders, pieceRot, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -19,7 +19,7 @@ const KNOCK_PLANK_MASS = 0.1;
 const SEESAW_MASS = 0.5;
 // Stool: as heavy as the ball, so it gives way to a roll but not to a tap, and damped so it stops
 // soon after the ball stops pushing.
-const STOOL_MASS = 1, STOOL_DAMPING = 2, STOOL_LIFT = 0.02;
+const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
 // Facets round a rail in the physics; a flat one faces the ball (see railSweep).
 const RAILS_SIDES = 24;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
@@ -325,14 +325,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // ends. It floats a hair above the surface so only its damping, not floor friction, slows it.
   level.pieces.forEach((p, index) => {
     if (p.type !== "stool") return;
-    const yaw = yQuat(p.rot), slide = stoolSlide(p), y = p.y + p.h / 2 + STOOL_LIFT, c = rotXZ(slide.at, 0, p.rot);
+    const yaw = yQuat(p.rot), slide = stoolSlide(p), y = p.y + p.h / 2 + STOOL_LIFT, alongZ = stoolAxis(p) === "z";
+    const c = rotXZ(alongZ ? 0 : slide.at, alongZ ? slide.at : 0, p.rot);
     const anchor = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x + c.x, y, p.z + c.z).setRotation(yaw));
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x + c.x, y, p.z + c.z).setRotation(yaw).setLinearDamping(STOOL_DAMPING).setCcdEnabled(true).setCanSleep(false),
     );
     const r = propRound(p.w, p.h, p.d);
     world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, p.d / 2 - r, r).setMass(STOOL_MASS).setFriction(0.4).setRestitution(0.05), body);
-    const joint = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+    const joint = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, alongZ ? { x: 0, y: 0, z: 1 } : { x: 1, y: 0, z: 0 });
     joint.limitsEnabled = true;
     joint.limits = [slide.lo - slide.at, slide.hi - slide.at];
     world.createMultibodyJoint(joint, anchor, body, true);
@@ -361,11 +362,12 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (desc) world.createCollider(desc.setFriction(1));
   }
 
-  // Kickers: a fixed convex wedge each, so the slope is one flat face with no seams to catch on.
+  // Kickers: a fixed rounded convex wedge each, so the slope is one flat face with no seams to catch on.
   for (const p of level.pieces) {
     if (p.type !== "kicker") continue;
-    const pts = new Float32Array(kickerCorners(p).flatMap(([x, y, z]) => { const o = rotXZ(x, z, p.rot); return [p.x + o.x, p.y + y, p.z + o.z]; }));
-    const desc = RAPIER.ColliderDesc.convexHull(pts);
+    const hull = kickerHull(p);
+    const pts = new Float32Array(hull.corners.flatMap(([x, y, z]) => { const o = rotXZ(x, z, p.rot); return [p.x + o.x, p.y + y, p.z + o.z]; }));
+    const desc = RAPIER.ColliderDesc.roundConvexHull(pts, hull.r);
     if (desc) world.createCollider(desc.setFriction(1));
   }
 
