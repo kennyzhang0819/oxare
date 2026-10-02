@@ -1,7 +1,7 @@
 export const TUNING = {
   gravity: 7,
   throttleForce: 8,
-  // Share of a slope's backward pull cancelled while the ball is pushed up it (ramps, kickers, tubes).
+  // Share of a slope's pull against the push cancelled while the ball is pushed up it; the sideways pull stays.
   climbAssist: 0.4,
   maxSpeed: 8,
   linearDamping: 0.8,

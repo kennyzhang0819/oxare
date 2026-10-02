@@ -583,13 +583,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       const at = ball.translation();
       let d: [number, number, number] | null = null, tube: SimTube | undefined;
       for (const t of tubes) if ((d = tubeDir(t, at))) { tube = t; break; }
-      // The push, and the slope it is on: the tube's direction, or the ground's normal under the ball.
-      let push: [number, number, number], slope: [number, number, number] | null = null;
+      // The push, the slope it is on (the tube's direction, or the ground's normal under the ball), and
+      // the way the push heads along that slope.
+      let push: [number, number, number], slope: [number, number, number] | null = null, heading: [number, number, number] | null = null;
       if (d && tube) {
         const hl = Math.hypot(d[0], d[2]);
         const along = fx * d[0] + fz * d[2] + (1 - hl) * (fx * tube.chord[0] + fz * tube.chord[1]);
         push = [d[0] * f * along, d[1] * f * along, d[2] * f * along];
         slope = [-TUNING.gravity * d[1] * d[0], -TUNING.gravity * d[1] * d[1], -TUNING.gravity * d[1] * d[2]];
+        if (f * along) heading = f * along < 0 ? [-d[0], -d[1], -d[2]] : d;
       } else {
         push = [fx * f, 0, fz * f];
         down.origin = at;
@@ -605,12 +607,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           // Gravity's pull along the slope: g minus its part into the surface.
           const n = hit.normal, gn = -TUNING.gravity * n.y;
           slope = [-gn * n.x, -TUNING.gravity - gn * n.y, -gn * n.z];
+          const px = fx * f, pz = fz * f, pn = px * n.x + pz * n.z, ux = px - pn * n.x, uy = -pn * n.y, uz = pz - pn * n.z, ul = Math.hypot(ux, uy, uz);
+          if (ul > 1e-6) heading = [ux / ul, uy / ul, uz / ul];
         }
       }
-      // Climb assist: while the push works against the slope's pull, cancel a share of that pull.
-      if (slope && push[0] * slope[0] + push[1] * slope[1] + push[2] * slope[2] < 0) {
+      // Climb assist: cancel a share of only the part of the slope's pull that works against the push,
+      // so a slanted platform still pulls the ball sideways down it while it drives across.
+      const back = slope && heading ? slope[0] * heading[0] + slope[1] * heading[1] + slope[2] * heading[2] : 0;
+      if (heading && back < 0) {
         const k = TUNING.climbAssist * Math.min(1, Math.abs(throttle));
-        push = [push[0] - slope[0] * k, push[1] - slope[1] * k, push[2] - slope[2] * k];
+        push = [push[0] - heading[0] * back * k, push[1] - heading[1] * back * k, push[2] - heading[2] * back * k];
       }
       // Magnets: a pull toward each one's axis, fading out at its reach; its level part is capped below
       // the throttle so the ball can always be driven off.
