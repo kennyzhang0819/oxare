@@ -7,15 +7,16 @@ type XZ = [number, number];
 type XYZ = [number, number, number];
 type Stripe = { kind: "line"; inward: XZ } | { kind: "path"; pts: XYZ[] } | null;
 
-const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.4, metalness: 0.2 });
+export const RAIL_MAT = new THREE.MeshStandardMaterial({ color: 0xaab4be, roughness: 0.4, metalness: 0.2 });
 // A light strip's outer face sits this far in from the rail's centre: PAINT proud of the tube.
 const STRIPE_IN = RAIL_R + PAINT;
-const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0x2ee8ff, emissive: 0x2ee8ff, emissiveIntensity: 0.8, roughness: 0.4 });
+export const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0x2ee8ff, emissive: 0x2ee8ff, emissiveIntensity: 0.8, roughness: 0.4 });
 
 // A fenced span's light strip: straight along a straight side, following the rail round a curve's
 // arc side, none on a ramp.
 function stripe(p: Piece, span: FenceSpanRail): Stripe {
   if (p.type !== "slab" && p.type !== "ramp" && p.type !== "curve") return null;
+  if (p.type === "slab" && p.twist) return null; // a straight strip can't follow a twisted side
   const side = fenceSides(p)[span.side]!, { a, b } = span;
   if (side.arc) return { kind: "path", pts: fenceSamples(p, side, a, b).map((s): XYZ => { const q = side.at(s, INSET + STRIPE_IN - 0.025); return [q.x, RAIL_Y + q.y, q.z]; }) };
   const m = side.at((a + b) / 2, INSET), m2 = side.at((a + b) / 2, INSET + 0.1);

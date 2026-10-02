@@ -1,16 +1,13 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { BALL_RADIUS, GOAL_BEAM_H, moverAt, type Level } from "./level.ts";
-import { SUN_DIR, SUN_OFFSET, buildLevel, createScene, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
+import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./level.ts";
+import { buildLevel, createScene, fitSun, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 const PROGRESS_KEY = "balling.progress";
-// Shadow-camera axes (three's lookAt with up = +Y), used to snap the light to whole shadow texels.
-const SUN_RIGHT = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIR).normalize();
-const SUN_UP = new THREE.Vector3().crossVectors(SUN_DIR, SUN_RIGHT);
 type Progress = Record<string, { best: number }>;
 export function loadProgress(): Progress {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
@@ -64,6 +61,7 @@ export class Game implements Mode {
     ({ scene: this.scene, sun: this.sun } = this.env);
     this.built = buildLevel(level, false);
     this.scene.add(this.built.group, this.ball.mesh);
+    fitSun(this.sun, this.built);
     this.hud = h("div", { class: "hud" },
       h("span", { class: "spacer" }),
       opts.admin ? h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)") : null,
@@ -137,6 +135,13 @@ export class Game implements Mode {
       const g = this.built.movers.get(m.index);
       if (g) { const at = moverAt(m.piece, sim.time - STEP * (1 - alpha)); g.position.set(at.x, at.y, at.z); }
     }
+    // What rides a moving platform goes with it (a crate or barrel is placed by its own body below).
+    for (const [i, m] of sim.riders) {
+      const g = this.built.pieceGroups[i], p = this.level.pieces[i];
+      if (!g || !p || p.type === "crate" || p.type === "barrel") continue;
+      const d = moverShift(m.piece, sim.time - STEP * (1 - alpha));
+      g.position.set(p.x + d.x, p.y + d.y, p.z + d.z);
+    }
     for (const c of sim.crates) {
       const g = this.built.crates.get(c.index);
       if (!g) continue;
@@ -198,14 +203,6 @@ export class Game implements Mode {
     // Locked to the ball, no easing: the ball holds one spot in the frame however it moves.
     this.camera.position.set(p.x + Math.sin(this.yaw) * TUNING.camDist, p.y + TUNING.camHeight, p.z + Math.cos(this.yaw) * TUNING.camDist);
     this.aim(p);
-    // The sun follows the ball; moving it by whole shadow texels keeps shadow edges from crawling.
-    const sc = this.sun.shadow.camera;
-    const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.width;
-    const a = p.dot(SUN_RIGHT), b = p.dot(SUN_UP);
-    const t = this.sun.target.position.copy(p)
-      .addScaledVector(SUN_RIGHT, Math.round(a / texel) * texel - a)
-      .addScaledVector(SUN_UP, Math.round(b / texel) * texel - b);
-    this.sun.position.copy(t).add(SUN_OFFSET);
   }
 
   private fall() {

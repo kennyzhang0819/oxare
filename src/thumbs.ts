@@ -50,10 +50,11 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
 }
 
 const LW = 360, LH = 225;
-const FEATURED: PieceType[] = ["tube", "rails", "mover", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
+const FEATURED: PieceType[] = ["tube", "rails", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
 const levelCache = new Map<string, string>();
 
-// Menu card picture: a close shot of the level's most telling piece, first match in FEATURED.
+// Menu card picture: the level's own `thumb` frame if it has one, else a close shot of its most
+// telling piece, first match in FEATURED.
 export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string {
   const key = JSON.stringify(level);
   const hit = levelCache.get(key);
@@ -67,13 +68,20 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   scene.add(sun);
   const built = buildLevel(level, false);
   scene.add(built.group);
-  const i = FEATURED.reduce((found, type) => found >= 0 ? found : level.pieces.findIndex((p) => p.type === type), -1);
-  const box = new THREE.Box3().setFromObject(i >= 0 ? built.pieceGroups[i]! : built.group);
-  box.max.y = Math.min(box.max.y, box.min.y + 6); // a goal's light beam would otherwise set the framing
-  const center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(3.5, box.getSize(new THREE.Vector3()).length() / 2);
+  let center: THREE.Vector3, radius: number;
+  if (level.thumb) {
+    center = new THREE.Vector3(level.thumb.x, level.thumb.y, level.thumb.z);
+    radius = level.thumb.r;
+  } else {
+    const i = FEATURED.reduce((found, type) => found >= 0 ? found : level.pieces.findIndex((p) => p.type === type), -1);
+    const box = new THREE.Box3().setFromObject(i >= 0 ? built.pieceGroups[i]! : built.group);
+    box.max.y = Math.min(box.max.y, box.min.y + 6); // a goal's light beam would otherwise set the framing
+    center = box.getCenter(new THREE.Vector3());
+    radius = Math.max(3.5, box.getSize(new THREE.Vector3()).length() / 2);
+  }
   const camera = new THREE.PerspectiveCamera(40, LW / LH, 0.1, 2000);
-  camera.position.copy(center).add(new THREE.Vector3(0.55, 0.75, 1).normalize().multiplyScalar(radius * 2.1));
+  const view = new THREE.Vector3(0.55, 0.75, 1).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), ((level.thumb?.yaw ?? 0) * Math.PI) / 180);
+  camera.position.copy(center).add(view.multiplyScalar(radius * 2.1));
   camera.lookAt(center);
   const prevTarget = renderer.getRenderTarget();
   renderer.setRenderTarget(rt);

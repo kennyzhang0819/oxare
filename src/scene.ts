@@ -2,17 +2,18 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { BALL_RADIUS, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_COLLAR_L, TUBE_COLLAR_T, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, TUBE_COLLAR_SIDES, tubeRings, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, barrelProfile, bumperProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
 import { TILE, ballTextures, edgeTextures, structTextures, tileTexture } from "./textures.ts";
-import { buildRails, buildRailsPiece } from "./rails.ts";
+import { RAIL_MAT, STRIPE_MAT, buildRails, buildRailsPiece } from "./rails.ts";
 import { platformMesh } from "./platform.ts";
-import { revolveMesh, sweepTube, torusMesh, type SweepRing } from "./geometry.ts";
+import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
 export const EDGE_RADIUS = BLOCK_R;
 
 export const SKY_TOP = 0x448fec;
 export const SKY_HORIZON = 0xafcde9;
-export const SUN_OFFSET = new THREE.Vector3(8, 14, 6);
+// Far enough out that the shadow camera sits above everything a level stacks over the ball.
+export const SUN_OFFSET = new THREE.Vector3(24, 42, 18);
 export const SUN_DIR = SUN_OFFSET.clone().normalize();
 export const OCEAN_Y = -45;
 export const CLOUD_Y = 40, CLOUD_TOP = 75;
@@ -36,7 +37,7 @@ function platformGeometry(...args: Parameters<typeof platformMesh>): THREE.Buffe
   geo.computeVertexNormals();
   return geo;
 }
-let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop", THREE.MeshStandardMaterial> | null = null;
+let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel", THREE.MeshStandardMaterial> | null = null;
 let ENV: THREE.Texture | null = null;
 
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
@@ -67,6 +68,8 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     plank: new THREE.MeshStandardMaterial({ map: tiles, color: 0xbac3cb, roughness: 0.85 }),
     plankGlow: new THREE.MeshStandardMaterial({ color: 0x3fe87a, emissive: 0x3fe87a, emissiveIntensity: 0.8, roughness: 0.4 }),
     stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, emissiveMap: st.stoolTopGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
+    barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, emissiveMap: st.barrelPanelGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
+    bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, emissiveMap: st.bumperTopGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55 }),
     hinge: new THREE.MeshStandardMaterial({ color: 0x4a535d, roughness: 0.5, metalness: 0.3 }),
     // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
     tread: new THREE.MeshStandardMaterial({ color: 0x5f6975, roughness: 0.6, metalness: 0.15 }),
@@ -166,6 +169,27 @@ function buildStartPad(g: THREE.Group) {
   g.add(pad);
 }
 
+// Bumper: the revolved profile in four bands, a white base, the red rubber band, a white rolled
+// rim and the flat top carrying a round circuit board, laid flat from above to fill it.
+const BUMPER_RUBBER = new THREE.MeshStandardMaterial({ color: 0xe8432c, roughness: 0.45 });
+function buildBumper(g: THREE.Group) {
+  const st = STRUCT!, bands = bumperProfile(), dish = bands[3]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
+  for (const band of bands) {
+    const m = revolveMesh(band, 48), base = pos.length / 3;
+    geo.addGroup(idx.length, m.indices.length, geo.groups.length);
+    for (let i = 0; i < m.positions.length; i += 3) uv.push(0.5 + m.positions[i]! / (2 * dish), 0.5 - m.positions[i + 2]! / (2 * dish));
+    pos.push(...m.positions);
+    idx.push(...m.indices.map((k) => k + base));
+  }
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, [st.body, BUMPER_RUBBER, st.body, st.bumperTop]);
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+}
+
 // Hanging bridge: each plank is a tiled slat with a green light strip round its rim and a hinge
 // barrel across its near end, so a barrel sits in every gap; the far anchor carries the last one.
 // Plank groups are returned in chain order for the physics to pose each frame; a fixed mount
@@ -258,6 +282,33 @@ function supportBody(top: number): THREE.BufferGeometry {
 // the sides, a foot that bends into the lower platform's wall on a lit flange, and a flared head
 // under the upper one. Drawn only; the collider is the stem's box
 // from pieceBoxes.
+const COLUMN_STRIP = new THREE.MeshStandardMaterial({ color: 0x8d979f, roughness: 0.5, metalness: 0.05 });
+// Column: a drum in the props' white with eight grey strips down it, a grey foot and head with a
+// cyan band just inside each, and every 4 layers up a grey band between two cyan lines. The strips
+// and bands are painted on, no more than PAINT proud.
+function buildColumn(g: THREE.Group, h: number) {
+  const st = STRUCT!, R = COLUMN_R;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 48), [st.body, st.top, st.top]);
+  body.position.y = h / 2;
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  const band = (y0: number, y1: number, mat: THREE.Material) => {
+    if (y0 < 0 || y1 > h || y1 <= y0) return;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(R + PAINT, R + PAINT, y1 - y0, 48, 1, true), mat);
+    m.position.y = (y0 + y1) / 2;
+    g.add(m);
+  };
+  const STRIPS = 8, sw = 0.08;
+  for (let k = 0; k < STRIPS; k++) {
+    const strip = new THREE.Mesh(new THREE.CylinderGeometry(R + PAINT / 2, R + PAINT / 2, h, 2, 1, true, (k / STRIPS) * Math.PI * 2, sw), COLUMN_STRIP);
+    strip.position.y = h / 2;
+    g.add(strip);
+  }
+  band(0, 0.18, st.top); band(0.26, 0.36, st.glow);
+  band(h - 0.18, h, st.top); band(h - 0.36, h - 0.26, st.glow);
+  for (let m = 4; m <= h - 0.6; m += 4) { band(m - 0.24, m - 0.16, st.glow); band(m - 0.12, m + 0.12, st.top); band(m + 0.16, m + 0.24, st.glow); }
+}
+
 function buildSupport(g: THREE.Group, p: Piece & { type: "support" }) {
   const st = STRUCT!, W = SUPPORT_W, D = SUPPORT_D;
   for (const c of supportPillars(p)) {
@@ -315,8 +366,26 @@ const KICKER_ORANGE = new THREE.MeshStandardMaterial({ color: 0xff7a2e, emissive
 
 // Kicker: a white wedge with a dark tread inset on its slope, pale slats across the tread and an
 // orange light strip along each side of it; a deck past the high edge carries the same tread, flat.
-function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
-  const st = STRUCT!, f = p.flat ?? 0, D = p.d + f;
+// A sliding kicker's strips are green like the stool's, with < > chevrons at the foot of its slope;
+// its track is invisible in play and outlined in the editor, and its wedge group is returned for
+// the physics to pose.
+function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: boolean): THREE.Group | undefined {
+  const st = STRUCT!, f = p.flat ?? 0, D = p.d + f, sliding = isSliding(p), slide = kickerSlide(p);
+  if (sliding && editor) {
+    const box = new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, p.h, D));
+    for (const s of [slide.lo, slide.hi]) {
+      const o = new THREE.LineSegments(box, ROUTE_MAT);
+      o.position.set(s, p.h / 2 + 0.02, 0);
+      o.renderOrder = 9;
+      g.add(o);
+    }
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(slide.lo, 0.05, 0), new THREE.Vector3(slide.hi, 0.05, 0)]), ROUTE_MAT);
+    line.renderOrder = 9;
+    g.add(line);
+  }
+  const outer = g;
+  if (sliding) { g = new THREE.Group(); g.position.x = slide.at; outer.add(g); }
+  const stripMat = sliding ? st.plankGlow : KICKER_ORANGE;
   // The rounded solid: the hull of a small sphere at each pulled-in corner.
   const hull = kickerHull(p), ball = new THREE.SphereGeometry(hull.r, 16, 8).getAttribute("position");
   const pts: THREE.Vector3[] = [];
@@ -327,26 +396,36 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
   const tw = p.w - 0.5;
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
   // plate in view: plate, then slats, then strips.
-  const tread = (len: number) => {
-    const t = new THREE.Group(), tl = len - 0.5;
+  // `marks` keeps the low end (local +z) clear of slats for the < > chevrons.
+  const tread = (len: number, marks = false) => {
+    const t = new THREE.Group(), tl = len - 0.5, ml = marks ? Math.min(0.8, tl * 0.35) : 0, sl = tl - ml;
     const plate = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.001, tl), st.tread);
     plate.position.y = LAYER;
     t.add(plate);
-    const n = Math.max(3, Math.round(tl / 0.32));
+    const n = Math.max(3, Math.round(sl / 0.32));
     for (let i = 0; i < n; i++) {
       const slat = new THREE.Mesh(new THREE.BoxGeometry(tw - 0.5, 0.001, 0.09), st.top);
-      slat.position.set(0, 2 * LAYER, -tl / 2 + ((i + 0.5) * tl) / n);
+      slat.position.set(0, 2 * LAYER, -tl / 2 + ((i + 0.5) * sl) / n);
       t.add(slat);
     }
+    if (marks) {
+      const a = 0.16, tip = 0.42, z = tl / 2 - ml / 2;
+      for (const dir of [-1, 1]) for (const up of [1, -1]) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(a * Math.SQRT2 + 0.05, 0.001, 0.07), st.plankGlow);
+        arm.position.set(dir * tip - (dir * a) / 2, 2 * LAYER, z + (up * a) / 2);
+        arm.rotation.y = (dir * up * Math.PI) / 4;
+        t.add(arm);
+      }
+    }
     for (const x of [tw / 2 - 0.08, -(tw / 2 - 0.08)]) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.001, tl), KICKER_ORANGE);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.001, tl), stripMat);
       strip.position.set(x, 3 * LAYER, 0);
       t.add(strip);
     }
     return t;
   };
   // The slope's tread at the slope's centre, tilted down toward local +z.
-  const slope = tread(Math.hypot(p.d, p.h));
+  const slope = tread(Math.hypot(p.d, p.h), sliding);
   slope.position.set(0, p.h / 2, f / 2);
   slope.rotation.x = Math.atan2(p.h, p.d);
   g.add(slope);
@@ -360,6 +439,7 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }) {
   const back = new THREE.Mesh(new THREE.BoxGeometry(p.w - 0.4, Math.max(0.1, p.h - 0.3), 0.08), [st.top, st.top, st.top, st.top, st.barrierPanel, st.barrierPanel]);
   back.position.set(0, p.h / 2, -(D / 2 - 0.04 + PAINT));
   g.add(back);
+  return sliding ? g : undefined;
 }
 
 function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
@@ -454,64 +534,68 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
 const TUBE_GLASS = new THREE.MeshPhysicalMaterial({
   color: 0x5ad2e6, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1,
 });
-const TUBE_COLLAR = new THREE.MeshStandardMaterial({ color: 0xc9d0d6, roughness: 0.35, metalness: 0.15, side: THREE.DoubleSide });
 
-// Wall of thickness r1 - r0 swept through `rings`, with flat annular ends.
-function tubeShell(rings: SweepRing[], r0: number, r1: number, sides = 32): THREE.BufferGeometry {
-  const inner = sweepTube(rings, r0, true, sides), outer = sweepTube(rings, r1, false, sides, rings.length * sides);
-  const pos = [...inner.positions, ...outer.positions], idx = [...inner.indices, ...outer.indices];
-  const n = rings.length * sides;
-  for (const [ring, flip] of [[0, true], [rings.length - 1, false]] as const) {
-    for (let j = 0; j < sides; j++) {
-      const a = ring * sides + j, b = ring * sides + ((j + 1) % sides), c = a + n, d = b + n;
-      if (flip) idx.push(a, d, c, a, b, d); else idx.push(a, c, d, a, d, b);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// Tube: a glass pipe as thick as its solid wall, a metal collar at each mouth slotted into eight
-// segments, and a light ring painted on each mouth's face; both mouths alike, since the tube runs
-// either way.
+// Tube: one thin glass skin (the physics keeps a solid wall behind it) with a ring of rail round each mouth; both mouths
+// alike, since the tube runs either way.
 function buildTube(g: THREE.Group, p: Tube) {
   const rings = tubeRings(p);
   if (rings.length < 2) return;
-  // The bore the ball rolls in, and the outside of the solid wall, on the physics' own facets.
-  for (const [r, inward, sides] of [[TUBE_R, true, TUBE_SKIN_SIDES], [TUBE_R + TUBE_SOLID_WALL, false, TUBE_WALL_SIDES]] as const) {
-    const skin = sweepTube(rings, r, inward, sides), skinGeo = new THREE.BufferGeometry();
-    skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
-    skinGeo.setIndex(skin.indices);
-    skinGeo.computeVertexNormals();
-    const glass = new THREE.Mesh(skinGeo, TUBE_GLASS);
-    glass.renderOrder = 1;
-    g.add(glass);
+  // One glass skin, the bore the ball rolls in, on the physics' own facets.
+  const skin = sweepTube(rings, TUBE_R, true, TUBE_SKIN_SIDES), skinGeo = new THREE.BufferGeometry();
+  skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
+  skinGeo.setIndex(skin.indices);
+  skinGeo.computeVertexNormals();
+  const glass = new THREE.Mesh(skinGeo, TUBE_GLASS);
+  glass.renderOrder = 1;
+  g.add(glass);
+  for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d));
+}
+
+// A ring of the fences' and rails' own rail round centre c, axis d (a tube mouth's, or a hoop), with
+// the rails' light strip round its outside.
+function railRing(c: [number, number, number], d: [number, number, number]): THREE.Group {
+  const ring = new THREE.Group();
+  for (const [R, r, sides, mat] of [[RING_R, RAIL_R, RING_SIDES, RAIL_MAT], [RING_R + RAIL_R * 0.85, 0.022, 6, STRIPE_MAT]] as const) {
+    const t = ringMesh(c, d, R, r, sides, RING_SEGMENTS), geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
+    geo.setIndex(t.indices);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    ring.add(m);
   }
-  const COLLAR_L = TUBE_COLLAR_L, COLLAR_T = TUBE_COLLAR_T, SLOTS = 8;
-  for (const [at, out, glow] of [[rings[0]!, -1, STRUCT!.glow], [rings[rings.length - 1]!, 1, STRUCT!.glow]] as const) {
-    const d = new THREE.Vector3(...at.d), c = new THREE.Vector3(...at.c);
-    const collar = new THREE.Group();
-    collar.position.copy(c);
-    collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().multiplyScalar(out));
-    // Built along +z, pointing out of the mouth.
-    const along = (z: number): SweepRing => ({ c: [0, 0, z], d: [0, 0, 1], m: [0, 0, 1] });
-    for (let k = 0; k < SLOTS; k++) {
-      const a0 = (k / SLOTS) * Math.PI * 2 + 0.06, a1 = ((k + 1) / SLOTS) * Math.PI * 2 - 0.06;
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R + COLLAR_T, TUBE_R + COLLAR_T, COLLAR_L, 6, 1, true, a0, a1 - a0), TUBE_COLLAR);
-      seg.rotation.x = Math.PI / 2;
-      seg.position.z = -COLLAR_L / 2;
-      seg.castShadow = true;
-      collar.add(seg);
-    }
-    // The sleeve fills the collar to just under the segments, so the slots are painted lines.
-    const sleeve = new THREE.Mesh(tubeShell([along(-COLLAR_L), along(0)], TUBE_R, TUBE_R + COLLAR_T - 0.005, TUBE_COLLAR_SIDES), STRUCT!.hinge);
-    const light = new THREE.Mesh(new THREE.RingGeometry(TUBE_R + 0.03, TUBE_R + 0.1, 40), glow);
-    light.position.z = 0.003;
-    collar.add(sleeve, light);
-    g.add(collar);
+  return ring;
+}
+
+// Hoop: a tube mouth's ring standing alone on the surface, where a tube mouth there would be.
+function buildHoop(g: THREE.Group) {
+  g.add(railRing([0, TUBE_R, 0], [0, 0, 1]));
+}
+
+// Barrel: a white rounded drum with a green ring near its foot and its head, and four circuit
+// panels round its side, each in a dark frame. Rings and panels are painted on, PAINT proud at most.
+// Like a crate, the group is centred on the physics body and placed by it each frame.
+function buildBarrel(g: THREE.Group, r: number, h: number) {
+  const st = STRUCT!, rr = propRound(2 * r, h, 2 * r);
+  const m = revolveMesh(barrelProfile(r, h), 48), geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
+  geo.setIndex(m.indices);
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, st.body);
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  for (const y of [-h / 2 + rr + 0.08, h / 2 - rr - 0.08]) {
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT, r + PAINT, 0.08, 48, 1, true), st.plankGlow);
+    ring.position.y = y;
+    g.add(ring);
+  }
+  const ph = h - 2 * rr - 0.42, arc = Math.min(1.1, 0.5 / r);
+  if (ph <= 0.1) return;
+  for (let k = 0; k < 4; k++) {
+    const a = (k + 0.5) * (Math.PI / 2);
+    const frame = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT / 2, r + PAINT / 2, ph + 0.08, 12, 1, true, a - arc / 2 - 0.06, arc + 0.12), st.hinge);
+    const panel = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT, r + PAINT, ph, 12, 1, true, a - arc / 2, arc), st.barrelPanel);
+    g.add(frame, panel);
   }
 }
 
@@ -570,12 +654,13 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   const board = new THREE.Mesh(new THREE.BoxGeometry(w - 0.2, 0.02, d - 0.2), [st.top, st.top, st.stoolTop, st.top, st.top, st.top]);
   board.position.y = h / 2 - 0.01 + PAINT;
   block.add(board);
-  const a = 0.13;
   // Face details are layered within PAINT: dark screens and slots flat just off the body, the
-  // chevrons and slot bars on top of them, so paint() leaves them all in view.
+  // chevrons and slot bars on top of them, so paint() leaves them all in view. Each chevron is
+  // sized from its tip's distance, so a pair always keeps a clear gap and never reads as a diamond.
   const chevrons = (face: THREE.Object3D, tip: number) => {
+    const a = Math.min(0.13, tip * 0.4), t = Math.min(0.045, a * 0.4);
     for (const dir of [-1, 1]) for (const up of [1, -1]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(a * Math.SQRT2 + 0.03, 0.045, 0.002), st.plankGlow);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(a * Math.SQRT2 + t * 0.7, t, 0.002), st.plankGlow);
       arm.position.set(dir * tip - (dir * a) / 2, (up * a) / 2, PAINT - 0.001);
       arm.rotation.z = (-dir * up * Math.PI) / 4;
       face.add(arm);
@@ -832,20 +917,24 @@ export interface SceneEnv {
   setDetail(full: boolean): void;
 }
 
-export function createScene(): SceneEnv {
+// Distance haze: squared-exponential, so what is near stays clear and only the far reaches fade
+// (in play, about a fifth hazed 100 out). The editor's is lighter, to see across its whole grid.
+export const FOG_PLAY = 0.005, FOG_EDITOR = 0.0018;
+export function createScene(fog = FOG_PLAY): SceneEnv {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY_HORIZON);
-  scene.fog = new THREE.FogExp2(SKY_HORIZON, 0.0035);
+  scene.fog = new THREE.FogExp2(SKY_HORIZON, fog);
   const sky = makeSky(), ocean = makeOcean();
   sky.layers.set(SKY_LAYER);
   scene.add(sky, ocean);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  // The sun carries most of the light, so what it can't reach (shadows) reads clearly darker.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.position.copy(SUN_OFFSET);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(4096, 4096);
   const c = sun.shadow.camera;
-  c.left = -24; c.right = 24; c.top = 24; c.bottom = -24; c.near = 1; c.far = 60;
+  c.left = -36; c.right = 36; c.top = 36; c.bottom = -36; c.near = 1; c.far = 150;
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.03; // the shadow map re-renders as the sun tracks the ball; this keeps shallow faces from shimmering
   scene.add(sun, sun.target);
@@ -1073,6 +1162,22 @@ export function posePlank(piece: THREE.Group, plank: THREE.Group, t: { x: number
   plank.quaternion.set(q.x, q.y, q.z, q.w).premultiply(piece.quaternion.clone().invert());
 }
 
+// Points the sun's shadow at the whole level, so every piece casts its shadow however far it is
+// from the camera: the shadow box is the level's bounds (the goal's beam aside) plus room for
+// moving platforms to travel. Level pieces stay put, so this is done once per build.
+export function fitSun(sun: THREE.DirectionalLight, built: Built) {
+  const box = new THREE.Box3(), part = new THREE.Box3();
+  built.group.updateMatrixWorld(true);
+  built.group.traverse((o) => { if (o instanceof THREE.Mesh && !(o.material instanceof THREE.ShaderMaterial)) box.union(part.setFromObject(o)); });
+  if (box.isEmpty()) return;
+  const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2 + 12;
+  sun.target.position.copy(c);
+  sun.position.copy(c).addScaledVector(SUN_DIR, r + 10);
+  const cam = sun.shadow.camera;
+  cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r; cam.near = 1; cam.far = 2 * r + 20;
+  cam.updateProjectionMatrix();
+}
+
 export function buildLevel(level: Level, editor: boolean): Built {
   if (!MAT) throw new Error("initMaterials first");
   const mat = MAT;
@@ -1088,22 +1193,27 @@ export function buildLevel(level: Level, editor: boolean): Built {
   level.pieces.forEach((p, index) => {
     const g = new THREE.Group();
     g.position.set(p.x, p.y, p.z);
-    g.rotation.order = "YXZ"; // tilt about the piece's own x axis, then yaw
+    g.rotation.order = "YXZ"; // roll about the piece's own z axis, tilt about its x axis, then yaw
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
-    if (p.type === "slab") g.rotation.x = (p.tilt * Math.PI) / 180;
+    if (p.type === "slab") { g.rotation.x = (p.tilt * Math.PI) / 180; g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180; }
+    if (p.type === "kicker" || p.type === "jump") g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180;
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g);
     if (p.type === "barrier") buildBarrier(g);
     if (p.type === "pillar") buildPillar(g);
+    if (p.type === "bumper") buildBumper(g);
+    if (p.type === "column") buildColumn(g, p.h);
     if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += p.h / 2 + 0.02; crates.set(index, g); }
+    if (p.type === "barrel") { buildBarrel(g, p.r, p.h); g.position.y += p.h / 2 + 0.02; crates.set(index, g); }
     if (p.type === "bridge") bridges.set(index, buildBridge(g, p));
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
     if (p.type === "support") buildSupport(g, p);
-    if (p.type === "kicker") buildKicker(g, p);
+    if (p.type === "kicker") { const k = buildKicker(g, p, editor); if (k) planks.set(index, k); }
     if (p.type === "tube") buildTube(g, p);
+    if (p.type === "hoop") buildHoop(g);
     for (const b of pieceBoxes(p)) {
       if (b.kind !== "block" || p.type === "blockade" || p.type === "barrier" || p.type === "support") continue; // these props draw themselves; the box is only their collider
       const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat.block);
@@ -1116,21 +1226,18 @@ export function buildLevel(level: Level, editor: boolean): Built {
       const rot = pieceRot(p);
       const cuts: XZ[][] = holesOn(level, p).map((h) => h.map((v) => { const o = rotXZ(v[0] - p.x, v[1] - p.z, -rot); return [o.x, o.z] as XZ; }));
       const geo = p.type === "slab"
-        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts)
+        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined)
         : curveGeometry(p);
       const m = new THREE.Mesh(geo, [mat.platform, mat.edge, mat.rim, mat.border]);
       m.receiveShadow = true;
       g.add(m);
+      if (isMoving(p)) {
+        m.castShadow = true;
+        if (editor) buildMoverRoute(g, p);
+        movers.set(index, g);
+      }
     }
     if (p.type === "hole" && editor) buildHoleMarker(g, p.w, p.d);
-    if (p.type === "mover") {
-      const m = new THREE.Mesh(platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE), [mat.platform, mat.edge, mat.rim, mat.border]);
-      m.receiveShadow = true;
-      m.castShadow = true;
-      g.add(m);
-      if (editor) buildMoverRoute(g, p);
-      movers.set(index, g);
-    }
     if (p.type === "ramp") {
       const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t));
       geo.rotateY(Math.PI / 2);
@@ -1166,21 +1273,29 @@ export function buildLevel(level: Level, editor: boolean): Built {
     pieceGroups.push(g);
   });
 
+  // Everything solid casts and takes shadows; glows, the beam, holograms and editor guides don't.
+  group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    if (!mats.every((m) => m instanceof THREE.MeshStandardMaterial)) return;
+    o.receiveShadow = true;
+    o.castShadow = !mats.every((m) => !m.map && m.emissiveIntensity > 0 && m.emissive.getHex() === m.color.getHex());
+  });
   return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, goal };
 }
 
 const ROUTE_MAT = new THREE.LineBasicMaterial({ color: 0x5dffa8, transparent: true, opacity: 0.9, depthTest: false });
 // Editor only: an outline of the platform at each stop and a line along its route (closing back
 // to the start for a loop), in the piece's own frame like the stops.
-function buildMoverRoute(g: THREE.Group, p: Piece & { type: "mover" }) {
+function buildMoverRoute(g: THREE.Group, p: Mover) {
   const box = new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, PLATFORM_THICKNESS, p.d));
-  for (const s of p.stops) {
+  for (const s of p.move.stops) {
     const o = new THREE.LineSegments(box, ROUTE_MAT);
     o.position.set(s.x, s.y - PLATFORM_THICKNESS / 2, s.z);
     o.renderOrder = 9;
     g.add(o);
   }
-  const pts = [{ x: 0, y: 0, z: 0 }, ...p.stops, ...(p.loop === "loop" ? [{ x: 0, y: 0, z: 0 }] : [])].map((s) => new THREE.Vector3(s.x, s.y + 0.05, s.z));
+  const pts = [{ x: 0, y: 0, z: 0 }, ...p.move.stops, ...(p.move.loop === "loop" ? [{ x: 0, y: 0, z: 0 }] : [])].map((s) => new THREE.Vector3(s.x, s.y + 0.05, s.z));
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ROUTE_MAT);
   line.renderOrder = 9;
   g.add(line);

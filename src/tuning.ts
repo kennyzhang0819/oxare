@@ -1,9 +1,9 @@
 export const TUNING = {
-  gravity: 5,
+  gravity: 7,
   throttleForce: 8,
   // Share of a slope's backward pull cancelled while the ball is pushed up it (ramps, kickers, tubes).
-  climbAssist: 0.2,
-  maxSpeed: 10,
+  climbAssist: 0.4,
+  maxSpeed: 8,
   linearDamping: 0.8,
   angularDamping: 0.8,
   yawRate: 1.8,
@@ -17,6 +17,9 @@ export const TUNING = {
   respawnY: -12,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
   propGravity: 0.5,
+  // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
+  bumperBounce: 0.8,
+  bumperKick: 5,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -38,6 +41,8 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   camBallGap: [0, 3, 0.1],
   respawnY: [-40, -2, 1],
   propGravity: [0.1, 2, 0.05],
+  bumperBounce: [0, 2, 0.05],
+  bumperKick: [0, 15, 0.5],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

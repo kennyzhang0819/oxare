@@ -13,12 +13,12 @@
     {"type": "pillar", "x": 36, "y": 0, "z": -42},
     {"type": "pillar", "x": 36, "y": 0, "z": -38},
     {"type": "curve", "x": 40, "y": 0, "z": -28, "inner": 8, "outer": 16, "rot": 0, "fences": {"inner": true, "outer": true, "a": false, "b": false}},
-    {"type": "slab", "x": 52, "y": 0, "z": -4, "w": 12, "d": 48, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
-    {"type": "blockade", "x": 56, "y": 0, "z": -20, "rot": 0},
-    {"type": "blockade", "x": 48, "y": 0, "z": -20, "rot": 0},
+    {"type": "slab", "x": 52, "y": 0, "z": -4, "w": 8, "d": 48, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
+    {"type": "blockade", "x": 54, "y": 0, "z": -20, "rot": 0},
+    {"type": "blockade", "x": 50, "y": 0, "z": -20, "rot": 0},
     {"type": "blockade", "x": 52, "y": 0, "z": -8, "rot": 0},
-    {"type": "blockade", "x": 48, "y": 0, "z": 4, "rot": 0},
-    {"type": "blockade", "x": 56, "y": 0, "z": 4, "rot": 0},
+    {"type": "blockade", "x": 50, "y": 0, "z": 4, "rot": 0},
+    {"type": "blockade", "x": 54, "y": 0, "z": 4, "rot": 0},
     {"type": "curve", "x": 40, "y": 0, "z": 20, "inner": 8, "outer": 16, "rot": 270, "fences": {"inner": true, "outer": true, "a": false, "b": false}},
     {"type": "slab", "x": 16, "y": 0, "z": 32, "w": 12, "d": 48, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "barrier", "x": 26, "y": 0, "z": 27.5, "rot": 90},
@@ -32,6 +32,6 @@
     {"type": "curve", "x": -8, "y": 0, "z": 20, "inner": 8, "outer": 16, "rot": 180, "fences": {"inner": true, "outer": true, "a": false, "b": false}},
     {"type": "slab", "x": -20, "y": 0, "z": 12, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "slab", "x": -20, "y": 0, "z": 0, "w": 8, "d": 8, "rot": 0, "tilt": 0, "fences": {"n": true, "e": true, "s": false, "w": true}},
-    {"type": "goal", "x": -20, "y": 0, "z": 0, "r": 1.2}
+    {"type": "goal", "x": -20, "y": 0, "z": 0, "r": 1}
   ]
 }

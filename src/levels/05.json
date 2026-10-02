@@ -4,7 +4,7 @@
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "slab", "x": 0, "y": 0, "z": -8, "w": 12, "d": 24, "rot": 0, "tilt": 0, "fences": {"n": false, "e": true, "s": false, "w": true}},
-    {"type": "goal", "x": 28, "y": 16, "z": -46, "r": 1.2},
+    {"type": "goal", "x": 28, "y": 16, "z": -46, "r": 1},
     {"type": "barrier", "x": 0, "y": 0, "z": -4, "rot": 0},
     {"type": "barrier", "x": -4, "y": 0, "z": -12, "rot": 0},
     {"type": "barrier", "x": 4, "y": 0, "z": -12, "rot": 0},
@@ -20,12 +20,12 @@
     {"type": "curve", "x": 40, "y": 10, "z": -74, "inner": 8, "outer": 16, "rot": 0, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
     {"type": "slab", "x": 52, "y": 12, "z": -54, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "rails", "x": 52, "y": 10, "z": -74, "rot": 0, "path": [{"x": 0, "y": 2, "z": 13, "bend": 0}], "lines": 2, "a": "side", "b": "top"},
-    {"type": "mover", "x": 54, "y": 12, "z": -44, "w": 4, "d": 4, "rot": 90, "speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]},
+    {"type": "slab", "x": 54, "y": 12, "z": -44, "w": 4, "d": 4, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}, "move": {"speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]}},
     {"type": "slab", "x": 52, "y": 12, "z": -34, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "curve", "x": 40, "y": 16, "z": -26, "inner": 8, "outer": 16, "rot": 180, "fences": {"inner": false, "outer": false, "a": false, "b": false}},
     {"type": "rails", "x": 52, "y": 12, "z": -26, "rot": 0, "path": [{"x": -13, "y": 4, "z": 12, "bend": 0, "mid": {"x": -4, "y": 2, "z": 8}}], "lines": 2, "a": "side", "b": "top", "bYaw": -90},
-    {"type": "mover", "x": 30, "y": 16, "z": -28, "w": 4, "d": 4, "rot": 90, "speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]},
-    {"type": "mover", "x": 26, "y": 16, "z": -32, "w": 4, "d": 4, "rot": 270, "speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]},
+    {"type": "slab", "x": 30, "y": 16, "z": -28, "w": 4, "d": 4, "rot": 90, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}, "move": {"speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]}},
+    {"type": "slab", "x": 26, "y": 16, "z": -32, "w": 4, "d": 4, "rot": 270, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}, "move": {"speed": 1, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -4, "wait": 0}]}},
     {"type": "slab", "x": 28, "y": 16, "z": -42, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}}
   ]
 }

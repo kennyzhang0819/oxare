@@ -76,6 +76,7 @@ export interface StructMaps {
   panel: THREE.Texture; panelGlow: THREE.Texture; pillar: THREE.Texture; crate: THREE.Texture; crateGlow: THREE.Texture; goalDisc: THREE.Texture;
   padTop: THREE.Texture; padGlow: THREE.Texture; padCentre: THREE.Texture; padSkirt: THREE.Texture;
   barrierPanel: THREE.Texture; barrierGlow: THREE.Texture; grille: THREE.Texture; stoolTop: THREE.Texture; stoolTopGlow: THREE.Texture;
+  bumperTop: THREE.Texture; bumperTopGlow: THREE.Texture; barrelPanel: THREE.Texture; barrelPanelGlow: THREE.Texture;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -91,25 +92,31 @@ function canvas2x(w: number, h: number): [HTMLCanvasElement, Ctx] {
 }
 
 // Circuit board every obstacle carries, drawn K times up so its lines stay bold; `cpu` is the
-// chip's size before that scaling.
-function circuitPanel(ctx: Ctx, glow: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, K = 2.7) {
+// chip's size before that scaling. `round` makes it a round board inside the rectangle.
+function circuitPanel(ctx: Ctx, glow: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, K = 2.7, round = false) {
   for (const t of [ctx, glow]) { t.save(); t.translate(px, py); t.scale(K, K); }
-  drawBoard(ctx, glow, 0, 0, pw / K, ph / K, seed, cpu);
+  drawBoard(ctx, glow, 0, 0, pw / K, ph / K, seed, cpu, round);
   for (const t of [ctx, glow]) t.restore();
 }
 
 // One CPU on a grey board, buses of parallel traces leaving its pins and bending at 45 degrees to
 // end in vias, two status lights. Traces never cross: everything drawn is stamped into a mask that
 // later traces avoid.
-function drawBoard(ctx: Ctx, glow: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number) {
+function drawBoard(ctx: Ctx, glow: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, round = false) {
   const rnd = seeded(seed);
   const P = 6, TW = 2.2;
   const C = { edge: "#6f7a85", board: "#8d979f", trace: "#b4bdc5", lit: "#7ff4ff", pad: "#dfe5ea", hole: "#525c66", chip: "#3e464e", chipTop: "#4a535c", pin: "#dfe5ea", silk: "#dfe5ea", light: "#2fe6ff" };
-  ctx.fillStyle = C.edge; ctx.fillRect(px - 4, py - 4, pw + 8, ph + 8);
-  ctx.fillStyle = C.board; ctx.fillRect(px, py, pw, ph);
+  const ox = px + pw / 2, oy = py + ph / 2, R = Math.min(pw, ph) / 2;
+  if (round) {
+    ctx.fillStyle = C.edge; ctx.beginPath(); ctx.arc(ox, oy, R + 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.board; ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = C.edge; ctx.fillRect(px - 4, py - 4, pw + 8, ph + 8);
+    ctx.fillStyle = C.board; ctx.fillRect(px, py, pw, ph);
+  }
 
   const mw = Math.ceil(pw) + 1, mh = Math.ceil(ph) + 1, mask = new Uint8Array(mw * mh);
-  const inside = (x: number, y: number, m: number) => x >= px + m && y >= py + m && x <= px + pw - m && y <= py + ph - m;
+  const inside = (x: number, y: number, m: number) => round ? Math.hypot(x - ox, y - oy) <= R - m : x >= px + m && y >= py + m && x <= px + pw - m && y <= py + ph - m;
   const cell = (x: number, y: number) => {
     const i = Math.round(x - px), j = Math.round(y - py);
     return i < 0 || j < 0 || i >= mw || j >= mh ? -1 : j * mw + i;
@@ -257,6 +264,30 @@ function stoolTopTextures(): [THREE.Texture, THREE.Texture] {
   return [mk(c), mk(e)];
 }
 
+// Bumper top: a round circuit board filling the square, its CPU in the middle; the corners are unused.
+function bumperTopTextures(): [THREE.Texture, THREE.Texture] {
+  const W = 256;
+  const [c, ctx] = canvas2x(W, W);
+  const [e, ectx] = canvas2x(W, W);
+  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, W);
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, W);
+  circuitPanel(ctx, ectx, 11, 11, W - 22, W - 22, 31, 26, 2.6, true);
+  const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  return [mk(c), mk(e)];
+}
+
+// Barrel side panel: a tall circuit board, its CPU sized for the narrow panel.
+function barrelPanelTextures(): [THREE.Texture, THREE.Texture] {
+  const W = 120, H = 200;
+  const [c, ctx] = canvas2x(W, H);
+  const [e, ectx] = canvas2x(W, H);
+  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, H);
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, H);
+  circuitPanel(ctx, ectx, 6, 6, W - 12, H - 12, 41, 18, 2.6);
+  const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  return [mk(c), mk(e)];
+}
+
 // Barrier: the circuit board edge to edge, and a louvred end grille.
 function barrierTextures(): [THREE.Texture, THREE.Texture, THREE.Texture] {
   const W = 512, H = 140;
@@ -371,7 +402,8 @@ function goalDisc(): THREE.Texture {
 // Blockade side: a motherboard plate between two stacks of cyan light bars, which
 // also go into an emissive map so they glow. Pillar: three tiers of vertical slats.
 export function structTextures(): StructMaps {
-  const W = 512, H = 208;
+  // Sized to the blockade's 1.6 x 1.1 side panel, so nothing is stretched.
+  const W = 304, H = 208;
   const [c, ctx] = canvas2x(W, H);
   const [e, ectx] = canvas2x(W, H);
   ctx.fillStyle = "#e9eef3";
@@ -391,7 +423,7 @@ export function structTextures(): StructMaps {
       }
     }
   }
-  circuitPanel(ctx, ectx, 96, 26, W - 192, H - 52, 11, 28);
+  circuitPanel(ctx, ectx, 96, 26, W - 192, H - 52, 11, 18);
 
   // Pillar wrap (u runs once around): twelve wide slats per tier, light rings between tiers.
   const PW = 384, PH = 256, SLATS = 12;
@@ -419,7 +451,9 @@ export function structTextures(): StructMaps {
   const [padTop, padGlow, padCentre, padSkirt] = padTextures();
   const [barrierPanel, barrierGlow, grille] = barrierTextures();
   const [stoolTop, stoolTopGlow] = stoolTopTextures();
-  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, goalDisc: goalDisc(), padTop, padGlow, padCentre, padSkirt, barrierPanel, barrierGlow, grille, stoolTop, stoolTopGlow };
+  const [bumperTop, bumperTopGlow] = bumperTopTextures();
+  const [barrelPanel, barrelPanelGlow] = barrelPanelTextures();
+  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, goalDisc: goalDisc(), padTop, padGlow, padCentre, padSkirt, barrierPanel, barrierGlow, grille, stoolTop, stoolTopGlow, bumperTop, bumperTopGlow, barrelPanel, barrelPanelGlow };
 }
 
 export interface BallMaps { map: THREE.Texture; emissive: THREE.Texture; roughness: THREE.Texture }

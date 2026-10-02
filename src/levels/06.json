@@ -3,7 +3,7 @@
   "name": "Jumps",
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
-    {"type": "goal", "x": -48, "y": 26, "z": -44, "r": 1.2},
+    {"type": "goal", "x": -48, "y": 26, "z": -44, "r": 1},
     {"type": "slab", "x": 0, "y": 0, "z": -4, "w": 8, "d": 16, "rot": 0, "tilt": 0, "fences": {"n": false, "e": false, "s": false, "w": false}},
     {"type": "jump", "x": 0, "y": 0, "z": -8, "w": 4, "d": 4, "rot": 0, "rise": 6},
     {"type": "support", "x": 0, "y": 0, "z": -12, "w": 6, "h": 4, "rot": 180},

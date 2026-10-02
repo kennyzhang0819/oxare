@@ -10,12 +10,13 @@ export interface PlatformMesh { positions: number[]; uv: Float32Array; indices: 
 export interface PlatformBend { at(u: number, z: number): XZ; knots: number[] }
 
 // See docs/platforms.md. Material groups: 0 top/bottom, 1 walls, 2 lips, 3 borders; scene.ts indexes materials by them.
-export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = []): PlatformMesh {
+// `twist`, given, rolls each cross-section about the top's centre line (x = 0, y = 0) by twist(z) radians.
+export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = [], twist?: (z: number) => number): PlatformMesh {
   const A = L / 2, B = W / 2;
   const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const K = 4, KB = 4;
   const y1 = 0, y0 = -thick;
-  const step = bend || warp ? 1 : 2;
+  const step = twist ? 0.5 : bend || warp ? 1 : 2;
   const rect: XZ[] = [[-A, -B], [-A, B], [A, B], [A, -B]];
   const region = cuts.length ? cutRegion(rect, cuts) : [[rect]];
 
@@ -150,7 +151,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
       const o = sz.b + sz.g, loops = part.map((l) => l.loop);
       if (!cuts.length) {
         const rf = sz.re - sz.g, ga = A - o - rf, gb = B - o - rf;
-        const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / 2));
+        const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / (twist ? step : 2)));
         const { sc, fc } = part[0]!;
         if (rf > 0) { const a = ringAt(loops[0]!, o, sz, sc, fc), c = ringAt(loops[0]!, o + rf, sz, sc, fc, true); strip(addRing(a, y, 0), addRing(c, y, 0), a.pts.length, dir); }
         const gridBase = pos.length / 3;
@@ -188,6 +189,15 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   }
   const wallsTo = idx.length;
 
+  // Texture coordinates come from the untwisted strip, so the tiles keep their size on a twist.
+  const flat = twist ? pos.slice() : pos;
+  if (twist) {
+    for (let i = 0; i < pos.length; i += 3) {
+      const a = twist(pos[i + 2]!), x = pos[i]!, y = pos[i + 1]!;
+      pos[i] = x * Math.cos(a) - y * Math.sin(a);
+      pos[i + 1] = x * Math.sin(a) + y * Math.cos(a);
+    }
+  }
   const lift: number[] = [];
   if (warp) {
     for (let i = 0; i < pos.length; i += 3) { const w = warp((pos[i]! + A) / L); lift.push(w); pos[i + 1] = pos[i + 1]! + w; }
@@ -201,8 +211,9 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   }
   const uv = new Float32Array((pos.length / 3) * 2);
   for (let i = 0; i < pos.length / 3; i++) {
-    if (uvKind[i] === 0) { uv[i * 2] = P(i, 0) / tile; uv[i * 2 + 1] = P(i, 2) / tile; }
-    else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (P(i, 1) - (lift[i] ?? 0) - y0) / thick; }
+    const F = (k: number) => (twist ? flat[i * 3 + k] ?? 0 : P(i, k));
+    if (uvKind[i] === 0) { uv[i * 2] = F(0) / tile; uv[i * 2 + 1] = F(2) / tile; }
+    else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (F(1) - (lift[i] ?? 0) - y0) / thick; }
   }
   return {
     positions: pos, uv, indices: idx,

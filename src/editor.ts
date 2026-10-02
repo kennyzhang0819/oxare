@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, PLANK_T, LAYER_H, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
-import { buildLevel, createScene, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
+import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_INSET, FENCE_RAIL_Y, cloneLevel, fenceOf, fenceSides, fenceSpans, fenceValue, isTilted, pieceRot, rotXZ, type Fence, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
@@ -23,7 +23,7 @@ export function blankLevel(): Level {
 
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
-  slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15]],
+  slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15]],
   curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
@@ -31,20 +31,30 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
-  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15]],
+  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["rot", 15]],
   barrier: [["rot", 15]],
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15]],
+  barrel: [["r", 0.1], ["h", 0.1], ["rot", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
-  jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 0.5]],
+  jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [],
+  column: [["h", 0.5]],
+  bumper: [],
   spinner: [["length", 0.5], ["speed", 0.1]],
-  goal: [["r", 0.5]],
+  goal: [],
   tube: [["rot", 15]],
-  mover: [["w", 0.5], ["d", 0.5], ["rot", 15], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
+  hoop: [["rot", 15]],
 };
+// What the panels call each field; the level files keep the short keys.
+const LABELS: Record<string, string> = {
+  w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)",
+  rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
+  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius",
+};
+const label = (key: string) => LABELS[key] ?? key;
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
 const SNAP_KEY = "balling.snap.v2";
 const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
@@ -68,7 +78,7 @@ function step(v: number, dir: number, grid: number, n: number): number {
   const first = on ? Math.round(k) + dir : dir > 0 ? Math.ceil(k) : Math.floor(k);
   return to(grid)((first + dir * (n - 1)) * grid);
 }
-const layerSnap = (v: number) => Math.round(v / LAYER_H) * LAYER_H;
+const layerSnap = (v: number) => Math.round(v / HEIGHT_STEP) * HEIGHT_STEP;
 // Platform sizes and heights step in fours, the unit every level is laid out in, unless "Fine
 // sizes" is ticked. Zero is kept so a ramp can be flattened or a curve run from its centre.
 const SIZE_GRID = 4;
@@ -80,7 +90,7 @@ let gridY = 0;
 try { gridY = Number(localStorage.getItem(GRID_Y_KEY)) || 0; } catch { /* on the ground */ }
 try { fineSizes = localStorage.getItem(FINE_KEY) === "1"; } catch { /* coarse */ }
 const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
-  slab: ["y", "w", "d"], mover: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
+  slab: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
 };
 const isCoarse = (t: PieceType, key: string) => !fineSizes && !!COARSE_FIELDS[t]?.includes(key);
 
@@ -119,6 +129,8 @@ function settle(level: Level, p: Piece) {
   if (p.type === "rails") { attachRailEnds(level, p); return; }
   if (!isStructure(p)) return;
   p.x = gridSnap(p.x); p.z = gridSnap(p.z);
+  // A column keeps the y it is given: it often stands under the platform it holds up.
+  if (p.type === "column") return;
   const y = surfaceAt(level, p.x, p.z);
   if (y !== null) p.y = y;
 }
@@ -220,7 +232,7 @@ export interface EditorOpts { onPlay(level: Level, from?: PlayFrom): void; onExi
 export class Editor implements Mode {
   private scene: THREE.Scene;
   private env: SceneEnv;
-  private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+  private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1200);
   private controls: OrbitControls;
   private built: Built;
   private sel = new Set<number>();
@@ -235,7 +247,7 @@ export class Editor implements Mode {
   private ghost = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true }));
   private hereBtn!: HTMLButtonElement;
   private grid: THREE.LineSegments | null = null;
-  private ground = new THREE.GridHelper(200, 100, 0x9fb4cc, 0xc7d6e6);
+  private ground = new THREE.GridHelper(400, 200, 0x9fb4cc, 0xc7d6e6);
   // Hitbox view (H): every collider of a fresh physics world for the level, drawn as lines. It is
   // rebuilt a moment after each change; `hitboxGen` drops a rebuild that a newer change overtook.
   private hitboxes = false;
@@ -276,12 +288,13 @@ export class Editor implements Mode {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
-    this.env = createScene();
+    this.env = createScene(FOG_EDITOR);
     this.scene = this.env.scene;
     this.ground.position.y = gridY;
     this.scene.add(this.ground);
     this.built = buildLevel(level, true);
     this.scene.add(this.built.group);
+    fitSun(this.env.sun, this.built);
     this.ghost.visible = false;
     this.scene.add(this.ghost);
     this.scene.add(this.handles);
@@ -382,6 +395,7 @@ export class Editor implements Mode {
     this.built = buildLevel(this.level, true);
     markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
     this.scene.add(this.built.group);
+    fitSun(this.env.sun, this.built);
     for (const hl of this.helpers) hl.removeFromParent();
     this.helpers = [];
     for (const i of [...this.sel]) if (i >= this.level.pieces.length) this.sel.delete(i);
@@ -433,10 +447,10 @@ export class Editor implements Mode {
             rec[key] = coarse ? Math.round(Number(input.value) / SIZE_GRID) * SIZE_GRID : Number(input.value);
             this.commit(before);
           } });
-        return h("label", {}, key, input);
+        return h("label", {}, label(key), input);
       };
       const step = isStructure(p) ? SNAP.structure : SNAP.platform;
-      props.append(field("x", step), field("y", LAYER_H), field("z", step));
+      props.append(field("x", step), field("y", HEIGHT_STEP), field("z", step));
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
       if (isPlatform(p)) props.append(this.fencePanel(p));
       if (p.type === "plank") {
@@ -446,6 +460,15 @@ export class Editor implements Mode {
           this.commit(before);
         } });
         props.append(h("div", { class: "checks", title: "Hang it on the side wall of the nearest platform edge, so it falls out across the gap" }, h("label", {}, cb, "side")));
+      }
+      if (p.type === "kicker") {
+        const cb = h("input", { type: "checkbox", checked: isSliding(p), onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) { p.track = Math.max(KICKER_TRACK, p.w); p.offset = 0; delete p.roll; } else { delete p.track; delete p.offset; }
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "Let the ball push it left and right along an invisible track" }, h("label", {}, cb, "slides sideways")));
+        if (isSliding(p)) props.append(field("track", 1), field("offset", 0.5));
       }
       if (p.type === "stool") {
         const alongZ = p.slide === "z";
@@ -480,7 +503,7 @@ export class Editor implements Mode {
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
       if (p.type === "tube" || p.type === "rails") this.body.append(this.tubePanel(p));
-      if (p.type === "mover") this.body.append(this.moverPanel(p));
+      if (p.type === "slab") this.body.append(this.moverPanel(p));
       this.body.append(
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
           h("button", { class: "ghost", onclick: () => this.duplicate() }, "Duplicate"),
@@ -638,7 +661,7 @@ export class Editor implements Mode {
     const wrap = h("div", { class: "tube-path" }, h("h3", {}, "path"));
     const num = (n: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
-      return h("label", {}, key, input);
+      return h("label", {}, label(key), input);
     };
     // The curve of the segment arriving at node k: its point's x y z, each held between the
     // segment's two nodes on that axis (shown beside it), and the curve kept inside that box.
@@ -667,7 +690,7 @@ export class Editor implements Mode {
       const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.mid = -1; this.refresh(); } } },
         h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
       if (k === 0) row.append(h("span", { class: "hint" }, "mouth at x y z"));
-      else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", LAYER_H), num(n as unknown as Record<string, number>, "z", SNAP.platform));
+      else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
       if (!end) {
         const smooth = n.bend > 0;
         row.append(
@@ -706,35 +729,41 @@ export class Editor implements Mode {
     return wrap;
   }
 
-  // Schedule editor: ping-pong or loop, and one row per stop (offset from the start, before rot,
-  // and the seconds it waits there), with stops added past the last one or removed.
-  private moverPanel(p: Piece & { type: "mover" }): HTMLElement {
-    const wrap = h("div", { class: "tube-path" }, h("h3", {}, "schedule"));
+  // A slab's movement: a toggle that makes it a moving platform or a fixed one again, and while it
+  // moves its schedule: speed, wait and offset, ping-pong or loop, and one row per stop (offset from
+  // the start, before rot, and the seconds it waits there), with stops added past the last one or removed.
+  private moverPanel(p: Piece & { type: "slab" }): HTMLElement {
+    const wrap = h("div", { class: "tube-path" }, h("h3", {}, "movement"));
     const change = (fn: () => void) => { const before = JSON.stringify(this.level); fn(); this.commit(before); };
-    const loop = h("select", { onchange: () => change(() => { p.loop = loop.value === "loop" ? "loop" : "pingpong"; }) },
-      h("option", { value: "pingpong", selected: p.loop === "pingpong" }, "ping-pong: out and back"),
-      h("option", { value: "loop", selected: p.loop === "loop" }, "loop: last stop back to start"),
+    const m = p.move;
+    wrap.append(h("button", { class: m ? "ghost" : "", title: "A moving platform carries everything standing on it", onclick: () => change(() => { if (m) delete p.move; else p.move = newMove(); }) },
+      m ? "Stop moving" : "Make it move"));
+    if (!m) return wrap;
+    const loop = h("select", { onchange: () => change(() => { m.loop = loop.value === "loop" ? "loop" : "pingpong"; }) },
+      h("option", { value: "pingpong", selected: m.loop === "pingpong" }, "ping-pong: out and back"),
+      h("option", { value: "loop", selected: m.loop === "loop" }, "loop: last stop back to start"),
     ) as HTMLSelectElement;
-    wrap.append(h("label", {}, "route", loop));
     const num = (o: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: o[key] ?? 0, onchange: () => change(() => { o[key] = Number(input.value); }) });
-      return h("label", {}, key, input);
+      return h("label", {}, label(key), input);
     };
-    wrap.append(h("div", { class: "node" }, h("span", { class: "tag" }, "start"), h("span", { class: "hint" }, `waits ${p.wait}s (the wait field above)`)));
-    p.stops.forEach((st, k) => {
+    const mo = m as unknown as Record<string, number>;
+    wrap.append(h("div", { class: "node" }, num(mo, "speed", 0.5), num(mo, "wait", 0.5), num(mo, "offset", 0.5)), h("label", {}, "route", loop));
+    wrap.append(h("div", { class: "node" }, h("span", { class: "tag" }, "start"), h("span", { class: "hint" }, `waits ${m.wait}s (the wait field above)`)));
+    m.stops.forEach((st, k) => {
       const o = st as unknown as Record<string, number>;
       wrap.append(h("div", { class: "node" }, h("span", { class: "tag" }, `${k + 1}`),
-        num(o, "x", SNAP.platform), num(o, "y", LAYER_H), num(o, "z", SNAP.platform), num(o, "wait", 0.5),
-        h("button", { class: "ghost", title: "Remove this stop", onclick: () => change(() => { p.stops.splice(k, 1); }) }, "remove")));
+        num(o, "x", SNAP.platform), num(o, "y", HEIGHT_STEP), num(o, "z", SNAP.platform), num(o, "wait", 0.5),
+        h("button", { class: "ghost", title: "Remove this stop", onclick: () => change(() => { m.stops.splice(k, 1); }) }, "remove")));
     });
     wrap.append(h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px;flex-wrap:wrap" },
       h("button", { class: "ghost", title: "Add a stop 8 further along the way the last leg went", onclick: () => change(() => {
-        const last = p.stops[p.stops.length - 1] ?? { x: 0, y: 0, z: 0, wait: p.wait };
-        const prev = p.stops[p.stops.length - 2] ?? { x: 0, y: 0, z: 0 };
+        const last = m.stops[m.stops.length - 1] ?? { x: 0, y: 0, z: 0, wait: m.wait };
+        const prev = m.stops[m.stops.length - 2] ?? { x: 0, y: 0, z: 0 };
         const dx = last.x - prev.x, dy = last.y - prev.y, dz = last.z - prev.z, l = Math.hypot(dx, dy, dz);
-        p.stops.push(l > 1e-6 ? { x: last.x + (dx / l) * 8, y: last.y + (dy / l) * 8, z: last.z + (dz / l) * 8, wait: 1 } : { x: 0, y: 0, z: -8, wait: 1 });
+        m.stops.push(l > 1e-6 ? { x: last.x + (dx / l) * 8, y: last.y + (dy / l) * 8, z: last.z + (dz / l) * 8, wait: 1 } : { x: 0, y: 0, z: -8, wait: 1 });
       }) }, "Add stop"),
-    ), h("div", { class: "hint" }, "Stops are offsets from the platform's start (before rot). It eases in and out of every stop at up to `speed`; `offset` starts it that many seconds into its schedule."));
+    ), h("div", { class: "hint" }, "Stops are offsets from the platform's start (before rotate). It eases in and out of every stop at up to its speed; the start offset starts it that many seconds into its schedule. Everything standing on it where the level places it rides with it."));
     return wrap;
   }
 
@@ -811,7 +840,7 @@ export class Editor implements Mode {
 
   // The white grid's height, in whole layers.
   private gridLevel(): HTMLElement {
-    const input = h("input", { type: "number", step: LAYER_H, value: gridY, title: "Height of the white grid; new pieces are placed on it",
+    const input = h("input", { type: "number", step: HEIGHT_STEP, value: gridY, title: "Height of the white grid; new pieces are placed on it",
       oninput: () => {
         gridY = layerSnap(Number(input.value) || 0);
         this.ground.position.y = gridY;
@@ -931,6 +960,8 @@ export class Editor implements Mode {
     if (mod && e.code === "KeyC") { e.preventDefault(); this.copy(); return; }
     if (mod && e.code === "KeyV") { e.preventDefault(); this.paste(); return; }
     if (mod && e.code === "KeyA") { e.preventDefault(); this.sel = new Set(this.level.pieces.map((_, i) => i)); this.refresh(); return; }
+    // E/Q (PgUp/PgDn) step a whole layer; with Shift, half a layer.
+    const rise = e.shiftKey ? HEIGHT_STEP : LAYER_H;
     if (this.node >= 0 && this.selectedTube() && !mod) {
       const g = SNAP.platform * (e.shiftKey ? 4 : 1);
       const ops: Record<string, () => void> = {
@@ -938,8 +969,8 @@ export class Editor implements Mode {
         ArrowRight: () => this.moveNode((n) => { n.x = snap(n.x + g); }),
         ArrowUp: () => this.moveNode((n) => { n.z = snap(n.z - g); }),
         ArrowDown: () => this.moveNode((n) => { n.z = snap(n.z + g); }),
-        PageUp: () => this.moveNode((n) => { n.y += LAYER_H; }), KeyE: () => this.moveNode((n) => { n.y += LAYER_H; }),
-        PageDown: () => this.moveNode((n) => { n.y -= LAYER_H; }), KeyQ: () => this.moveNode((n) => { n.y -= LAYER_H; }),
+        PageUp: () => this.moveNode((n) => { n.y += rise; }), KeyE: () => this.moveNode((n) => { n.y += rise; }),
+        PageDown: () => this.moveNode((n) => { n.y -= rise; }), KeyQ: () => this.moveNode((n) => { n.y -= rise; }),
         KeyB: () => this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : TUBE_BEND; }),
         Delete: () => this.removeNode(), Backspace: () => this.removeNode(),
       };
@@ -978,10 +1009,11 @@ export class Editor implements Mode {
       case "ArrowRight": nudge(1, 0); break;
       case "ArrowUp": nudge(0, -1); break;
       case "ArrowDown": nudge(0, 1); break;
-      case "PageUp": case "KeyE": for (const p of pieces) p.y += LAYER_H; break;
-      case "PageDown": case "KeyQ": for (const p of pieces) p.y -= LAYER_H; break;
+      case "PageUp": case "KeyE": for (const p of pieces) p.y += rise; break;
+      case "PageDown": case "KeyQ": for (const p of pieces) p.y -= rise; break;
       case "KeyR": for (const p of pieces) if ("rot" in p) p.rot = (p.rot + (e.shiftKey ? -90 : 90) + 360) % 360; break;
       case "KeyT": for (const p of pieces) if (p.type === "slab") p.tilt = (p.tilt + (e.shiftKey ? -90 : 90) + 360) % 360; break;
+      case "KeyY": for (const p of pieces) if (p.type === "slab") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; break;
       default: return;
     }
     e.preventDefault();
@@ -1117,7 +1149,7 @@ export class Editor implements Mode {
       q.x = snapFor(q)(s0.x + dx); q.z = snapFor(q)(s0.z + dz);
       settle(this.level, q);
       const g = this.built.pieceGroups[k];
-      if (g) { g.position.set(q.x, q.type === "crate" ? q.y + q.h / 2 + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
+      if (g) { g.position.set(q.x, (q.type === "crate" || q.type === "barrel") ? q.y + q.h / 2 + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
     }
     for (const hl of this.helpers) hl.update();
     d.moved = true;

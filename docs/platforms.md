@@ -45,3 +45,7 @@ The ball rolls on one welded triangle mesh built from every platform top (`floor
 - Both meshes are zero-thickness shells that only push from their front face, so every platform is also filled with solid convex hulls from its underside to 0.03 below its surface, chamfered under the lip. The ball never touches them while rolling, but if it ever reaches the corner where a wall meets the lip, the solid pushes it back out instead of letting it in. `check.ts` fires balls at raised slab, holed slab, curve and ramp edges to prove nothing gets inside.
 
 `npm run check` checks that seams stay shallow, curves stay flat, and that the ball falls through holes and notches but rolls past them.
+
+## Twisted slabs
+
+A slab with `twist` is in the welded floor like any other, laid as a grid of small quads (half a unit along it, one across) over its rolled top, so each quad is nearly flat and the creases between their triangles are too small for the ball to feel. Its flat end welds to the platform before it. The solid under each quad is built per triangle (as under a holed slab), since a convex hull over a warped quad's corners would bulge up through the rolling surface.

@@ -1,4 +1,4 @@
-import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isTilted, pieceRot, rampHeight, rotXZ, type Level } from "./level.ts";
+import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -10,20 +10,32 @@ const BX = PLATFORM_EDGE_INSET, BY = PLATFORM_EDGE_DROP;
 const BEVEL_STEPS = 4;
 
 type V = { v: XZ; y: number };
-interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean }
+// `warped`: its corners are not in one plane (a twisted slab's strip), so its solid is built per triangle.
+interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean; warped?: boolean }
 const snapXZ = (q: XZ[]) => q.map(([x, z]): XZ => [snap(x), snap(z)]).filter((v, i, a) => { const l = a[(i + a.length - 1) % a.length]!; return a.length < 2 || v[0] !== l[0] || v[1] !== l[1]; });
 const oriented = (q: V[]) => polyArea(q.map((w) => w.v)) < 0 ? q : q.slice().reverse();
 // See docs/platforms.md. Must stay free of three: check.ts runs it in Node.
 function topPolys(level: Level): Poly[] {
   const out: Poly[] = [];
   for (const p of level.pieces) {
-    if (isTilted(p)) continue;
+    if (isTilted(p) || isMoving(p)) continue;
     const rot = pieceRot(p);
     const W = (x: number, z: number): XZ => { const o = rotXZ(x, z, rot); return [snap(p.x + o.x), snap(p.z + o.z)]; };
     if (p.type === "slab" || p.type === "ramp") {
       const hx = p.w / 2, hz = p.d / 2;
       const outline = [W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)];
-      if (p.type === "slab") {
+      if (p.type === "slab" && p.twist) {
+        // A grid of small quads over the rolled top, half a unit along it and one across, so each
+        // is nearly flat; the long sides carry the lip as on any slab.
+        const n = Math.max(1, Math.ceil(p.d * 2)), k = Math.max(1, Math.ceil(p.w));
+        const zs = Array.from({ length: n + 1 }, (_, i) => p.d / 2 - (i / n) * p.d), xs = Array.from({ length: k + 1 }, (_, j) => -hx + (j / k) * p.w);
+        const at = (x: number, z: number): V => { const t = twistPoint(p, [x, 0, z]); return { v: W(t[0], t[2]), y: snap(p.y + t[1]) }; };
+        const grid = zs.map((z) => xs.map((x) => at(x, z)));
+        const rim = [...grid.map((r) => r[k]!.v), ...grid.slice().reverse().map((r) => r[0]!.v)];
+        for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) {
+          out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(rim, m), narrow: false, warped: true });
+        }
+      } else if (p.type === "slab") {
         for (const region of cutRegion(outline, holesOn(level, p))) {
           const snapped = region.map(snapXZ);
           if (snapped[0]!.length < 3) continue;
@@ -236,13 +248,13 @@ export function floorMesh(level: Level): Floor {
     });
     fill(top, insets, insets.map((l) => l.map((w) => top.vertex(w.v[0], w.y, w.v[1]))), true);
     const lip = (w: V) => ({ v: w.v, y: w.y - BY - SOLID_GAP }), base = (w: V) => ({ v: w.v, y: w.y - PLATFORM_THICKNESS });
-    if (q.loops.length === 1 && convex(q.loops[0]!)) {
+    if (q.loops.length === 1 && convex(q.loops[0]!) && !q.warped) {
       // One hull: the full outline from the underside to just under the lip, chamfered in to the
       // inset ring just under the surface.
       const loop = q.loops[0]!;
       solids.push(cloud([...loop.map(base), ...loop.map(lip), ...insets[0]!.map((w) => ({ v: w.v, y: w.y - SOLID_GAP }))]));
     } else {
-      // A slab cut by holes: prisms over its triangles up to just under the lip.
+      // A slab cut by holes, or a warped strip: prisms over its triangles up to just under the lip.
       const flat: number[] = [], holes: number[] = [], all = q.loops.flat();
       q.loops.forEach((loop, k) => { if (k > 0) holes.push(flat.length / 2); for (const w of loop) flat.push(w.v[0], w.v[1]); });
       const t = earcut(flat, holes);

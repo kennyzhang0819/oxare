@@ -143,6 +143,20 @@ export function tubeWallBlocks(rings: SweepRing[], rIn: number, rOut: number, si
   return out;
 }
 
+// torusMesh stood up round centre c with its axis along unit d (ring radius R, rail radius r): the
+// torus's own axis (y) goes to d and its x to the level direction square to d.
+export function ringMesh(c: V3, d: V3, R: number, r: number, sides: number, segments: number): { positions: number[]; indices: number[] } {
+  const t = torusMesh(R, r, sides, segments), f = Math.hypot(d[0], d[2]);
+  const u: V3 = f > 1e-6 ? [d[2] / f, 0, -d[0] / f] : [1, 0, 0];
+  const w: V3 = [u[1] * d[2] - u[2] * d[1], u[2] * d[0] - u[0] * d[2], u[0] * d[1] - u[1] * d[0]];
+  const pos: number[] = [];
+  for (let i = 0; i < t.positions.length; i += 3) {
+    const x = t.positions[i]!, y = t.positions[i + 1]!, z = t.positions[i + 2]!;
+    pos.push(c[0] + x * u[0] + y * d[0] + z * w[0], c[1] + x * u[1] + y * d[1] + z * w[1], c[2] + x * u[2] + y * d[2] + z * w[2]);
+  }
+  return { positions: pos, indices: t.indices };
+}
+
 // A torus lying flat (axis up) about the origin: ring radius R, tube radius r. Drawn by the scene and
 // used as-is for the physics, so the two match vertex for vertex.
 export function torusMesh(R: number, r: number, tubeSides = 10, segments = 48): { positions: number[]; indices: number[] } {
