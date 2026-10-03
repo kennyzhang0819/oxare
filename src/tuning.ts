@@ -14,6 +14,8 @@ export const TUNING = {
   camDist: 4,
   camHeight: 2,
   camBallGap: 0.9,
+  // Share of the ball's weight a steep wall can carry while the ball is pressed against it in the air.
+  wallGrip: 0.5,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
   propGravity: 0.5,
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
@@ -42,6 +44,7 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   camDist: [3, 7, 0.25],
   camHeight: [1, 4, 0.25],
   camBallGap: [0, 3, 0.1],
+  wallGrip: [0, 1, 0.05],
   propGravity: [0.1, 2, 0.05],
   bumperBounce: [0, 2, 0.05],
   bumperKick: [0, 15, 0.5],
