@@ -15,7 +15,7 @@ export const TILE_SHADES = 5, TILE_STEP = 0.012;
 export const PROPS = { white: WHITE, grey: DARK_GREY, tread: DARK_GREY, hinge: DARK_GREY, cyan: CYAN, green: GREEN };
 // Supports, columns and gates take the pillar's colours.
 export const PILLAR = { white: WHITE, slate: DARK_GREY, pale: LIGHT_GREY };
-export const PLATFORM = { tile: WHITE, lip: WHITE, lipLine: LIGHT_GREY, recess: BLACK, rim: WHITE, border: LIGHT_GREY, block: DARK_GREY, plank: LIGHT_GREY };
+export const PLATFORM = { tile: WHITE, lip: WHITE, lipLine: LIGHT_GREY, recess: BLACK, rim: WHITE, border: LIGHT_GREY, block: DARK_GREY, plank: LIGHT_GREY, glass: TUBE_GLASS };
 // The circuit board every obstacle carries (barrier, kicker back, stool, bumper, magnet, barrel, gate).
 export const BOARD = { edge: DARK_GREY, board: DARK_GREY, trace: LIGHT_GREY, pad: WHITE, hole: DARK_GREY, chip: LIGHT_GREY, chipTop: LIGHT_GREY };
 export const BLOCKADE = { plate: LIGHT_GREY };

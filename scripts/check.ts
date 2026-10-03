@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, beltRods, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { beanAt, beanDist, beanTrack, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -477,10 +477,11 @@ for (const rise of [RAMP_RISE, -RAMP_RISE]) {
 }
 // A hole swallows the ball; the floor beside it still carries one. A hole across the slab's
 // edge notches it: the ball falls through the notch and rolls past it.
-for (const [name, x, hx, falls] of [["through", 0, 0, true], ["beside", 4, 0, false], ["notch", 4, 5, true], ["past-notch", -1, 5, false]] as const) {
+// A glass slab is cut by holes like any other.
+for (const [name, x, hx, falls, glass] of [["through", 0, 0, true, false], ["beside", 4, 0, false, false], ["notch", 4, 5, true, false], ["past-notch", -1, 5, false, false], ["glass", 0, 0, true, true], ["glass-beside", 4, 0, false, true]] as const) {
   const level = testLevel({ id: `hole-${name}`, name, pieces: [
     { type: "start", x, y: 0, z: 0 },
-    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {}, ...(glass ? { glass: true } : {}) },
     { type: "hole", x: hx, y: 0, z: -9, w: 4, d: 6, rot: 0 },
     { type: "goal", x: 0, y: 0, z: -18, r: 2 },
   ] });
@@ -1320,6 +1321,34 @@ for (const reversed of [false, true]) {
   sim.free();
   if (worst > 0.06 || steps < 30) { failed = true; console.error(`FAIL twist: ball strayed ${worst.toFixed(3)} from the rolled top over ${steps} steps (ended at ${last.x.toFixed(2)}, ${last.y.toFixed(2)}, ${last.z.toFixed(2)})`); }
   else console.log(`ok twist: ball rode onto the twisted slab and along its rolled top within ${worst.toFixed(3)} over ${steps} steps`);
+}
+// A curled slab is part of the rolling floor too: rolled onto from a flat slab at its flat end, the
+// ball crosses the seam without a hop, then rides up the quarter pipe with its centre one radius
+// inside the curl's circle, neither sinking in nor leaving the surface, until gravity turns it back.
+{
+  const level = testLevel({ id: "curl", name: "curl", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -4, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -16, w: 8, d: 16, rot: 0, tilt: 0, curl: 90, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -6, r: 1 },
+  ] });
+  const p = level.pieces[2] as Slab, R = curlRadius(p), near = p.z + p.d / 2;
+  const sim = await createSim(level);
+  let worst = 0, flatWorst = 0, top = 0, steps = 0, last = sim.ball.translation();
+  for (let i = 0; i < 120 * 4; i++) {
+    sim.step(1, 0, -1);
+    const b = sim.ball.translation();
+    if (b.z > last.z + 1e-4) break;
+    last = b;
+    top = Math.max(top, b.y);
+    if (b.z > near) { if (b.z < near + 3) flatWorst = Math.max(flatWorst, Math.abs(b.y - BALL_RADIUS)); continue; }
+    if (b.z < near - R + 1 || Math.abs(b.x) > 3) continue;
+    worst = Math.max(worst, Math.abs(Math.hypot(b.y - R, b.z - near) - (R - BALL_RADIUS)));
+    steps++;
+  }
+  sim.free();
+  if (worst > 0.06 || flatWorst > 0.06 || steps < 30 || top < 2) { failed = true; console.error(`FAIL curl: ball strayed ${worst.toFixed(3)} from the curl (${flatWorst.toFixed(3)} on the flat) over ${steps} steps, topping out at y ${top.toFixed(2)} (ended at ${last.x.toFixed(2)}, ${last.y.toFixed(2)}, ${last.z.toFixed(2)})`); }
+  else console.log(`ok curl: ball rode up the quarter pipe to y ${top.toFixed(2)} within ${worst.toFixed(3)} of its curve over ${steps} steps`);
 }
 // What stands on a moving platform rides it: a blockade placed on the platform is found, solid,
 // on the platform at its stop, and gone from where the level placed it.

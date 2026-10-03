@@ -811,7 +811,7 @@ interface At { x: number; y: number; z: number }
 
 export type Piece =
   | (At & { type: "start" })
-  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; move?: Move; belt?: true; shape?: SlabShape })
+  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; curl?: number; move?: Move; belt?: true; glass?: true; shape?: SlabShape })
   | (At & { type: "curve"; inner: number; outer: number; rot: number; sweep?: number })
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
@@ -849,6 +849,8 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
   { name: "side kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: 1, d: KICKER_D, h: KICKER_H, rot: 0, top: 0.4, wall: "right" }) },
   { name: "sliding kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0, track: KICKER_TRACK, offset: 0 }) },
   { name: "treadmill", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, belt: true }) },
+  { name: "glass", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, glass: true }) },
+  { name: "curl", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, curl: CURL_DEFAULT }) },
   { name: "C curve", base: "curve", make: (x, y, z) => ({ type: "curve", x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, sweep: 180 }) },
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
@@ -923,6 +925,29 @@ export function twistPoint(p: Slab, v: [number, number, number]): [number, numbe
   const a = twistAt(p, v[2]), c = Math.cos(a), s = Math.sin(a);
   return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
 }
+// A glass slab: a plain slab whose tiled top and underside are a see-through pane; its rim, walls,
+// seams and holes are a slab's. Drawn only; the physics is a slab's.
+export const isGlass = (p: Piece): p is Slab & { glass: true } => p.type === "slab" && !!p.glass;
+// A curled slab bends along its length in its own upright plane, like a quarter pipe or a loop:
+// flat at its near end (local +z), where it joins the platform before it, and turned `curl` degrees
+// (positive up, negative down) at its far end, bending evenly, so its top runs round a circle of
+// curlRadius (signed, in units). curlPoint carries a local point (y below the top) round with the
+// cross-section it is in. It stays in the welded floor, laid as half-unit strips (docs/platforms.md).
+export const isCurled = (p: Piece): p is Slab & { curl: number } => p.type === "slab" && !!p.curl;
+export const CURL_DEFAULT = 180, CURL_MAX = 360;
+// The ball needs room to roll round inside: a curl's radius is at least this.
+export const CURL_MIN_R = 2;
+export const curlRadius = (p: Slab): number => p.d / (((p.curl ?? 0) * Math.PI) / 180);
+export function curlPoint(p: Slab, v: [number, number, number]): [number, number, number] {
+  if (!p.curl) return v;
+  const R = curlRadius(p), a = (p.d / 2 - v[2]) / R, c = Math.cos(a), s = Math.sin(a);
+  return [v[0], R * (1 - c) + v[1] * c, p.d / 2 - R * s + v[1] * s];
+}
+// How far along local -z a curled slab's top reaches from its near end, in its XZ footprint: up to
+// where it turns vertical.
+export const curlReach = (p: Slab & { curl: number }): number => Math.abs(curlRadius(p)) * Math.sin(Math.min((Math.abs(p.curl) * Math.PI) / 180, Math.PI / 2));
+// A local point carried onto a slab's top as drawn: twisted or curled with its cross-section.
+export const slabPoint = (p: Slab, v: [number, number, number]): [number, number, number] => curlPoint(p, twistPoint(p, v));
 
 // Fraction of a ramp's length that stays level at each end before the incline begins.
 export const RAMP_FLAT = 0.25;
@@ -1017,7 +1042,7 @@ function fenceSpans(f: Fence, len: number): [number, number][] {
 
 // Where along a side a rail from a to b bends: evenly along an arc side (and at its knots) or a ramp, else just its ends.
 export function fenceSamples(p: Platform, side: FenceSide, a: number, b: number): number[] {
-  const n = side.arc ? Math.max(1, Math.ceil(((b - a) / 90) * 12)) : p.type === "ramp" ? Math.max(1, Math.ceil(b - a)) : p.type === "slab" && p.twist ? Math.max(1, Math.ceil((b - a) * 2)) : 1;
+  const n = side.arc ? Math.max(1, Math.ceil(((b - a) / 90) * 12)) : p.type === "ramp" ? Math.max(1, Math.ceil(b - a)) : p.type === "slab" && (p.twist || p.curl) ? Math.max(1, Math.ceil((b - a) * 2)) : 1;
   const out = Array.from({ length: n + 1 }, (_, k) => a + ((b - a) * k) / n);
   for (const k of side.knots ?? []) if (k > a + 1e-6 && k < b - 1e-6 && out.every((s) => Math.abs(s - k) > 1e-6)) out.push(k);
   return out.sort((x, y) => x - y);
@@ -1058,8 +1083,8 @@ function legacyFences(p: Platform, spec: Record<string, Fence>): Piece[] {
   const sides = fenceSides(p), rot = pieceRot(p), r3 = (v: number) => Math.round(v * 1000) / 1000;
   const base = (side: FenceSide, at: number): V3 => {
     const q = side.at(at, FENCE_RAIL_INSET);
-    if (p.type !== "slab" || !p.twist) return [q.x, q.y, q.z];
-    const v = twistPoint(p, [q.x, FENCE_RAIL_Y + q.y, q.z]);
+    if (p.type !== "slab" || (!p.twist && !p.curl)) return [q.x, q.y, q.z];
+    const v = slabPoint(p, [q.x, FENCE_RAIL_Y + q.y, q.z]);
     return [v[0], v[1] - FENCE_RAIL_Y, v[2]];
   };
   type Node = { v: V3; mid?: V3 };
@@ -1102,6 +1127,10 @@ function legacyFences(p: Platform, spec: Record<string, Fence>): Piece[] {
 
 // Lowest and highest top-surface y of a platform.
 export function yRange(p: Platform): [number, number] {
+  if (isCurled(p)) {
+    const far = p.y + curlRadius(p) * (1 - Math.cos(Math.min((Math.abs(p.curl) * Math.PI) / 180, Math.PI)));
+    return [Math.min(p.y, far), Math.max(p.y, far)];
+  }
   if (p.type !== "ramp") return [p.y, p.y];
   const top = p.y + p.rise * LAYER_H;
   return [Math.min(p.y, top), Math.max(p.y, top)];
@@ -1109,6 +1138,11 @@ export function yRange(p: Platform): [number, number] {
 
 // Top-surface y of a platform at world (x, z), assuming the point is on it.
 export function platformHeightAt(p: Platform, x: number, z: number): number {
+  if (isCurled(p)) {
+    const l = rotXZ(x - p.x, z - p.z, -p.rot), R = curlRadius(p);
+    const a = Math.min(Math.asin(Math.max(0, Math.min(1, (p.d / 2 - l.z) / Math.abs(R)))), (Math.abs(p.curl) * Math.PI) / 180);
+    return p.y + R * (1 - Math.cos(a));
+  }
   if (p.type === "slab" && p.twist) {
     const l = rotXZ(x - p.x, z - p.z, -p.rot), a = twistAt(p, l.z);
     return p.y + l.x * Math.tan(Math.max(-1.55, Math.min(1.55, a)));
@@ -1159,7 +1193,7 @@ export function respawnY(level: Level): number {
   let low = Infinity;
   for (const p of level.pieces) {
     low = Math.min(low, p.y);
-    if (p.type === "ramp") low = Math.min(low, p.y + p.rise * LAYER_H);
+    if (p.type === "ramp" || isCurled(p)) low = Math.min(low, yRange(p)[0]);
     if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") for (const n of p.path) low = Math.min(low, p.y + n.y);
     if (p.type === "slab" && p.move) for (const s of p.move.stops) low = Math.min(low, p.y + s.y);
   }
@@ -1234,7 +1268,7 @@ export function holeFootprint(h: Piece & { type: "hole" }): XZ[] {
 
 // Holes cut into slab `p`: those resting on its top surface. Curves and ramps are not cut.
 export function holesOn(level: Level, p: Piece): XZ[][] {
-  if (p.type !== "slab" || isTilted(p) || isMoving(p) || p.twist || p.belt) return [];
+  if (p.type !== "slab" || isTilted(p) || isMoving(p) || p.twist || p.curl || p.belt) return [];
   const out: XZ[][] = [];
   for (const h of level.pieces) if (h.type === "hole" && Math.abs(h.y - p.y) < 1e-6) out.push(holeFootprint(h));
   return out;
@@ -1293,8 +1327,8 @@ export function platformFootprint(p: Piece): XZ[][] {
     return Array.from({ length: t.length / 3 }, (_, k) => [o[t[k * 3]!]!, o[t[k * 3 + 1]!]!, o[t[k * 3 + 2]!]!]);
   }
   if (p.type === "slab" || p.type === "ramp") {
-    const hx = p.w / 2, hz = p.d / 2;
-    return [[W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)]];
+    const hx = p.w / 2, hz = p.d / 2, far = isCurled(p) ? hz - curlReach(p) : -hz;
+    return [[W(-hx, far), W(hx, far), W(hx, hz), W(-hx, hz)]];
   }
   if (p.type === "curve") {
     const c = curveStrip(p), us = curveStations(p, curveSegments(p)), V = (u: number, r: number) => W(...c.at(u, r));
@@ -1544,7 +1578,12 @@ export function levelProblems(level: Level): string[] {
   if (count("start") !== 1) out.push(`needs exactly one start, has ${count("start")}`);
   if (count("goal") !== 1) out.push(`needs exactly one goal, has ${count("goal")}`);
   level.pieces.forEach((p, i) => {
-    if (isBelt(p) && (isTilted(p) || isMoving(p) || p.twist)) out.push(`piece ${i}: a treadmill can't tilt, roll, twist or move`);
+    if (isBelt(p) && (isTilted(p) || isMoving(p) || p.twist || p.curl)) out.push(`piece ${i}: a treadmill can't tilt, roll, twist, curl or move`);
+    if (isCurled(p)) {
+      if (p.tilt || p.roll || p.twist || p.move) out.push(`piece ${i}: a curled slab can't tilt, roll, twist or move`);
+      if (Math.abs(p.curl) > CURL_MAX) out.push(`piece ${i}: curl must be within ±${CURL_MAX}°`);
+      else if (Math.abs(curlRadius(p)) < CURL_MIN_R) out.push(`piece ${i}: a slab curled ${p.curl}° must be at least ${Math.ceil(((CURL_MIN_R * Math.abs(p.curl) * Math.PI) / 180) * 2) / 2} deep`);
+    }
     if (isBelt(p) && Math.min(p.w, p.d) < BELT_MIN) out.push(`piece ${i}: treadmill w and d must be at least ${BELT_MIN}`);
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
@@ -1568,7 +1607,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "gate" && (p.w <= 0 || p.d < SUPPORT_W + 2 * GATE_CHAIN_R)) out.push(`piece ${i}: gate w must be positive and d at least ${SUPPORT_W + 2 * GATE_CHAIN_R}`);
     if (isShaped(p)) {
       const sh = p.shape, g = (v?: number) => v ?? 0;
-      if (p.tilt || p.roll || p.twist || p.belt || p.move) out.push(`piece ${i}: a shaped slab can't tilt, roll, twist, move or be a treadmill`);
+      if (p.tilt || p.roll || p.twist || p.curl || p.belt || p.move) out.push(`piece ${i}: a shaped slab can't tilt, roll, twist, curl, move or be a treadmill`);
       const ends = [["north end", p.w + g(sh.e?.n) + g(sh.w?.n)], ["south end", p.w + g(sh.e?.s) + g(sh.w?.s)], ["east end", p.d + g(sh.n?.e) + g(sh.s?.e)], ["west end", p.d + g(sh.n?.w) + g(sh.s?.w)]] as const;
       for (const [name, size] of ends) if (size < 1) out.push(`piece ${i}: the slab's ${name} must stay at least 1 across`);
       if (g(sh.n?.bow) + g(sh.s?.bow) <= -(p.d - 1) || g(sh.e?.bow) + g(sh.w?.bow) <= -(p.w - 1)) out.push(`piece ${i}: the slab's sides bow in so far they meet`);
@@ -1662,7 +1701,7 @@ export function validateLevel(raw: unknown): Level {
     const f = (p.fences ?? {}) as Record<string, unknown>;
     switch (p.type) {
       case "start": return { type: "start", ...at };
-      case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}), ...(p.belt === true ? { belt: true as const } : {}), ...(shape(p.shape) ? { shape: shape(p.shape)! } : {}),
+      case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}), ...(p.curl ? { curl: num(p.curl, "curl") } : {}), ...(p.belt === true ? { belt: true as const } : {}), ...(p.glass === true ? { glass: true as const } : {}), ...(shape(p.shape) ? { shape: shape(p.shape)! } : {}),
         ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"]);
       case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"), ...(p.sweep !== undefined && num(p.sweep, "sweep") !== 90 ? { sweep: num(p.sweep, "sweep") } : {}) }, f, ["a", "outer", "b", "inner"]);
       case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"]);
