@@ -119,11 +119,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // carried along each step.
   const movers: SimMover[] = [];
   const moverOf = new Map<number, SimMover>();
+  // Tilted slabs: wall grip works only on their big faces, never their edges.
+  const walls = new Set<number>();
   level.pieces.forEach((p, index) => {
     if (!isMoving(p)) return;
     const at = moverAt(p, 0);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z));
-    world.createCollider(platformHull(p.w, p.d).setRotation(qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)))).setFriction(1), body);
+    walls.add(world.createCollider(platformHull(p.w, p.d).setRotation(qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)))).setFriction(1), body).handle);
     const m = { index, body, piece: p };
     movers.push(m);
     moverOf.set(index, m);
@@ -189,7 +191,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
       // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
-      fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1));
+      walls.add(fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1)).handle);
       return;
     }
     for (const b of pieceBoxes(p)) {
@@ -621,17 +623,19 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       const wx = rx + push[0] * STEP, wz = rz + push[2] * STEP, wh = Math.hypot(wx, wz);
       if (wh > cap) push = [(wx * (cap / wh) - rx) / STEP, push[1], (wz * (cap / wh) - rz) / STEP];
       push = [push[0] + extra[0], push[1] + extra[1], push[2] + extra[2]];
-      // Wall grip: off the ground, a steep surface the ball is pressed against carries up to wallGrip of
-      // its weight, no more than the press (friction 1) allows.
+      // Wall grip: off the ground, an upright slab's big face the ball is pressed against carries up to
+      // wallGrip of its weight, no more than the press (friction 1) allows.
       if (TUNING.wallGrip > 0) {
         let press = 0, grounded = false;
         world.contactPairsWith(ballCollider, (other) => {
           world.contactPair(ballCollider, other, (m, flipped) => {
-            const ny = flipped ? m.normal().y : -m.normal().y;
+            const n = m.normal(), ny = flipped ? n.y : -n.y;
+            const face = walls.has(other.handle) ? qrot(other.rotation(), { x: 0, y: 1, z: 0 }) : null;
+            const big = !!face && Math.abs(n.x * face.x + n.y * face.y + n.z * face.z) > 0.9;
             for (let i = 0; i < m.numContacts(); i++) {
               if (m.contactDist(i) > 0.02) continue;
               if (ny > 0.3) grounded = true;
-              else if (Math.abs(ny) < 0.3) press += m.contactImpulse(i) / STEP;
+              else if (big && Math.abs(ny) < 0.3) press += m.contactImpulse(i) / STEP;
             }
           });
         });
