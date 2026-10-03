@@ -660,18 +660,22 @@ export function moverShift(p: Mover, t: number): { x: number; y: number; z: numb
   return { x: a.x - p.x, y: a.y - p.y, z: a.z - p.z };
 }
 
-// Bean: a striped capsule prop that rolls along a node path laid out like a tube's and shoves
+// Bean: a striped capsule prop that glides along a node path laid out like a tube's and shoves
 // whatever it meets out of its way. (x, y, z) is its first node and `path` the rest, relative to it
 // before `rot`; a node's y is the surface the bean rolls on there, its centre `r` above it. `bend`
 // rounds a corner, `mid` curves a segment and `smooth` makes the path one curve, as on a tube. It
-// lies across its heading, `len` from tip to tip, and rolls over the surface at `speed`: `pingpong`
+// lies along the way it sets off (turned `turn` degrees from that about the vertical: 90 lies it
+// across it) and keeps that one orientation for the whole run, never rolling or turning, `len` from
+// tip to tip, and glides BEAN_LIFT above the surface at `speed`: `pingpong`
 // runs the path out and back, easing out of and into a stop at each end and waiting `wait` seconds
 // there; `loop` closes the path with a straight run from the last node back to the first (that
 // corner rounded like the last node's; a last node placed on the first closes it itself, with that
 // segment's curve) and goes round without a pause. `offset` starts it that many seconds into its
 // schedule. Its place is a pure function of time, so the physics, the picture and the editor agree.
 export type Bean = Piece & { type: "bean" };
-export const BEAN_R = 0.6, BEAN_LEN = 2.4, BEAN_SPEED = 3;
+export const BEAN_R = 0.6, BEAN_LEN = 2.4, BEAN_SPEED = 6;
+// A bean floats this far above the surface it follows.
+export const BEAN_LIFT = 0.05;
 // Over this distance a ping-pong bean rolls up to speed from a stop and back down into one.
 export const BEAN_EASE = 1.5;
 export interface Quat { x: number; y: number; z: number; w: number }
@@ -702,7 +706,7 @@ export function beanTrack(p: Bean): BeanTrack {
 // the closing run included, rounds as an inside corner does, then cut where the round repeats: at
 // the middle of the closing run, or at the first node where that run is curved or the path smooth.
 function beanLine(p: Bean): V3[] {
-  const lift = p.r, c = tubeNodes(p, lift);
+  const lift = p.r + BEAN_LIFT, c = tubeNodes(p, lift);
   if (c.length < 2) return [c[0]!];
   if (p.loop !== "loop") { const rings = tubeRings(p, lift); return rings.length ? rings.map((q) => q.c) : [c[0]!]; }
   const closed = Math.hypot(...sub(c[c.length - 1]!, c[0]!)) < 1e-6;
@@ -755,9 +759,9 @@ export function beanDist(p: Bean, len: number, t: number): number {
   return u < wait ? len : len - run(u - wait);
 }
 
-// The bean's centre and turn in world space at time t: lying across the track's heading there and
-// rolled by the distance it has come, so it rolls over the surface and back the other way on the
-// return. `d` is the level heading along the track.
+// The bean's centre and turn in world space at time t: its turn is fixed, lying along the track's
+// first segment turned `turn` degrees about the vertical, however the track winds on. `d` is the
+// level heading along the track there.
 export interface BeanPose { x: number; y: number; z: number; q: Quat; d: V3 }
 export function beanAt(p: Bean, track: BeanTrack, t: number): BeanPose {
   const s = beanDist(p, track.len, t), pts = track.pts, n = pts.length;
@@ -768,7 +772,10 @@ export function beanAt(p: Bean, track: BeanTrack, t: number): BeanPose {
   const fwd = rotXZ(0, -1, p.rot);
   let d: V3 = [fwd.x, 0, fwd.z];
   if (L > 1e-9) { const h = Math.hypot(b[0] - a[0], b[2] - a[2]); if (h > 1e-6) d = [(b[0] - a[0]) / h, 0, (b[2] - a[2]) / h]; }
-  return { x: c[0], y: c[1], z: c[2], q: quatMul(quatYTo(d[2], 0, -d[0]), quatAboutY(s / p.r)), d };
+  let d0: V3 = [fwd.x, 0, fwd.z];
+  if (n > 1) { const h0 = Math.hypot(pts[1]![0] - pts[0]![0], pts[1]![2] - pts[0]![2]); if (h0 > 1e-6) d0 = [(pts[1]![0] - pts[0]![0]) / h0, 0, (pts[1]![2] - pts[0]![2]) / h0]; }
+  const axis = rotXZ(d0[0], d0[2], p.turn ?? 0);
+  return { x: c[0], y: c[1], z: c[2], q: quatYTo(axis.x, 0, axis.z), d };
 }
 
 // Older levels fence a platform's sides on the platform itself: per side true along its whole
@@ -780,7 +787,7 @@ interface At { x: number; y: number; z: number }
 export type Piece =
   | (At & { type: "start" })
   | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; move?: Move; belt?: true; shape?: SlabShape })
-  | (At & { type: "curve"; inner: number; outer: number; rot: number })
+  | (At & { type: "curve"; inner: number; outer: number; rot: number; sweep?: number })
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
@@ -796,7 +803,7 @@ export type Piece =
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number })
   | (At & { type: "barrel"; r: number; h: number; rot: number; roll?: number })
   | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number; slide?: "z" })
-  | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; path: TubeNode[]; smooth?: true })
+  | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; turn?: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "jump"; w: number; d: number; rot: number; rise: number; roll?: number })
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
@@ -817,6 +824,7 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
   { name: "side kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: 1, d: KICKER_D, h: KICKER_H, rot: 0, top: 0.4, wall: "right" }) },
   { name: "sliding kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0, track: KICKER_TRACK, offset: 0 }) },
   { name: "treadmill", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, belt: true }) },
+  { name: "C curve", base: "curve", make: (x, y, z) => ({ type: "curve", x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, sweep: 180 }) },
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
@@ -926,7 +934,11 @@ export function fenceSides(p: Platform): FenceSide[] {
     return [
       { key: "a", len: ro - ri, at: (s, k) => ({ x: cl(ri + s, ri + k, ro - k), y: 0, z: -k }), param: (x) => x - ri },
       { key: "outer", len: 90, arc: true, knots: [knot, 90 - knot], at: (s, k) => edge(s, ro - k, k), param: ang },
-      { key: "b", len: ro - ri, at: (s, k) => ({ x: k, y: 0, z: -cl(ro - s, ri + k, ro - k) }), param: (_x, z) => ro + z },
+      { key: "b", len: ro - ri, at: (s, k) => { const [x, z] = c.at(c.len - k, cl(ro - s, ri + k, ro - k)); return { x, y: 0, z }; }, param: (x, z) => {
+        // The point's radius, measured along end b from its inner corner to its outer.
+        const [x0, z0] = c.at(c.len, ri), [x1, z1] = c.at(c.len, ro), dx = x1 - x0, dz = z1 - z0;
+        return ro - (ri + (((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz || 1)) * (ro - ri));
+      } },
       { key: "inner", len: 90, arc: true, knots: [knot, 90 - knot], at: (s, k) => edge(90 - s, ri + k, k), param: (x, z) => 90 - ang(x, z) },
     ];
   }
@@ -1175,7 +1187,7 @@ export function pieceCylinders(p: Piece): Cylinder[] {
 
 export function pieceSectors(p: Piece): Sector[] {
   if (p.type !== "curve") return [];
-  return [{ kind: "platform", inner: p.inner, outer: p.outer, y0: -PLATFORM_THICKNESS, y1: 0 }];
+  return [{ kind: "platform", inner: p.inner, outer: p.outer, y0: -PLATFORM_THICKNESS, y1: 0, a1: curveSweep(p) }];
 }
 
 export function rotXZ(x: number, z: number, deg: number): { x: number; z: number } {
@@ -1207,22 +1219,33 @@ export const CURVE_SEGMENTS = 24;
 export type Curve = Piece & { type: "curve" };
 // Each end of a curve runs this far dead straight before the arc begins, so its ends are square.
 export const CURVE_STRAIGHT = 2;
+// A curve's arc turns `sweep` degrees: 90 (a corner, the default) or 180 (a C, two corners in one piece).
+export const CURVE_SWEEPS = [90, 180];
+export const curveSweep = (p: Curve): number => p.sweep ?? 90;
+// Segments round a curve's arc, in its footprint and its floor: CURVE_SEGMENTS per quarter turn.
+export const curveSegments = (p: Curve): number => Math.round((CURVE_SEGMENTS * curveSweep(p)) / 90);
 
-// A curve laid along its centre line, `len` long from end a (local +x) to end b (local -z): `at(u, r)`
-// is the local point u along it and r out from the corner it turns round (r from inner to outer),
-// and `param` maps a local point back to u. The ends run straight for `s`; the arc between them
-// turns about (s, -s), so the ends sit where a plain quarter ring's would.
-export function curveStrip(p: Curve): { s: number; len: number; at(u: number, r: number): XZ; param(x: number, z: number): number } {
-  const s = Math.min(CURVE_STRAIGHT, Math.max(0, p.inner)), R = (p.inner + p.outer) / 2 - s, arc = (R * Math.PI) / 2;
+// A curve laid along its centre line, `len` long from end a (local +x) to end b: `at(u, r)` is the
+// local point u along it and r out from the corner it turns round (r from inner to outer), and
+// `param` maps a local point back to u. The ends run straight for `s`; the arc between them turns
+// `sweep` about (s, -s), so a corner's ends sit where a plain quarter ring's would, and a C's end b
+// comes back level with end a, heading local +z.
+export function curveStrip(p: Curve): { s: number; len: number; sweep: number; at(u: number, r: number): XZ; param(x: number, z: number): number } {
+  const s = Math.min(CURVE_STRAIGHT, Math.max(0, p.inner)), R = (p.inner + p.outer) / 2 - s, sweep = (curveSweep(p) * Math.PI) / 180, arc = R * sweep;
+  const half = sweep > Math.PI / 2 + 1e-9, cs = Math.cos(sweep), sn = Math.sin(sweep);
   return {
-    s, len: 2 * s + arc,
+    s, len: 2 * s + arc, sweep,
     at: (u, r) => {
       if (u <= s) return [r, -u];
-      if (u >= s + arc) return [s - (u - s - arc), -r];
+      if (u >= s + arc) { const e = u - s - arc; return [s + (r - s) * cs - e * sn, -s - (r - s) * sn - e * cs]; }
       const a = (u - s) / R;
       return [s + (r - s) * Math.cos(a), -s - (r - s) * Math.sin(a)];
     },
-    param: (x, z) => z > -s ? Math.max(0, -z) : x < s ? 2 * s + arc - Math.max(0, x) : s + R * Math.max(0, Math.min(Math.PI / 2, Math.atan2(-(z + s), x - s))),
+    param: (x, z) => {
+      if (z > -s) return half && x < s ? 2 * s + arc + Math.min(0, z) : Math.max(0, -z);
+      if (!half && x < s) return 2 * s + arc - Math.max(0, x);
+      return s + R * Math.max(0, Math.min(sweep, Math.atan2(-(z + s), x - s)));
+    },
   };
 }
 
@@ -1249,7 +1272,7 @@ export function platformFootprint(p: Piece): XZ[][] {
     return [[W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)]];
   }
   if (p.type === "curve") {
-    const c = curveStrip(p), us = curveStations(p, CURVE_SEGMENTS), V = (u: number, r: number) => W(...c.at(u, r));
+    const c = curveStrip(p), us = curveStations(p, curveSegments(p)), V = (u: number, r: number) => W(...c.at(u, r));
     return us.slice(1).map((u1, i) => { const u0 = us[i]!; return [V(u0, p.inner), V(u0, p.outer), V(u1, p.outer), V(u1, p.inner)]; });
   }
   return [];
@@ -1500,6 +1523,7 @@ export function levelProblems(level: Level): string[] {
     if (isBelt(p) && Math.min(p.w, p.d) < BELT_MIN) out.push(`piece ${i}: treadmill w and d must be at least ${BELT_MIN}`);
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
+    if (p.type === "curve" && !CURVE_SWEEPS.includes(curveSweep(p))) out.push(`piece ${i}: curve sweep must be ${CURVE_SWEEPS.join(" or ")}`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
     if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "gate") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
@@ -1615,7 +1639,7 @@ export function validateLevel(raw: unknown): Level {
       case "start": return { type: "start", ...at };
       case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}), ...(p.belt === true ? { belt: true as const } : {}), ...(shape(p.shape) ? { shape: shape(p.shape)! } : {}),
         ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"]);
-      case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot") }, f, ["a", "outer", "b", "inner"]);
+      case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"), ...(p.sweep !== undefined && num(p.sweep, "sweep") !== 90 ? { sweep: num(p.sweep, "sweep") } : {}) }, f, ["a", "outer", "b", "inner"]);
       case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"]);
       case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
@@ -1650,7 +1674,7 @@ export function validateLevel(raw: unknown): Level {
         track: num(p.track ?? STOOL_TRACK, "track"), offset: num(p.offset ?? 0, "offset"), ...(p.slide === "z" ? { slide: "z" as const } : {}) };
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "bean": return { type: "bean", ...at, rot: num(p.rot ?? 0, "rot"), r: num(p.r ?? BEAN_R, "r"), len: num(p.len ?? BEAN_LEN, "len"), speed: num(p.speed ?? BEAN_SPEED, "speed"),
-        wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
+        wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", ...(p.turn ? { turn: num(p.turn, "turn") } : {}), path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: GOAL_R };
       case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };

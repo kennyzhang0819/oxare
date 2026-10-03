@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PIECE_TYPES, PIECE_VARIANTS, newPiece, type Level, type Piece, type PieceType } from "./level.ts";
+import { PIECE_TYPES, PIECE_VARIANTS, magnetProfile, newPiece, type Level, type Piece, type PieceType } from "./level.ts";
 import { SUN_OFFSET, buildLevel } from "./scene.ts";
 
 const W = 112, H = 84;
@@ -27,10 +27,12 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
 
   const entries: [string, Piece][] = [...PIECE_TYPES.map((t): [string, Piece] => [t, newPiece(t, 0, 0, 0)]), ...PIECE_VARIANTS.map((v): [string, Piece] => [v.name, v.make(0, 0, 0)])];
   for (const [type, piece] of entries) {
-    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, true);
+    // Movers' track guides would be most of the picture; those thumbs show the object alone.
+    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, !["bean", "stool", "sliding kicker"].includes(type));
     scene.add(built.group);
     const box = new THREE.Box3().setFromObject(built.group);
     if (type === "goal") box.max.y = Math.min(box.max.y, 2.5); // frame the disc, not the whole beam
+    if (type === "magnet") { const r = Math.max(...magnetProfile().flat().map((v) => v[0])); box.min.x = box.min.z = -r; box.max.x = box.max.z = r; } // frame the body, not its aura
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(0.8, box.getSize(new THREE.Vector3()).length() / 2);
     camera.position.copy(center).add(new THREE.Vector3(1, 0.75, 1.15).normalize().multiplyScalar(radius * 2.9));
@@ -54,7 +56,7 @@ const FEATURED: PieceType[] = ["gate", "tube", "rails", "bean", "seesaw", "jump"
 const levelCache = new Map<string, string>();
 
 // Menu card pictures are saved as files in public/thumbs/<id>.png, with index.json naming, for each
-// level, the thumbKey its picture was taken from (dev: the editor's Save and the admin panel's
+// level, the thumbKey its picture was taken from (and, after a dot, when) (dev: the editor's Save and the admin panel's
 // Rebuild thumbnails write them). A card uses its file while the key still matches, and renders the
 // level live (levelThumb) when the file is missing or the level has changed since.
 let saved: Record<string, string> = {};
@@ -72,15 +74,15 @@ export function thumbKey(level: Level): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 export function levelThumbSrc(renderer: THREE.WebGLRenderer, level: Level): string {
-  const key = thumbKey(level);
-  return saved[level.id] === key ? `${import.meta.env.BASE_URL}thumbs/${level.id}.png?v=${key}` : levelThumb(renderer, level);
+  const key = thumbKey(level), have = saved[level.id];
+  return have?.split(".")[0] === key ? `${import.meta.env.BASE_URL}thumbs/${level.id}.png?v=${have}` : levelThumb(renderer, level);
 }
 // Renders the level's picture and saves it through the dev server.
 export async function saveThumb(renderer: THREE.WebGLRenderer, level: Level): Promise<void> {
   const key = thumbKey(level);
   const res = await fetch("/__thumb/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: level.id, key, png: levelThumb(renderer, level) }) });
   if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
-  saved[level.id] = key;
+  saved[level.id] = `${key}.${Date.now().toString(36)}`;
 }
 
 // A card picture rendered live: the level's own `thumb` frame if it has one, else a close shot of

@@ -1,4 +1,4 @@
-import { beltRods, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
+import { beltRods, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -59,7 +59,7 @@ function topPolys(level: Level): Poly[] {
         }
       }
     } else if (p.type === "curve") {
-      const c = curveStrip(p), us = curveStations(p, 12);
+      const c = curveStrip(p), us = curveStations(p, curveSegments(p) / 2);
       const inner = us.map((u) => W(...c.at(u, p.inner))), outer = us.map((u) => W(...c.at(u, p.outer)));
       const outline = [...outer, ...inner.slice().reverse()];
       for (let i = 0; i < us.length - 1; i++) {

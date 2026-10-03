@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, isMoving, isShaped, type Slab, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs, saveThumb } from "./thumbs.ts";
@@ -53,7 +53,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["roll", 15]],
   barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
-  bean: [["rot", 15], ["r", 0.1], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
+  bean: [["rot", 15], ["turn", 15], ["r", 0.1], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
   jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [["rot", 15], ["roll", 15]],
@@ -70,7 +70,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
-  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width",
+  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)",
 };
 const label = (key: string) => LABELS[key] ?? key;
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
@@ -520,6 +520,17 @@ export class Editor implements Mode {
               this.commit(before);
             } }, right ? "right" : "left"))));
         }
+      }
+      if (p.type === "curve") {
+        const sel = h("select", { title: "A corner turns 90 degrees; a C turns 180, two corners in one piece with no seam, its far end coming back level with the near one", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (sel.value === "180") p.sweep = 180; else delete p.sweep;
+          this.commit(before);
+        } },
+          h("option", { value: "90", selected: curveSweep(p) === 90 }, "corner: 90°"),
+          h("option", { value: "180", selected: curveSweep(p) === 180 }, "C: 180°"),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "turn", sel));
       }
       if (p.type === "slab") {
         const cb = h("input", { type: "checkbox", checked: !!p.belt, onchange: () => {

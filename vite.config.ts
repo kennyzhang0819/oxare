@@ -47,7 +47,9 @@ function levelSaver(): Plugin {
             if (typeof key !== "string" || typeof png !== "string" || !png.startsWith("data:image/png;base64,")) throw new Error("needs a key and a PNG data URL");
             mkdirSync(THUMBS, { recursive: true });
             writeFileSync(`${THUMBS}/${id}.png`, Buffer.from(png.slice("data:image/png;base64,".length), "base64"));
-            writeThumbIndex({ ...thumbIndex(), [id]: key });
+            // The key, then when it was written: the page puts the whole value in the image's URL, so a
+            // rebuilt picture is a new URL and never comes out of the browser's cache.
+            writeThumbIndex({ ...thumbIndex(), [id]: `${key}.${Date.now().toString(36)}` });
             res.setHeader("content-type", "application/json");
             res.end(JSON.stringify({ file: `${THUMBS}/${id}.png` }));
           } catch (err) {

@@ -14,7 +14,7 @@ Seen from above, outside corners are rounded. Inside corners (a hole's corners, 
 
 ## Curves
 
-A curve is drawn as a straight strip laid along its centre line (`curveStrip` in `src/level.ts`): 2 straight (`CURVE_STRAIGHT`), the arc, then 2 straight again. The straights keep each end's rounded corners square to the end instead of leaning with the arc, and the strip's long edges break exactly where the straights meet the arc. The footprint, the physics floor and the fence rails follow the same layout.
+A curve is drawn as a straight strip laid along its centre line (`curveStrip` in `src/level.ts`): 2 straight (`CURVE_STRAIGHT`), the arc, then 2 straight again. The arc turns 90 for a corner or 180 for a C (`sweep`): a C is one strip, so there is no seam where two corners would meet, and its far end comes back level with its near one. The straights keep each end's rounded corners square to the end instead of leaning with the arc, and the strip's long edges break exactly where the straights meet the arc. The footprint, the physics floor and the fence rails follow the same layout.
 
 ## Holes
 

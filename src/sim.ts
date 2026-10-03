@@ -22,8 +22,10 @@ const SEESAW_MASS = 0.5;
 const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
 // Crates and barrels: one light, slippery, barely bouncy body each; a gate's cube shares the feel.
 const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
-// A bean's skin: slippery, so it shoves the ball on rather than dragging it round with its roll.
+// A bean's skin: slippery, so it shoves the ball on rather than dragging it along.
 const BEAN_FRICTION = 0.3;
+// A bean throws the ball off itself like a bumper's side, at this share of the bumper's kick.
+const BEAN_KICK = 0.5;
 // A gate's chain link: light beside the cube it holds.
 const GATE_LINK_MASS = 0.02;
 // A gate's cube: heavier than a barrel, and dragged by a force against its speed each step (a body's
@@ -516,16 +518,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     planks.push({ index, body });
   });
 
-  // A bean rolls its track on a kinematic body, set each step to where its schedule says, so it
+  // A bean glides its track on a kinematic body, set each step to where its schedule says, so it
   // shoves the ball and any free prop it meets aside with nothing to stop it. Its collider is the
-  // capsule drawn, lying along its own y and turned to lie across its heading (beanAt).
-  const beans: { body: RAPIER.RigidBody; piece: Bean; track: BeanTrack }[] = [];
+  // capsule drawn, lying along its own y and turned as beanAt says. `vel` is its speed this step.
+  const beans: { body: RAPIER.RigidBody; piece: Bean; track: BeanTrack; vel: { x: number; y: number; z: number } }[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "bean") return;
     const track = beanTrack(p), at = beanAt(p, track, 0);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z).setRotation(at.q));
     world.createCollider(RAPIER.ColliderDesc.capsule(Math.max(0, p.len / 2 - p.r), p.r).setFriction(BEAN_FRICTION), body);
-    beans.push({ body, piece: p, track });
+    beans.push({ body, piece: p, track, vel: { x: 0, y: 0, z: 0 } });
     planks.push({ index, body });
   });
 
@@ -771,7 +773,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       }
       ball.addForce({ x: push[0], y: push[1], z: push[2] }, true);
       for (const m of movers) m.body.setNextKinematicTranslation(moverAt(m.piece, time + STEP));
-      for (const b of beans) { const at = beanAt(b.piece, b.track, time + STEP); b.body.setNextKinematicTranslation(at); b.body.setNextKinematicRotation(at.q); }
+      for (const b of beans) {
+        const now = b.body.translation(), at = beanAt(b.piece, b.track, time + STEP);
+        b.vel = { x: (at.x - now.x) / STEP, y: (at.y - now.y) / STEP, z: (at.z - now.z) / STEP };
+        b.body.setNextKinematicTranslation(at); b.body.setNextKinematicRotation(at.q);
+      }
       for (const c of carried) {
         if (c.active && !c.active()) continue;
         const d = moverShift(c.mover.piece, time + STEP);
@@ -804,6 +810,19 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const n = qrot(q, { x: l.x / d, y: 0, z: l.z / d }), vin = v0.x * n.x + v0.y * n.y + v0.z * n.z;
         if (vin >= 0) continue;
         const v = ball.linvel(), vn = v.x * n.x + v.y * n.y + v.z * n.z, out = Math.max(TUNING.bumperKick, -vin * TUNING.bumperBounce);
+        if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
+      }
+      // Beans: like a bumper's side, out from the nearest point of the bean's axis, but measured against
+      // the bean's own motion, so a bean running into a resting ball throws it ahead.
+      for (const bn of beans) {
+        const o = bn.body.translation(), q = bn.body.rotation(), b = ball.translation(), h = Math.max(0, bn.piece.len / 2 - bn.piece.r);
+        const l = qunrot(q, { x: b.x - o.x, y: b.y - o.y, z: b.z - o.z }), ly = Math.max(-h, Math.min(h, l.y));
+        const rx = l.x, ry = l.y - ly, rz = l.z, d = Math.hypot(rx, ry, rz);
+        if (d < 1e-6 || d > bn.piece.r + BALL_RADIUS + 0.05) continue;
+        const n = qrot(q, { x: rx / d, y: ry / d, z: rz / d }), bv = bn.vel;
+        const vin = (v0.x - bv.x) * n.x + (v0.y - bv.y) * n.y + (v0.z - bv.z) * n.z;
+        if (vin >= 0) continue;
+        const v = ball.linvel(), vn = (v.x - bv.x) * n.x + (v.y - bv.y) * n.y + (v.z - bv.z) * n.z, out = Math.max(TUNING.bumperKick * BEAN_KICK, -vin * TUNING.bumperBounce);
         if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }

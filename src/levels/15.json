@@ -1,0 +1,29 @@
+{
+  "id": "15",
+  "name": "Beans",
+  "hidden": true,
+  "pieces": [
+    {"type": "start", "x": 0, "y": 0, "z": 2},
+    {"type": "slab", "x": 26, "y": 0, "z": -93, "w": 24, "d": 24, "rot": 0, "tilt": 0},
+    {"type": "column", "x": 29, "y": 0, "z": -93, "h": 4},
+    {"type": "bean", "x": 33, "y": 0, "z": -93, "rot": 0, "r": 0.6, "len": 2.4, "speed": 4, "wait": 0, "offset": 0, "loop": "loop", "path": [{"x": -4, "y": 0, "z": -4, "bend": 0}, {"x": -8, "y": 0, "z": 0, "bend": 0}, {"x": -4, "y": 0, "z": 4, "bend": 0}], "smooth": true},
+    {"type": "slab", "x": -63, "y": 0, "z": -75, "w": 16, "d": 24, "rot": 0, "tilt": 0},
+    {"type": "goal", "x": -61, "y": 0, "z": -76, "r": 1},
+    {"type": "ramp", "x": 0, "y": 0, "z": -10, "w": 8, "d": 32, "rot": 0, "rise": -4},
+    {"type": "slab", "x": 0, "y": -4, "z": -34, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "bean", "x": -3, "y": -4, "z": -38, "rot": 270, "r": 0.6, "len": 2.4, "speed": 6, "wait": 0, "offset": 0, "loop": "pingpong", "path": [{"x": 0, "y": 0, "z": -6, "bend": 0}]},
+    {"type": "bean", "x": 3, "y": -4, "z": -30, "rot": 90, "r": 0.6, "len": 2.4, "speed": 6, "wait": 0, "offset": 0, "loop": "pingpong", "path": [{"x": 0, "y": 0, "z": -6, "bend": 0}]},
+    {"type": "slab", "x": 0, "y": -4, "z": -50, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "jump", "x": 0, "y": -4, "z": -54, "w": 4, "d": 4, "rot": 0, "rise": 6},
+    {"type": "barrier", "x": -1.5, "y": -4, "z": -57, "rot": 0},
+    {"type": "barrier", "x": 1.5, "y": -4, "z": -57, "rot": 0},
+    {"type": "curve", "x": -12, "y": -4, "z": -66, "inner": 8, "outer": 16, "rot": 0},
+    {"type": "jump", "x": -8, "y": -4, "z": -78, "w": 4, "d": 4, "rot": 0, "rise": 6},
+    {"type": "slab", "x": -24, "y": -4, "z": -78, "w": 8, "d": 16, "rot": 90, "tilt": 0},
+    {"type": "barrier", "x": -17, "y": -4, "z": -76.5, "rot": 90},
+    {"type": "barrier", "x": -17, "y": -4, "z": -79.5, "rot": 90},
+    {"type": "kicker", "x": -29, "y": -4, "z": -78, "w": 2.5, "d": 3, "h": 1, "rot": 90},
+    {"type": "crate", "x": -31, "y": -4, "z": -77, "w": 2, "h": 1.2, "d": 2, "rot": 0, "roll": 90},
+    {"type": "crate", "x": -31, "y": -4, "z": -79, "w": 2, "h": 1.2, "d": 2, "rot": 0, "roll": 90}
+  ]
+}

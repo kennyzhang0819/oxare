@@ -53,6 +53,12 @@ const curveLevel = testLevel({ id: "curve", name: "curve", pieces: [
   { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: {} },
   { type: "goal", x: 0, y: 0, z: -15, r: 2 },
 ] });
+// A C: the same curve carried round 180, the ball steered round its arc (about (2, -2), radius 13) to its far end.
+const cLevel = testLevel({ id: "c-curve", name: "C curve", pieces: [
+  { type: "start", x: 15, y: 0, z: -1.2 },
+  { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, sweep: 180, fences: {} },
+  { type: "goal", x: -11, y: 0, z: 0, r: 2 },
+] });
 // A shaped slab, 10 wide where it meets the start slab and 6 where it meets the far one, its sides
 // bowed in a little between: both seams weld, and the ball rolls its length flat.
 const shapedLevel = testLevel({ id: "shaped", name: "shaped", pieces: [
@@ -71,7 +77,8 @@ const teeLevel = testLevel({ id: "tee", name: "tee", pieces: [
 // The floor is checked under fixed physics, so the result is about the floor's shape and not the
 // feel tuning: a faster or lighter ball skims the seam grooves without settling into them.
 const FLOOR_CHECK = { gravity: 5, throttleForce: 9, maxSpeed: 6.5 };
-for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [shapedLevel, "line"], [curveLevel, "arc"]] as const) {
+// An arc is steered round a centre at a radius until the ball has turned `until` radians about it.
+for (const [level, steer, cx, cz, rad, until] of [[seamLevel, "line", 0, 0, 0, 0], [teeLevel, "line", 0, 0, 0, 0], [shapedLevel, "line", 0, 0, 0, 0], [curveLevel, "arc", 0, 0, 15, 1.45], [cLevel, "arc", 2, -2, 13, 3.0]] as const) {
   Object.assign(TUNING, FLOOR_CHECK);
   const sim = await createSim(level);
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
@@ -80,9 +87,9 @@ for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [shapedLe
     const p = sim.ball.translation();
     if (steer === "line") { if (p.z < -33) break; sim.step(1, 0, -1); }
     else {
-      const a = Math.atan2(-p.z, p.x), r = Math.hypot(p.x, p.z);
-      if (a > 1.45) break;
-      const k = (15 - r) * 0.2;
+      const a = Math.atan2(-(p.z - cz), p.x - cx), r = Math.hypot(p.x - cx, p.z - cz);
+      if (a > until) break;
+      const k = (rad - r) * 0.2;
       sim.step(1, -Math.sin(a) + Math.cos(a) * k, -Math.cos(a) - Math.sin(a) * k);
     }
     const q = sim.ball.translation(), s0 = startOf(level);

@@ -359,7 +359,7 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   return [mk(top), mk(glow), mk(centre), sktx];
 }
 
-// Crate face, on every face: a grey plate crossed by a dark band with stepped ends and a dark stem
+// Crate face, on every face: a white plate crossed by a dark band with stepped ends and a dark stem
 // up and down to a tab at each edge, a framed screen where they cross, and a green bracket glowing
 // round each corner, right at the edge so it wraps the rounded corner.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
