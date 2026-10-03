@@ -13,7 +13,7 @@ Every color a level's pieces are drawn in lives in `src/palette.ts`. The pieces 
 | `ORANGE` | #ff7a2e | the kicker's strips, the treadmill's chevrons |
 | `RED` | #ff2b2b | the bumper's band, the magnet's light, a bean's stripes |
 | `DARK_RED` | #6e2630 | the magnet's lower disc |
-| `TUBE_GLASS` | #5ad2e6 | tubes and hoops |
+| `TUBE_GLASS` | #5ad2e6 | tubes, hoops and the pane of a glass slab |
 
 Floor tiles are `WHITE` in `TILE_SHADES` (5) fixed shades, each `TILE_STEP` (1.2%) darker; every tile takes one, its top and left edge two steps lighter, bottom and right two darker. Planks use the same tiles tinted `LIGHT_GREY`.
 

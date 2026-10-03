@@ -37,7 +37,7 @@ function paletteGroups(): [string, PieceType[]][] {
 
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
-  slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15]],
+  slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15], ["curl", 15]],
   curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
@@ -68,7 +68,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
 };
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
-  w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)",
+  w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)", curl: "curl (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
   track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)",
 };
@@ -539,6 +539,14 @@ export class Editor implements Mode {
           this.commit(before);
         } });
         props.append(h("div", { class: "checks", title: "Rods instead of a tiled top, carrying the ball toward the far end (local -z); turn it with rot" }, h("label", {}, cb, "treadmill")));
+        if (!p.belt) {
+          const gl = h("input", { type: "checkbox", checked: !!p.glass, onchange: () => {
+            const before = JSON.stringify(this.level);
+            if (gl.checked) p.glass = true; else delete p.glass;
+            this.commit(before);
+          } });
+          props.append(h("div", { class: "checks", title: "A see-through pane instead of the tiled top and underside; the rim, holes and physics stay a slab's" }, h("label", {}, gl, "glass")));
+        }
       }
       if (p.type === "stool") {
         const alongZ = p.slide === "z";
@@ -593,8 +601,8 @@ export class Editor implements Mode {
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
       if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") this.body.append(this.tubePanel(p));
-      if (p.type === "slab" && !p.belt && !p.twist && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
-      if (p.type === "slab" && !p.belt && !isShaped(p)) this.body.append(this.moverPanel(p));
+      if (p.type === "slab" && !p.belt && !p.twist && !p.curl && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
+      if (p.type === "slab" && !p.belt && !p.curl && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
           h("button", { class: "ghost", onclick: () => this.duplicate() }, "Duplicate"),

@@ -13,12 +13,15 @@ export interface PlatformBend { at(u: number, z: number): XZ; knots: number[] }
 // `twist`, given, rolls each cross-section about the top's centre line (x = 0, y = 0) by twist(z) radians.
 // `open` leaves out the tiled top and underside inside their square corners (a treadmill's opening, BELT_FRAME in).
 // `outline`, given, replaces the L x W rectangle with that shape (a shaped slab's), centred like it.
-export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = [], twist?: (z: number) => number, open = false, outline?: XZ[]): PlatformMesh {
+// `deform`, given, carries every point of the finished strip somewhere else (a curled slab's bend),
+// after `twist`; its texture coordinates stay those of the flat strip.
+export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = [], twist?: (z: number) => number, open = false, outline?: XZ[], deform?: (v: [number, number, number]) => [number, number, number]): PlatformMesh {
   const A = L / 2, B = W / 2;
   const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const K = 4, KB = 4;
   const y1 = 0, y0 = -thick;
-  const step = twist ? 0.5 : bend || warp ? 1 : 2;
+  const fine = !!twist || !!deform;
+  const step = fine ? 0.5 : bend || warp ? 1 : 2;
   const rect: XZ[] = outline ?? [[-A, -B], [-A, B], [A, B], [A, -B]];
   const shaped = !!outline;
   const region = cuts.length || shaped ? cutRegion(rect, cuts) : [[rect]];
@@ -154,7 +157,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
       const o = sz.b + sz.g, loops = part.map((l) => l.loop);
       if (!cuts.length && !shaped) {
         const rf = sz.re - sz.g, ga = A - o - rf, gb = B - o - rf;
-        const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / (twist ? step : 2)));
+        const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / (fine ? step : 2)));
         const { sc, fc } = part[0]!;
         if (rf > 0) { const a = ringAt(loops[0]!, o, sz, sc, fc), c = ringAt(loops[0]!, o + rf, sz, sc, fc, true); strip(addRing(a, y, 0), addRing(c, y, 0), a.pts.length, dir); }
         if (open) continue;
@@ -193,13 +196,19 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   }
   const wallsTo = idx.length;
 
-  // Texture coordinates come from the untwisted strip, so the tiles keep their size on a twist.
-  const flat = twist ? pos.slice() : pos;
+  // Texture coordinates come from the flat strip, so the tiles keep their size on a twist or a curl.
+  const flat = fine ? pos.slice() : pos;
   if (twist) {
     for (let i = 0; i < pos.length; i += 3) {
       const a = twist(pos[i + 2]!), x = pos[i]!, y = pos[i + 1]!;
       pos[i] = x * Math.cos(a) - y * Math.sin(a);
       pos[i + 1] = x * Math.sin(a) + y * Math.cos(a);
+    }
+  }
+  if (deform) {
+    for (let i = 0; i < pos.length; i += 3) {
+      const v = deform([pos[i]!, pos[i + 1]!, pos[i + 2]!]);
+      pos[i] = v[0]; pos[i + 1] = v[1]; pos[i + 2] = v[2];
     }
   }
   const lift: number[] = [];
@@ -215,7 +224,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   }
   const uv = new Float32Array((pos.length / 3) * 2);
   for (let i = 0; i < pos.length / 3; i++) {
-    const F = (k: number) => (twist ? flat[i * 3 + k] ?? 0 : P(i, k));
+    const F = (k: number) => (fine ? flat[i * 3 + k] ?? 0 : P(i, k));
     if (uvKind[i] === 0) { uv[i * 2] = F(0) / tile; uv[i * 2 + 1] = F(2) / tile; }
     else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (F(1) - (lift[i] ?? 0) - y0) / thick; }
   }

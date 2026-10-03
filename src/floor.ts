@@ -1,4 +1,4 @@
-import { beltRods, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
+import { beltRods, curlPoint, isCurled, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -10,8 +10,11 @@ const BX = PLATFORM_EDGE_INSET, BY = PLATFORM_EDGE_DROP;
 const BEVEL_STEPS = 4;
 
 type V = { v: XZ; y: number };
+type V3 = [number, number, number];
 // `warped`: its corners are not in one plane (a twisted slab's strip), so its solid is built per triangle.
-interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean; warped?: boolean }
+// `warp`: the poly is laid out flat here and only bent where its vertices are emitted (a curled slab's
+// strip, which may stand up or hang over), so welding, seams and lips are worked out on the flat layout.
+interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean; warped?: boolean; warp?: (x: number, y: number, z: number) => V3 }
 const snapXZ = (q: XZ[]) => q.map(([x, z]): XZ => [snap(x), snap(z)]).filter((v, i, a) => { const l = a[(i + a.length - 1) % a.length]!; return a.length < 2 || v[0] !== l[0] || v[1] !== l[1]; });
 const oriented = (q: V[]) => polyArea(q.map((w) => w.v)) < 0 ? q : q.slice().reverse();
 // See docs/platforms.md. Must stay free of three: check.ts runs it in Node.
@@ -34,6 +37,19 @@ function topPolys(level: Level): Poly[] {
         const rim = [...grid.map((r) => r[k]!.v), ...grid.slice().reverse().map((r) => r[0]!.v)];
         for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) {
           out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(rim, m), narrow: false, warped: true });
+        }
+      } else if (isCurled(p)) {
+        // Half-unit strips along the flat layout; the curl bends each at emission. The near edge
+        // stays where it is, so it welds and seams with the slab before it like any other.
+        const n = Math.max(1, Math.ceil(p.d * 2)), rim = outline;
+        const zs = Array.from({ length: n + 1 }, (_, i) => p.d / 2 - (i / n) * p.d);
+        const warp = (x: number, y: number, z: number): V3 => {
+          const l = rotXZ(x - p.x, z - p.z, -rot), c = curlPoint(p, [l.x, y - p.y, l.z]), o = rotXZ(c[0], c[2], rot);
+          return [snap(p.x + o.x), snap(p.y + c[1]), snap(p.z + o.z)];
+        };
+        for (let i = 0; i < n; i++) {
+          const q: V[] = [{ v: W(-hx, zs[i]!), y: p.y }, { v: W(hx, zs[i]!), y: p.y }, { v: W(hx, zs[i + 1]!), y: p.y }, { v: W(-hx, zs[i + 1]!), y: p.y }];
+          out.push({ loops: [oriented(q)], rim: (m) => onOutline(rim, m), narrow: false, warped: true, warp });
         }
       } else if (p.type === "slab" && p.belt) {
         // A treadmill's frame: the opening's edge drops square into the recess, with no lip.
@@ -164,7 +180,6 @@ export function floorMesh(level: Level): Floor {
   };
   const top = mesh(), under = mesh();
   const solids: Float32Array[] = [];
-  const cloud = (pts: { v: XZ; y: number }[]) => new Float32Array(pts.flatMap((w) => [w.v[0], w.y, w.v[1]]));
   const convex = (q: V[]) => q.every((a, i) => {
     const b = q[(i + 1) % q.length]!, c = q[(i + 2) % q.length]!;
     return (b.v[0] - a.v[0]) * (c.v[1] - b.v[1]) - (b.v[1] - a.v[1]) * (c.v[0] - b.v[0]) <= 1e-9;
@@ -184,6 +199,9 @@ export function floorMesh(level: Level): Floor {
   };
 
   for (const q of polys) {
+    const P = (x: number, y: number, z: number): V3 => (q.warp ? q.warp(x, y, z) : [x, y, z]);
+    const topV = (x: number, y: number, z: number) => top.vertex(...P(x, y, z)), underV = (x: number, y: number, z: number) => under.vertex(...P(x, y, z));
+    const cloud = (pts: { v: XZ; y: number }[]) => new Float32Array(pts.flatMap((w) => P(w.v[0], w.y, w.v[1])));
     const insets: V[][] = [];
     const gaps = q.narrow ? edgeGaps(q.loops.map((l) => l.map((w) => w.v))) : null;
     q.loops.forEach((loop, k) => {
@@ -228,9 +246,9 @@ export function floorMesh(level: Level): Floor {
         const d0 = deep ? BY : depthAt(i), d1 = deep ? BY : depthAt((i + 1) % n);
         const row = (j: number): [number, number] => {
           const t = j / BEVEL_STEPS;
-          const at = (o: V, w: V, depth: number) => j === 0 ? top.vertex(o.v[0], o.y - depth, o.v[1])
-            : j === BEVEL_STEPS ? top.vertex(w.v[0], w.y, w.v[1])
-            : top.vertex(o.v[0] + (w.v[0] - o.v[0]) * t, o.y + (w.y - o.y) * t - drop(bx * t, depth, bx), o.v[1] + (w.v[1] - o.v[1]) * t);
+          const at = (o: V, w: V, depth: number) => j === 0 ? topV(o.v[0], o.y - depth, o.v[1])
+            : j === BEVEL_STEPS ? topV(w.v[0], w.y, w.v[1])
+            : topV(o.v[0] + (w.v[0] - o.v[0]) * t, o.y + (w.y - o.y) * t - drop(bx * t, depth, bx), o.v[1] + (w.v[1] - o.v[1]) * t);
           return [at(o0, i0, d0), at(o1, i1, d1)];
         };
         let [a, b] = row(0);
@@ -246,13 +264,13 @@ export function floorMesh(level: Level): Floor {
       for (let i = 0; i < n; i++) {
         const a = loop[i]!, b = loop[(i + 1) % n]!;
         if ((uses.get(edgeKey(a, b)) ?? 0) !== 1) continue;
-        const at = under.vertex(a.v[0], a.y - WALL_TOP, a.v[1]), bt = under.vertex(b.v[0], b.y - WALL_TOP, b.v[1]);
-        const ab = under.vertex(a.v[0], a.y - PLATFORM_THICKNESS, a.v[1]), bb = under.vertex(b.v[0], b.y - PLATFORM_THICKNESS, b.v[1]);
+        const at = underV(a.v[0], a.y - WALL_TOP, a.v[1]), bt = underV(b.v[0], b.y - WALL_TOP, b.v[1]);
+        const ab = underV(a.v[0], a.y - PLATFORM_THICKNESS, a.v[1]), bb = underV(b.v[0], b.y - PLATFORM_THICKNESS, b.v[1]);
         under.tri(at, ab, bb);
         under.tri(at, bb, bt);
       }
     });
-    fill(top, insets, insets.map((l) => l.map((w) => top.vertex(w.v[0], w.y, w.v[1]))), true);
+    fill(top, insets, insets.map((l) => l.map((w) => topV(w.v[0], w.y, w.v[1]))), true);
     const lip = (w: V) => ({ v: w.v, y: w.y - BY - SOLID_GAP }), base = (w: V) => ({ v: w.v, y: w.y - PLATFORM_THICKNESS });
     if (q.loops.length === 1 && convex(q.loops[0]!) && !q.warped) {
       // One hull: the full outline from the underside to just under the lip, chamfered in to the
@@ -269,7 +287,7 @@ export function floorMesh(level: Level): Floor {
         solids.push(cloud([...tri.map(base), ...tri.map(lip)]));
       }
     }
-    fill(under, q.loops, q.loops.map((l) => l.map((w) => under.vertex(w.v[0], w.y - PLATFORM_THICKNESS, w.v[1]))), false);
+    fill(under, q.loops, q.loops.map((l) => l.map((w) => underV(w.v[0], w.y - PLATFORM_THICKNESS, w.v[1]))), false);
   }
   return {
     positions: new Float32Array(top.pos), indices: new Uint32Array(top.idx),

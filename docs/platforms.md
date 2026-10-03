@@ -32,7 +32,7 @@ Holes are free-form, so they can carve a slab into any shape. Two limits:
 
 In play a hole draws nothing itself. In the editor it shows a faint cyan footprint so it can be seen and clicked.
 
-Curves, ramps and tilted slabs are never cut.
+Curves, ramps, tilted, twisted and curled slabs are never cut. Glass slabs are cut like any other.
 
 ## Physics floor
 
@@ -62,3 +62,12 @@ A shaped slab is otherwise a plain slab: no tilt, roll, twist, treadmill or move
 ## Twisted slabs
 
 A slab with `twist` is in the welded floor like any other, laid as a grid of small quads (half a unit along it, one across) over its rolled top, so each quad is nearly flat and the creases between their triangles are too small for the ball to feel. Its flat end welds to the platform before it. The solid under each quad is built per triangle (as under a holed slab), since a convex hull over a warped quad's corners would bulge up through the rolling surface.
+
+## Curled slabs
+
+A slab with `curl` is in the welded floor too, laid as half-unit strips along its length. The strips are worked out flat, exactly where an uncurled slab's would be, so the seam with the platform before it, the lips along its sides and the far end's open lip come out as on any slab; only when a strip's vertices are emitted is each carried round the curl with its cross-section (`curlPoint` in level.ts, the same map the drawn mesh uses). So a strip can stand upright or hang upside down in a loop while the welding and the lip profile never see anything but a flat rectangle. The near end is left exactly where it is, so it welds and seams with the flat slab before it, and the ball crosses onto the curl without a hop. Walls and the underside bend the same way, and the solid under each strip is built per triangle as under a twisted slab. The flat layout can lie under the curl's overhang, so nothing in the floor is looked up by position there: a curled slab's footprint for `surfaceAt`, snapping and overlaps is only the part before it turns vertical.
+
+## Glass slabs
+
+A glass slab's physics floor is a plain slab's, holes and all. Only the drawn mesh changes: the groups that carry the tiled top and underside are moved onto a second mesh with the glass material, which casts no shadow, while the rim, lips and walls stay on the slab's mesh with its shadow.
+

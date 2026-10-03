@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, beltRods, isBelt, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BEAN_LIFT, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { BUMPER, EFFECTS, GATE, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
@@ -18,7 +18,7 @@ export const SUN_DIR = SUN_OFFSET.clone().normalize();
 export const OCEAN_Y = -45;
 export const CLOUD_Y = 40, CLOUD_TOP = 75;
 
-let MAT: Record<"platform" | "block" | "edge" | "rim" | "border", THREE.MeshStandardMaterial> | null = null;
+let MAT: Record<"platform" | "block" | "edge" | "rim" | "border" | "glass", THREE.MeshStandardMaterial> | null = null;
 const LIP = PLATFORM_LIP;
 // Spacing of stacked paint layers (dark base, slats, light strips), three of them fitting in PAINT.
 const LAYER = PAINT / 3.5;
@@ -26,6 +26,20 @@ const LAYER = PAINT / 3.5;
 function curveGeometry(p: Curve): THREE.BufferGeometry {
   const c = curveStrip(p), rmid = (p.inner + p.outer) / 2;
   return platformGeometry(c.len, p.outer - p.inner, PLATFORM_THICKNESS, LIP, TILE, { at: (u, z) => c.at(u, rmid + z), knots: c.s > 0 ? [c.s, c.len - c.s] : [] });
+}
+// A glass slab's tiled faces, moved off the slab's geometry onto a see-through pane of their own
+// that casts no shadow; the rim, lips and walls stay on the slab's mesh and keep its shadow.
+function glassPane(geo: THREE.BufferGeometry): THREE.Mesh {
+  const pane = new THREE.BufferGeometry();
+  for (const name of ["position", "uv", "normal"]) pane.setAttribute(name, geo.getAttribute(name));
+  pane.setIndex(geo.getIndex());
+  for (const grp of geo.groups.filter((q) => q.materialIndex === 0)) pane.addGroup(grp.start, grp.count, 0);
+  geo.groups = geo.groups.filter((q) => q.materialIndex !== 0);
+  const m = new THREE.Mesh(pane, MAT!.glass);
+  m.receiveShadow = true;
+  m.renderOrder = 1;
+  m.userData.noShadow = true;
+  return m;
 }
 // The drawn platform mesh (platform.ts) as a three geometry with its material groups.
 function platformGeometry(...args: Parameters<typeof platformMesh>): THREE.BufferGeometry {
@@ -49,6 +63,7 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     edge: new THREE.MeshStandardMaterial({ map: edge.map, emissiveMap: edge.glow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.6 }),
     rim: new THREE.MeshStandardMaterial({ color: PLATFORM.rim, roughness: 0.35, metalness: 0.05 }),
     border: new THREE.MeshStandardMaterial({ color: PLATFORM.border, roughness: 0.7 }),
+    glass: new THREE.MeshPhysicalMaterial({ color: PLATFORM.glass, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.34, depthWrite: false, clearcoat: 1, clearcoatRoughness: 0.08 }),
   };
   const st = structTextures();
   STRUCT = {
@@ -1426,11 +1441,12 @@ export function buildLevel(level: Level, editor: boolean): Built {
       const rot = pieceRot(p);
       const cuts: XZ[][] = holesOn(level, p).map((h) => h.map((v) => { const o = rotXZ(v[0] - p.x, v[1] - p.z, -rot); return [o.x, o.z] as XZ; }));
       const geo = p.type === "slab"
-        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined, isBelt(p), isShaped(p) ? slabOutline(p) : undefined)
+        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined, isBelt(p), isShaped(p) ? slabOutline(p) : undefined, isCurled(p) ? (v) => curlPoint(p, v) : undefined)
         : curveGeometry(p);
       const m = new THREE.Mesh(geo, [mat.platform, mat.edge, mat.rim, mat.border]);
       m.receiveShadow = true;
       g.add(m);
+      if (isGlass(p) && !isBelt(p)) g.add(glassPane(geo));
       if (isBelt(p)) beltRodMeshes.push(...buildBelt(g, p));
       if (isMoving(p)) {
         m.castShadow = true;
@@ -1476,7 +1492,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
 
   // Everything solid casts and takes shadows; glows, the beam, holograms and editor guides don't.
   group.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
+    if (!(o instanceof THREE.Mesh) || o.userData.noShadow) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     if (!mats.every((m) => m instanceof THREE.MeshStandardMaterial)) return;
     o.receiveShadow = true;
