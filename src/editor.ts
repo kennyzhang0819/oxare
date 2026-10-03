@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs, saveThumb } from "./thumbs.ts";
@@ -11,8 +11,9 @@ import type { PlayFrom } from "./game.ts";
 const HITBOX_KEY = "balling.hitboxes";
 const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.8, depthTest: false });
 
+// A new level starts hidden: the admin makes it public from the level's ⋯ menu.
 export function blankLevel(): Level {
-  return { id: "new-level", name: "New Level", pieces: [
+  return { id: "new-level", name: "New Level", hidden: true, pieces: [
     newPiece("start", 0, 0, 0),
     { ...newPiece("slab", 0, 0, 0), w: 8, d: 8 } as Piece,
     newPiece("goal", 0, 0, -12),
@@ -38,48 +39,49 @@ function paletteGroups(): [string, PieceType[]][] {
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
   slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15], ["curl", 15]],
-  curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15]],
+  curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15], ["roll", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   rails: [["rot", 15]],
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
-  support: [["w", 0.5], ["h", 1], ["rot", 15]],
+  support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
   gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
-  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["roll", 15]],
+  kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
-  blockade: [["rot", 15], ["roll", 15]],
-  barrier: [["rot", 15], ["roll", 15]],
-  crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["roll", 15]],
-  barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["roll", 15]],
+  blockade: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  barrier: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
   bean: [["rot", 15], ["turn", 15], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
-  jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
-  hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
-  pillar: [["rot", 15], ["roll", 15]],
-  column: [["h", 0.5], ["rot", 15], ["roll", 15]],
-  bumper: [["rot", 15], ["roll", 15]],
-  magnet: [["rot", 15], ["roll", 15]],
+  jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["rise", 0.5]],
+  hole: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  pillar: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  column: [["h", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  bumper: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  magnet: [["rot", 15], ["tilt", 15], ["roll", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
   goal: [],
   tube: [["rot", 15]],
-  hoop: [["rot", 15], ["roll", 15]],
+  hoop: [["rot", 15], ["tilt", 15], ["roll", 15]],
   fence: [["rot", 15]],
 };
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)", curl: "curl (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
-  track: "track length", offset: "start offset", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)",
+  track: "track length", offset: "start offset", reach: "reach (stem out)", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)",
 };
 const label = (key: string) => LABELS[key] ?? key;
-// Snap increments for moving platforms and structures, chosen in the toolbar and remembered.
-const SNAP_KEY = "balling.snap.v2";
-const SNAP_STEPS = [0.1, 0.25, 0.5, 1, 2, 4, 8];
-const SNAP = { platform: 4, structure: STRUCT_GRID };
+// Snap increments for moving platforms and structures, chosen in the toolbar and remembered; platform
+// sizes and heights step and round to the platform snap too.
+const SNAP_KEY = "balling.snap.v3";
+const SNAP_STEPS = [0.25, 0.5, 1, 2, 4, 8];
+const SNAP = { platform: 2, structure: 2 };
 try {
   const saved = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "{}") as Partial<typeof SNAP>;
-  for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && v > 0) SNAP[k] = v; }
+  for (const k of ["platform", "structure"] as const) { const v = saved[k]; if (typeof v === "number" && SNAP_STEPS.includes(v)) SNAP[k] = v; }
 } catch { /* keep defaults */ }
 const to = (step: number) => (v: number) => Math.round(Math.round(v / step) * step * 1000) / 1000;
 const snap = (v: number) => to(SNAP.platform)(v);
@@ -95,20 +97,16 @@ function step(v: number, dir: number, grid: number, n: number): number {
   return to(grid)((first + dir * (n - 1)) * grid);
 }
 const layerSnap = (v: number) => Math.round(v / HEIGHT_STEP) * HEIGHT_STEP;
-// Platform sizes and heights step in fours, the unit every level is laid out in, unless "Fine
-// sizes" is ticked. Zero is kept so a ramp can be flattened or a curve run from its centre.
-const SIZE_GRID = 4;
-const FINE_KEY = "balling.fineSizes";
-let fineSizes = false;
+// Platform sizes and heights that step and round to the platform snap. Zero is kept so a ramp can be
+// flattened or a curve run from its centre.
 // Height of the white ground grid, chosen in the toolbar and remembered; new pieces land on it.
 const GRID_Y_KEY = "balling.gridY";
 let gridY = 0;
 try { gridY = Number(localStorage.getItem(GRID_Y_KEY)) || 0; } catch { /* on the ground */ }
-try { fineSizes = localStorage.getItem(FINE_KEY) === "1"; } catch { /* coarse */ }
-const COARSE_FIELDS: Partial<Record<PieceType, string[]>> = {
+const SNAPPED_FIELDS: Partial<Record<PieceType, string[]>> = {
   slab: ["y", "w", "d"], curve: ["y", "inner", "outer"], ramp: ["y", "w", "d", "rise"], bridge: ["w", "d"],
 };
-const isCoarse = (t: PieceType, key: string) => !fineSizes && !!COARSE_FIELDS[t]?.includes(key);
+const snapsToPlatform = (t: PieceType, key: string) => !!SNAPPED_FIELDS[t]?.includes(key);
 
 // A tube's or rails' nodes in world space, first end first, and the inverse: rebuild the piece from them.
 // `mid` is the curve point of the segment arriving at the node, if that segment is curved.
@@ -157,13 +155,17 @@ function settle(level: Level, p: Piece) {
   if (!isStructure(p)) return;
   if (p.type === "kicker" && p.top !== undefined) {
     // A side kicker snaps by its wall side, which stands against a wall on a platform's edge.
-    const o = rotXZ(p.wall === "left" ? -p.w / 2 : p.w / 2, 0, p.rot);
+    const o = rotXZ(p.mirror ? -p.w / 2 : p.w / 2, 0, p.rot);
+    p.x = r3(gridSnap(p.x + o.x) - o.x); p.z = r3(gridSnap(p.z + o.z) - o.z);
+  } else if (p.type === "kicker" && isSliding(p)) {
+    // A sliding kicker snaps by where it rests on its track, so the kicker, not the track's middle, sits on the grid.
+    const o = rotXZ(kickerSlide(p).at, 0, p.rot);
     p.x = r3(gridSnap(p.x + o.x) - o.x); p.z = r3(gridSnap(p.z + o.z) - o.z);
   } else { p.x = gridSnap(p.x); p.z = gridSnap(p.z); }
   // A column keeps the y it is given: it often stands under the platform it holds up.
   if (p.type === "column") return;
-  // So does a rolled prop: one stood out of a wall is placed by hand.
-  if (pieceRoll(p) % 360 !== 0) return;
+  // So does a rolled prop, or a turned hole: one stood out of a wall, or cut into it, is placed by hand.
+  if (pieceRoll(p) % 360 !== 0 || pieceTilt(p) % 360 !== 0 || holeTurned(p)) return;
   const y = surfaceAt(level, p.x, p.z);
   if (y !== null) p.y = y;
 }
@@ -301,6 +303,9 @@ export class Editor implements Mode {
   private redoStack: string[] = [];
   // The selection the side panel was last built for (see renderPanel).
   private panelShows = "";
+  private panelTimer = 0;
+  private pressed = false;
+  private onPointer = (e: PointerEvent) => { this.pressed = e.buttons !== 0; };
   private raf = 0;
   private panel: HTMLElement;
   private info = h("div", { class: "info" });
@@ -355,7 +360,7 @@ export class Editor implements Mode {
         h("button", { onclick: () => void this.save() }, "Save"),
         this.hitboxBtn = h("button", { class: "ghost", title: "Show every collider exactly as the physics has it (H)", onclick: () => this.toggleHitboxes() }, "Hitboxes") as HTMLButtonElement,
       ),
-      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.fineToggle(), this.gridLevel()),
+      h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.gridLevel()),
       h("div", { class: "bar add" }, ...paletteGroups().map(([title, types]) => h("div", { class: "group" }, h("div", { class: "group-title" }, title), ...types.flatMap((t) => [
         { name: t as string, make: (x: number, y: number, z: number) => newPiece(t, x, y, z) },
         ...PIECE_VARIANTS.filter((v) => v.base === t),
@@ -374,6 +379,7 @@ export class Editor implements Mode {
     addEventListener("keydown", this.onKey);
     addEventListener("keyup", this.onKeyUp);
     addEventListener("blur", this.onBlur);
+    for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) addEventListener(t, this.onPointer, true);
     this.resize();
     this.refresh();
     this.raf = requestAnimationFrame(this.frame);
@@ -455,7 +461,25 @@ export class Editor implements Mode {
     this.renderPanel();
   }
 
+  // A field commits as focus leaves it, so rebuilding at once would drop the field or button just clicked:
+  // wait until focus has moved and the click has landed, then put focus back on the same field.
   private renderPanel() {
+    clearTimeout(this.panelTimer);
+    this.panelTimer = window.setTimeout(this.rebuildPanel);
+  }
+
+  private rebuildPanel = () => {
+    if (this.pressed) { this.panelTimer = window.setTimeout(this.rebuildPanel, 30); return; }
+    const fields = () => [this.info, this.body].flatMap((el) => Array.from(el.querySelectorAll("input, select, button")));
+    const same = [...this.sel].sort((x, y) => x - y).join(",") === this.panelShows;
+    const at = fields().indexOf(document.activeElement!);
+    this.buildPanel();
+    const f = same && at >= 0 ? fields()[at] : undefined;
+    if (f instanceof HTMLElement) f.focus();
+    if (f instanceof HTMLInputElement && (f.type === "number" || f.type === "text")) f.select();
+  };
+
+  private buildPanel() {
     // Rebuilding the panel keeps it scrolled where it was while the same pieces stay selected.
     const shows = [...this.sel].sort((x, y) => x - y).join(","), top = shows === this.panelShows ? this.body.scrollTop : 0;
     this.panelShows = shows;
@@ -482,11 +506,11 @@ export class Editor implements Mode {
       const props = h("div", { class: "props" });
       const rec = p as unknown as Record<string, number>;
       const field = (key: string, step: number) => {
-        const coarse = isCoarse(p.type, key);
-        const input = h("input", { type: "number", step: coarse ? SIZE_GRID : step, value: rec[key] ?? 0,
+        const grid = snapsToPlatform(p.type, key) ? SNAP.platform : 0;
+        const input = h("input", { type: "number", step: grid || step, value: rec[key] ?? 0,
           onchange: () => {
             const before = JSON.stringify(this.level);
-            rec[key] = coarse ? Math.round(Number(input.value) / SIZE_GRID) * SIZE_GRID : Number(input.value);
+            rec[key] = grid ? to(grid)(Number(input.value)) : Number(input.value);
             this.commit(before);
           } });
         return h("label", {}, label(key), input);
@@ -494,7 +518,7 @@ export class Editor implements Mode {
       const step = isStructure(p) ? SNAP.structure : SNAP.platform;
       props.append(field("x", step), field("y", HEIGHT_STEP), field("z", step));
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
-      if (isPlatform(p)) props.append(this.fencePanel(p));
+      if (isPlatform(p) && !isTilted(p)) props.append(this.fencePanel(p));
       if (p.type === "plank") {
         const cb = h("input", { type: "checkbox", checked: !!p.side, onchange: () => {
           const before = JSON.stringify(this.level);
@@ -502,6 +526,15 @@ export class Editor implements Mode {
           this.commit(before);
         } });
         props.append(h("div", { class: "checks", title: "Hang it on the side wall of the nearest platform edge, so it falls out across the gap" }, h("label", {}, cb, "side")));
+      }
+      if (MIRRORED.includes(p.type)) {
+        const cb = h("input", { type: "checkbox", checked: !!p.mirror, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) p.mirror = true; else delete p.mirror;
+          settle(this.level, p);
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "Flip it left for right (M)" }, h("label", {}, cb, "mirror")));
       }
       if (p.type === "kicker") {
         const cb = h("input", { type: "checkbox", checked: isSliding(p), onchange: () => {
@@ -511,15 +544,7 @@ export class Editor implements Mode {
         } });
         props.append(h("div", { class: "checks", title: "Let the ball push it left and right along an invisible track" }, h("label", {}, cb, "slides sideways")));
         if (isSliding(p)) props.append(field("track", 1), field("offset", 0.5));
-        if (p.top !== undefined) {
-          const right = p.wall !== "left";
-          props.append(field("top", 0.1), h("div", { class: "checks" }, h("label", {}, "wall side",
-            h("button", { title: "Which side stays straight against the wall; the other narrows toward the top", onclick: () => {
-              const before = JSON.stringify(this.level);
-              p.wall = right ? "left" : "right";
-              this.commit(before);
-            } }, right ? "right" : "left"))));
-        }
+        if (p.top !== undefined) props.append(field("top", 0.1));
       }
       if (p.type === "curve") {
         const sel = h("select", { title: "A corner turns 90 degrees; a C turns 180, two corners in one piece with no seam, its far end coming back level with the near one", onchange: () => {
@@ -531,6 +556,15 @@ export class Editor implements Mode {
           h("option", { value: "180", selected: curveSweep(p) === 180 }, "C: 180°"),
         ) as HTMLSelectElement;
         props.append(h("label", {}, "turn", sel));
+        const at = h("select", { title: "The end a rolled curve turns about: that end stays put and banks; the other end swings round", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (at.value === "b") p.rollAt = "b"; else delete p.rollAt;
+          this.commit(before);
+        } },
+          h("option", { value: "a", selected: p.rollAt !== "b" }, "end a"),
+          h("option", { value: "b", selected: p.rollAt === "b" }, "end b"),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "roll about", at));
       }
       if (p.type === "slab") {
         const cb = h("input", { type: "checkbox", checked: !!p.belt, onchange: () => {
@@ -922,16 +956,6 @@ export class Editor implements Mode {
     return h("label", { class: "grid-y" }, "Grid y", input);
   }
 
-  private fineToggle(): HTMLElement {
-    const cb = h("input", { type: "checkbox", checked: fineSizes, title: "Let platform sizes and heights leave the grid of 4",
-      onchange: () => {
-        fineSizes = cb.checked;
-        try { localStorage.setItem(FINE_KEY, fineSizes ? "1" : "0"); } catch { /* not remembered */ }
-        this.refresh();
-      } }) as HTMLInputElement;
-    return h("label", {}, cb, "Fine sizes");
-  }
-
   private selectedPieces(): Piece[] {
     return [...this.sel].map((i) => this.level.pieces[i]).filter((p): p is Piece => !!p);
   }
@@ -1101,8 +1125,9 @@ export class Editor implements Mode {
       case "PageUp": case "KeyE": for (const p of pieces) p.y += rise; break;
       case "PageDown": case "KeyQ": for (const p of pieces) p.y -= rise; break;
       case "KeyR": for (const p of pieces) if ("rot" in p || ROLLED_PROPS.includes(p.type)) { const q = p as { rot?: number }; q.rot = ((q.rot ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; } break;
-      case "KeyT": for (const p of pieces) if (p.type === "slab") p.tilt = (p.tilt + (e.shiftKey ? -90 : 90) + 360) % 360; break;
-      case "KeyY": for (const p of pieces) if (p.type === "slab") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; else if (ROLLED_PROPS.includes(p.type)) { const q = p as { roll?: number }; q.roll = ((q.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
+      case "KeyT": for (const p of pieces) if (p.type === "slab") p.tilt = (p.tilt + (e.shiftKey ? -90 : 90) + 360) % 360; else if (p.type === "hole") p.tilt = ((p.tilt ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump" || ROLLED_PROPS.includes(p.type)) { const q = p as { tilt?: number }; q.tilt = ((q.tilt ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
+      case "KeyM": for (const p of pieces) if (MIRRORED.includes(p.type)) { if (p.mirror) delete p.mirror; else p.mirror = true; settle(this.level, p); } break;
+      case "KeyY": for (const p of pieces) if (p.type === "support") p.roll = supportOver(p) ? 0 : 180; else if (p.type === "slab" || p.type === "curve" || p.type === "hole") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; else if (ROLLED_PROPS.includes(p.type)) { const q = p as { roll?: number }; q.roll = ((q.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
       default: return;
     }
     e.preventDefault();
@@ -1394,6 +1419,8 @@ export class Editor implements Mode {
     removeEventListener("keydown", this.onKey);
     removeEventListener("keyup", this.onKeyUp);
     removeEventListener("blur", this.onBlur);
+    for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const) removeEventListener(t, this.onPointer, true);
+    clearTimeout(this.panelTimer);
     clear(this.ctx.overlay);
   }
 }

@@ -10,7 +10,6 @@ export const TUNING = {
   tiltRange: 10,
   tiltPitchRange: 10,
   mouseSens: 0.0025,
-  yawEase: 0.08,
   camDist: 4,
   camHeight: 2,
   camBallGap: 0.9,
@@ -18,6 +17,13 @@ export const TUNING = {
   wallGrip: 1,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
   propGravity: 0.5,
+  // Stools and sliding kickers: their mass (the ball's is 1), then, once the ball has let go, a drag against
+  // their speed (per second) plus a steady friction (units/s²) that stops them dead.
+  slideMass: 0.75,
+  slideDrag: 0.3,
+  slideFriction: 0.4,
+  // Crates and barrels: linear and angular damping, so a barrel stops rolling.
+  propDamping: 0.8,
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
   bumperBounce: 0.8,
   bumperKick: 2,
@@ -42,12 +48,15 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   tiltRange: [5, 45, 1],
   tiltPitchRange: [5, 45, 1],
   mouseSens: [0.0005, 0.01, 0.0005],
-  yawEase: [0, 0.5, 0.01],
   camDist: [3, 7, 0.25],
   camHeight: [1, 4, 0.25],
   camBallGap: [0, 3, 0.1],
   wallGrip: [0, 1, 0.05],
   propGravity: [0.1, 2, 0.05],
+  slideMass: [0.1, 3, 0.05],
+  slideDrag: [0, 10, 0.25],
+  slideFriction: [0, 15, 0.25],
+  propDamping: [0, 5, 0.1],
   bumperBounce: [0, 2, 0.05],
   bumperKick: [0, 15, 0.5],
   magnetForce: [0, 30, 0.5],

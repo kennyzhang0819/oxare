@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { PIECE_TYPES, PIECE_VARIANTS, magnetProfile, newPiece, type Level, type Piece, type PieceType } from "./level.ts";
-import { SUN_OFFSET, buildLevel } from "./scene.ts";
+import { addLights, buildLevel, fitSun } from "./scene.ts";
 
 const W = 112, H = 84;
 let cache: Map<string, string> | null = null;
@@ -13,10 +13,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
   const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xd6e6f5);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.copy(SUN_OFFSET);
-  scene.add(sun);
+  const sun = addLights(scene);
   const camera = new THREE.PerspectiveCamera(35, W / H, 0.1, 500);
   const pixels = new Uint8Array(W * H * 4);
   const canvas = document.createElement("canvas");
@@ -37,6 +34,9 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
     const radius = Math.max(0.8, box.getSize(new THREE.Vector3()).length() / 2);
     camera.position.copy(center).add(new THREE.Vector3(1, 0.75, 1.15).normalize().multiplyScalar(radius * 2.9));
     camera.lookAt(center);
+    fitSun(sun, built);
+    // The play view may have paused shadow updates; this picture needs its own.
+    renderer.shadowMap.needsUpdate = true;
     renderer.setRenderTarget(rt);
     renderer.render(scene, camera);
     renderer.readRenderTargetPixels(rt, 0, 0, W, H, pixels);
@@ -48,6 +48,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
   }
   renderer.setRenderTarget(prevTarget);
   rt.dispose();
+  sun.dispose();
   return cache;
 }
 
@@ -94,12 +95,10 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   const rt = new THREE.WebGLRenderTarget(LW, LH, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9cc8f2);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.copy(SUN_OFFSET);
-  scene.add(sun);
+  const sun = addLights(scene);
   const built = buildLevel(level, false);
   scene.add(built.group);
+  fitSun(sun, built);
   let center: THREE.Vector3, radius: number;
   if (level.thumb) {
     center = new THREE.Vector3(level.thumb.x, level.thumb.y, level.thumb.z);
@@ -116,12 +115,14 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   camera.position.copy(center).add(view.multiplyScalar(radius * 2.1));
   camera.lookAt(center);
   const prevTarget = renderer.getRenderTarget();
+  renderer.shadowMap.needsUpdate = true;
   renderer.setRenderTarget(rt);
   renderer.render(scene, camera);
   const pixels = new Uint8Array(LW * LH * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, LW, LH, pixels);
   renderer.setRenderTarget(prevTarget);
   rt.dispose();
+  sun.dispose();
   // The level was built only for this picture: free its geometry (materials are shared).
   built.group.traverse((o) => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) o.geometry.dispose(); });
   const canvas = document.createElement("canvas");

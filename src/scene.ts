@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BEAN_LIFT, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { BUMPER, EFFECTS, GATE, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
@@ -35,7 +35,8 @@ function glassPane(geo: THREE.BufferGeometry): THREE.Mesh {
   pane.setIndex(geo.getIndex());
   for (const grp of geo.groups.filter((q) => q.materialIndex === 0)) pane.addGroup(grp.start, grp.count, 0);
   geo.groups = geo.groups.filter((q) => q.materialIndex !== 0);
-  const m = new THREE.Mesh(pane, MAT!.glass);
+  // A list, not the material alone: a mesh with one material ignores its groups and would glaze every face.
+  const m = new THREE.Mesh(pane, [MAT!.glass]);
   m.receiveShadow = true;
   m.renderOrder = 1;
   m.userData.noShadow = true;
@@ -113,8 +114,9 @@ function buildBlockade(g: THREE.Group) {
 // Editor only: in play a hole draws nothing itself, so this is what gets clicked.
 const HOLE_MAT = new THREE.MeshBasicMaterial({ color: PROPS.cyan, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
 const HOLE_LINE = new THREE.LineBasicMaterial({ color: PROPS.cyan });
-function buildHoleMarker(g: THREE.Group, w: number, d: number) {
-  const plane = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(0, 0.03, 0);
+function buildHoleMarker(g: THREE.Group, p: Piece & { type: "hole" }) {
+  const deg = Math.PI / 180, turn = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler((p.tilt ?? 0) * deg, p.rot * deg, (p.roll ?? 0) * deg, "YXZ"));
+  const plane = new THREE.PlaneGeometry(p.w, p.d).rotateX(-Math.PI / 2).translate(0, 0.03, 0).applyMatrix4(turn);
   g.add(new THREE.Mesh(plane, HOLE_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), HOLE_LINE));
 }
 
@@ -295,10 +297,10 @@ function rimFrame(w: number, h: number, strip: number, lip: number): THREE.Buffe
 // stem from the upper platform's underside `top` straight down, a quarter bend toward local -z,
 // and a short foot running into the lower platform's side wall at mid-thickness. Extruded across
 // x with a soft bevel so every edge catches light.
-function supportBody(top: number): THREE.BufferGeometry {
-  const W = SUPPORT_W, D = SUPPORT_D, ri = SUPPORT_BEND_R, ro = ri + D, b = 0.07, T = PLATFORM_THICKNESS;
+function supportBody(top: number, reach: number, ri: number): THREE.BufferGeometry {
+  const W = SUPPORT_W, D = SUPPORT_D, ro = ri + D, b = 0.07, T = PLATFORM_THICKNESS;
   const yl1 = -T / 2 + D / 2, yl0 = -T / 2 - D / 2, zc = -D / 2 - ri, yc = yl1 + ri;
-  const wall = -(SUPPORT_GAP + D / 2) - 0.05; // a hair inside the wall, so no seam shows
+  const wall = -reach - 0.05; // a hair inside the wall, so no seam shows
   // Shape coords: u is local z, v is y. Inset by the bevel so the finished piece is W x D.
   const s = new THREE.Shape();
   s.moveTo(D / 2 - b, top - b);
@@ -316,11 +318,9 @@ function supportBody(top: number): THREE.BufferGeometry {
   return geo;
 }
 
-// Support pillars: a white column per pillar, its outer face carrying a slate recessed slot with
-// two pale bars and a cyan light line down each side, facing inward, slate bands every few layers, ear lugs on
-// the sides, a foot that bends into the lower platform's wall on a lit flange, and a flared head
-// under the upper one. Drawn only; the collider is the stem's box
-// from pieceBoxes.
+// Support pillars: a white column per pillar wearing supportTrim, its foot curving straight into the
+// lower platform's wall. The stem collides as the box from pieceBoxes, the foot and bend as
+// supportHulls and the ears as supportEarHulls.
 // Supports, columns and gates take the pillar's colours: its slate for the dark parts, its pale grey
 // for the light ones, beside the props' white and cyan.
 const CUBE_MAT = new THREE.MeshStandardMaterial({ color: GATE.cube, roughness: 0.5, metalness: 0.05 });
@@ -352,65 +352,74 @@ function buildColumn(g: THREE.Group, h: number) {
   for (let m = 4; m <= h - 0.6; m += 4) { band(m - 0.24, m - 0.16, st.glow); band(m - 0.12, m + 0.12, PALE); band(m + 0.16, m + 0.24, st.glow); }
 }
 
-function buildSupport(g: THREE.Group, p: Piece & { type: "support" }) {
-  const st = STRUCT!, W = SUPPORT_W, D = SUPPORT_D;
+function buildSupport(parent: THREE.Group, p: Piece & { type: "support" }) {
+  const st = STRUCT!, g = new THREE.Group();
+  if (supportOver(p)) { g.rotation.z = Math.PI; g.position.y = -PLATFORM_THICKNESS; }
+  parent.add(g);
   for (const c of supportPillars(p)) {
     const col = new THREE.Group();
     col.position.set(c.x, 0, c.z);
-    const body = new THREE.Mesh(supportBody(c.y1), st.body);
+    const body = new THREE.Mesh(supportBody(c.y1, supportReach(p), supportBend(p)), st.body);
     body.castShadow = body.receiveShadow = true;
     col.add(body);
-    supportTrim(col, c.y1);
-    const head = new THREE.Mesh(new RoundedBoxGeometry(W + 0.2, 0.3, D + 0.16, 3, 0.08), st.body);
-    head.position.y = c.y1 - 0.15;
-    head.castShadow = true;
-    const headBand = new THREE.Mesh(new THREE.BoxGeometry(W + 0.22, 0.06, D + 0.18), SLATE);
-    headBand.position.y = c.y1 - 0.42;
-    col.add(head, headBand);
+    supportTrim(col, c.y1, supportBend(p));
     g.add(col);
   }
 }
 
-// A support pillar's trim up to `top`, in its column's frame (local -z toward the wall): the slot,
-// the bands with their ears, the band where the bend begins and the lit flange on the wall.
-function supportTrim(col: THREE.Group, top: number) {
-  const st = STRUCT!, W = SUPPORT_W, D = SUPPORT_D;
-  // The slot faces inward, toward the platforms, between the bend and the head.
-  const s0 = 0.5, s1 = top - 0.7, sh = s1 - s0, sy = (s0 + s1) / 2, fz = -D / 2;
-  const slot = new THREE.Mesh(new THREE.BoxGeometry(W * 0.46, sh, 0.06), SLATE);
-  slot.position.set(0, sy, fz);
-  col.add(slot);
-  for (const x of [-0.08, 0.08]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.07, sh - 0.2, 0.08), PALE);
-    bar.position.set(x, sy, fz - 0.01);
-    col.add(bar);
-  }
-  for (const x of [-W * 0.33, W * 0.33]) {
-    const line = new THREE.Mesh(new THREE.BoxGeometry(0.035, sh, 0.05), st.glow);
-    line.position.set(x, sy, fz);
-    col.add(line);
-  }
-  for (let y = s0 + 2.4; y < s1 - 0.8; y += 2.4) {
-    const band = new THREE.Mesh(new RoundedBoxGeometry(W + 0.04, 0.16, D + 0.04, 2, 0.05), SLATE);
-    band.position.y = y;
-    col.add(band);
-    for (const x of [W / 2 + 0.06, -(W / 2 + 0.06)]) {
-      const ear = new THREE.Mesh(new RoundedBoxGeometry(0.14, 0.7, D * 0.55, 2, 0.04), st.body);
-      ear.position.set(x, y + 0.5, 0);
-      ear.castShadow = true;
-      col.add(ear);
+// A support pillar's trim up to `top`, in its column's frame (local -z toward the wall). Near each
+// end of the straight stem a slate collar runs round it, dipping on the front and back faces with
+// its ends turned toward that end of the stem. Each stretch of stem between them carries, front and
+// back, a slate panel ribbed in pale grey inside a pale border between two cyan lines, and an ear
+// out each side (pillarEar), narrowing toward its tip, with a slate pad on its front and back.
+function supportTrim(col: THREE.Group, top: number, bend: number) {
+  const st = STRUCT!, W = SUPPORT_W, D = SUPPORT_D, T = PLATFORM_THICKNESS, b = 0.07, yb = -T / 2 + D / 2 + bend;
+  // Paint on the faces at ±z, drawn in each face's own x / y with +z out of it.
+  const faces = (z: number, add: (f: THREE.Group) => void) => {
+    for (const s of [-1, 1]) {
+      const f = new THREE.Group();
+      f.position.z = s * z;
+      if (s < 0) f.rotation.y = Math.PI;
+      add(f);
+      col.add(f);
+    }
+  };
+  const flat = (shape: THREE.Shape | THREE.Shape[], mat: THREE.Material, layer: number) => {
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape, 6), mat);
+    m.position.z = PAINT / 2 + layer * LAYER;
+    return m;
+  };
+  const t = 0.07, c = 0.1, hw = W / 2 - b;
+  for (const [y0, dir] of [[top - 0.45, 1], [yb + 0.25, -1]] as const) {
+    const ye = y0 + dir * c, line: [number, number][] = [[-hw, ye], [-hw + c, y0], [hw - c, y0], [hw, ye]];
+    const collar = new THREE.Shape([...line, ...[...line].reverse().map(([x, y]): [number, number] => [x, y - dir * t])].map(([x, y]) => new THREE.Vector2(x, y)));
+    faces(D / 2, (f) => f.add(flat(collar, SLATE, 0)));
+    for (const sx of [-1, 1]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.002, t, D - 2 * b), SLATE);
+      side.position.set(sx * (W / 2 + PAINT / 2), ye - (dir * t) / 2, 0);
+      col.add(side);
     }
   }
-  // A slate band where the bend begins, and a slate flange with a cyan rim where the foot meets
-  // the lower platform's wall.
-  const T = PLATFORM_THICKNESS, wallZ = -(SUPPORT_GAP + D / 2);
-  const band = new THREE.Mesh(new RoundedBoxGeometry(W + 0.08, 0.16, D + 0.06, 2, 0.05), SLATE);
-  band.position.y = -T / 2 + D / 2 + SUPPORT_BEND_R + 0.1;
-  const flange = new THREE.Mesh(new RoundedBoxGeometry(W + 0.24, D + 0.24, 0.08, 2, 0.03), SLATE);
-  flange.position.set(0, -T / 2, wallZ + 0.04);
-  const rim = new THREE.Mesh(rimFrame(W + 0.24, D + 0.24, 0.04, 0.02), st.glow);
-  rim.position.set(0, -T / 2, wallZ + 0.08);
-  col.add(band, flange, rim);
+  const pw = W * 0.42, ball = new THREE.SphereGeometry(PILLAR_EAR.r, 10, 6).getAttribute("position");
+  for (const stretch of pillarStretches(yb, top)) {
+    const { ym, ph } = stretch, nr = Math.max(3, Math.round((ph - 0.16) / 0.11)), pitch = (ph - 0.16) / nr;
+    const ribs = Array.from({ length: nr }, (_, i) => roundRect(new THREE.Shape(), pw - 0.12, pitch * 0.45, 0.015, 0, ym - (ph - 0.16) / 2 + (i + 0.5) * pitch));
+    faces(D / 2, (f) => {
+      f.add(flat(roundRect(new THREE.Shape(), pw + 0.08, ph + 0.08, 0.12, 0, ym), PALE, 0));
+      f.add(flat(roundRect(new THREE.Shape(), pw, ph, 0.09, 0, ym), SLATE, 1));
+      f.add(flat(ribs, PALE, 2));
+      for (const x of [-1, 1]) f.add(flat(roundRect(new THREE.Shape(), 0.035, ph * 0.9, 0.0175, x * (pw / 2 + 0.1), ym), st.glow, 0));
+    });
+    // The ears: the hull of a small ball at each of pillarEar's points, as the physics rounds it.
+    for (const side of [-1, 1]) {
+      const pts: THREE.Vector3[] = [];
+      for (const [x, y, z] of pillarEar(stretch, side)) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
+      const ear = new THREE.Mesh(new ConvexGeometry(pts), st.body);
+      ear.castShadow = ear.receiveShadow = true;
+      col.add(ear);
+    }
+    faces(PILLAR_EAR.d / 2, (f) => { for (const sx of [-1, 1]) f.add(flat(roundRect(new THREE.Shape(), 0.11, ph * 0.37, 0.05, sx * (W / 2 + 0.08), ym), SLATE, 0)); });
+  }
 }
 
 // Gate: each arch is one white extrusion of gateStrip, bevelled like a support's pillar. Each leg
@@ -440,7 +449,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   shape.setFromPoints([...strip.map(([o]) => o), ...strip.map(([, i]) => i).reverse()].map(([x, y]) => new THREE.Vector2(x, y)));
   const geo = new THREE.ExtrudeGeometry(shape, { depth: W - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 3 });
   geo.translate(0, 0, -(W - 2 * b) / 2);
-  const cy = p.h - D - GATE_CORNER, xi = p.w / 2 + SUPPORT_GAP;
+  const xi = p.w / 2 + GATE_GAP;
   // Circuit-board panels along each beam's straight, front and back, like a barrier's.
   const cx = xi - GATE_CORNER, gap = 0.25, n = Math.max(1, Math.round(cx)), pw = (2 * cx - gap * (n + 1)) / n, panel = new THREE.BoxGeometry(pw, D * 0.6, 0.08);
   for (const z of [p.d / 2, -p.d / 2]) {
@@ -453,7 +462,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
       const col = new THREE.Group();
       col.position.x = side * (xi + D / 2);
       col.rotation.y = (side * Math.PI) / 2;
-      supportTrim(col, cy + 0.4);
+      supportTrim(col, gateLegTop(p), GATE_BEND_R);
       arch.add(col);
     }
     for (const s of [1, -1]) for (let k = 0; k < n; k++) {
@@ -914,7 +923,7 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   return block;
 }
 
-// The jump pad shares the kicker's white (body), dark (tread), pale slats (top) and orange; the
+// The jump pad shares the kicker's white (body), dark tread, pale stripes and orange; the
 // hovering squares are unlit and faint, in a soft amber.
 const JUMP_HOLO_COLOR = EFFECTS.jumpHolo;
 const JUMP_HOLO = new THREE.MeshBasicMaterial({ color: JUMP_HOLO_COLOR, transparent: true, opacity: 0.45, depthWrite: false });
@@ -922,72 +931,135 @@ const JUMP_HOLO_FILL = new THREE.MeshBasicMaterial({ color: JUMP_HOLO_COLOR, tra
 // The squares breathe in and out on x / z, each a little behind the one below, so they ripple upward.
 const JUMP_PULSE = { period: 1.6, amp: 0.12, lag: 0.55, taper: 0.07 };
 
-// A dark slatted vent lying flat.
+// A `w` by `d` rectangle centred on (x0, y0) with its corners rounded by r, traced into a shape or hole.
+function roundRect<T extends THREE.Path>(s: T, w: number, d: number, r: number, x0 = 0, y0 = 0): T {
+  const x = w / 2 - r, y = d / 2 - r;
+  s.moveTo(x0 + x, y0 - d / 2);
+  s.absarc(x0 + x, y0 - y, r, -Math.PI / 2, 0, false);
+  s.absarc(x0 + x, y0 + y, r, 0, Math.PI / 2, false);
+  s.absarc(x0 - x, y0 + y, r, Math.PI / 2, Math.PI, false);
+  s.absarc(x0 - x, y0 - y, r, Math.PI, 1.5 * Math.PI, false);
+  return s;
+}
+// A polygon with every corner rounded off `r` along its edges, traced into a shape or hole.
+function roundPoly<T extends THREE.Path>(s: T, pts: [number, number][], r: number): T {
+  pts.forEach(([x, y], k) => {
+    const [px, py] = pts[(k + pts.length - 1) % pts.length]!, [nx, ny] = pts[(k + 1) % pts.length]!;
+    const lp = Math.hypot(px - x, py - y), ln = Math.hypot(nx - x, ny - y);
+    if (k === 0) s.moveTo(x + ((px - x) * r) / lp, y + ((py - y) * r) / lp); else s.lineTo(x + ((px - x) * r) / lp, y + ((py - y) * r) / lp);
+    s.quadraticCurveTo(x, y, x + ((nx - x) * r) / ln, y + ((ny - y) * r) / ln);
+  });
+  s.closePath();
+  return s;
+}
+const flatShape = (s: THREE.Shape): THREE.BufferGeometry => new THREE.ShapeGeometry(s, 8).rotateX(-Math.PI / 2);
+const ventRound = (w: number, d: number): number => Math.min(0.35, 0.3 * Math.min(w, d));
+
+// A kicker's tread lying flat: a dark plate with well-rounded corners, striped across in thick
+// light and dark bands, each band kept inside the corners.
 function vent(w: number, d: number): THREE.Group {
-  const g = new THREE.Group(), st = STRUCT!;
-  const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.001, d), st.tread);
+  const g = new THREE.Group(), st = STRUCT!, r = ventRound(w, d);
+  const base = new THREE.Mesh(flatShape(roundRect(new THREE.Shape(), w, d, r)), st.tread);
   base.position.y = LAYER;
   g.add(base);
-  const n = Math.max(2, Math.round(d / 0.14));
+  const sl = d - 0.1, n = Math.max(3, Math.round(sl / 0.22)), pitch = sl / n;
   for (let k = 0; k < n; k++) {
-    const slat = new THREE.Mesh(new THREE.BoxGeometry(w - 0.12, 0.001, 0.05), st.top);
-    slat.position.set(0, 2 * LAYER, -d / 2 + ((k + 0.5) * d) / n);
-    g.add(slat);
+    const z = -sl / 2 + (k + 0.5) * pitch, end = d / 2 - Math.abs(z) - pitch / 4;
+    const round = end < r ? r - Math.sqrt(Math.max(0, r * r - (r - end) ** 2)) : 0, len = w - 0.1 - 2 * round;
+    if (len < 0.05) continue;
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(len, 0.001, pitch / 2), PALE);
+    stripe.position.set(0, 2 * LAYER, z);
+    g.add(stripe);
   }
   return g;
 }
 
+// The launch square's grille: the vent's dark plate, dotted in a grid of pale dots kept inside the corners.
+function dotGrille(w: number): THREE.Group {
+  const g = new THREE.Group(), r = ventRound(w, w);
+  const base = new THREE.Mesh(flatShape(roundRect(new THREE.Shape(), w, w, r)), STRUCT!.tread);
+  base.position.y = LAYER;
+  g.add(base);
+  const n = Math.max(3, Math.round((w - 0.12) / 0.15)), pitch = (w - 0.12) / n, dr = pitch * 0.28, inner = w / 2 - r, dots: THREE.Shape[] = [];
+  for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) {
+    const x = (i + 0.5 - n / 2) * pitch, y = (k + 0.5 - n / 2) * pitch;
+    if (Math.hypot(Math.max(0, Math.abs(x) - inner), Math.max(0, Math.abs(y) - inner)) > r - 0.06 - dr) continue;
+    dots.push(new THREE.Shape().absarc(x, y, dr, 0, 2 * Math.PI, false));
+  }
+  const dot = new THREE.Mesh(new THREE.ShapeGeometry(dots, 4).rotateX(-Math.PI / 2), PALE);
+  dot.position.y = 2 * LAYER;
+  g.add(dot);
+  return g;
+}
+
+// Paint wrapped onto a jump pad's rounded corner, a cone round (cx, cz) whose top radius is rt.
+// Shape x runs across the corner, as arc length at the middle of the slope and fanning out with the
+// radius; shape y runs down the slope from its middle. `facing` is the corner's direction (radians
+// from +x toward +z). Each triangle is split small so the paint follows the curve.
+function cornerDecal(shape: THREE.Shape, mat: THREE.Material, cx: number, cz: number, facing: number, rt: number, lift: number): THREE.Mesh {
+  const a = Math.atan2(JUMP_H, JUMP_RUN), L = Math.hypot(JUMP_H, JUMP_RUN), rm = rt + JUMP_RUN / 2;
+  const flat = new THREE.ShapeGeometry(shape, 8), src = flat.getAttribute("position"), idx = flat.getIndex()!, pos: number[] = [], nor: number[] = [];
+  const put = (x: number, y: number) => {
+    const th = facing + x / rm, d = L / 2 + y, rho = rt + d * Math.cos(a);
+    const nx = Math.cos(th) * Math.sin(a), ny = Math.cos(a), nz = Math.sin(th) * Math.sin(a);
+    pos.push(cx + rho * Math.cos(th) + nx * lift, JUMP_H - d * Math.sin(a) + ny * lift, cz + rho * Math.sin(th) + nz * lift);
+    nor.push(nx, ny, nz);
+  };
+  for (let i = 0; i < idx.count; i += 3) {
+    const [v0, v1, v2] = [0, 1, 2].map((j) => new THREE.Vector2(src.getX(idx.getX(i + j)), src.getY(idx.getX(i + j)))) as [THREE.Vector2, THREE.Vector2, THREE.Vector2];
+    const n = Math.max(1, Math.ceil(Math.max(v0.distanceTo(v1), v1.distanceTo(v2), v2.distanceTo(v0)) / 0.04));
+    const at = (u: number, w: number) => put(v0.x + ((v1.x - v0.x) * u + (v2.x - v0.x) * w) / n, v0.y + ((v1.y - v0.y) * u + (v2.y - v0.y) * w) / n);
+    for (let u = 0; u < n; u++) for (let w = 0; w < n - u; w++) {
+      at(u, w); at(u + 1, w); at(u, w + 1);
+      if (w < n - u - 1) { at(u + 1, w); at(u + 1, w + 1); at(u, w + 1); }
+    }
+  }
+  flat.dispose();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  return new THREE.Mesh(geo, mat);
+}
+
 // Jump pad: a low white platform with a grey ramp all round up to its flat top, the launch square
 // in the middle of the top, a dark grille with an orange rim, under three hovering amber squares.
-// The platform's collider is the hull of the same two outlines.
+// The body is jumpHull rounded like the kicker's, and is its collider too.
 function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
-  const st = STRUCT!, H = JUMP_H, { base, top } = jumpRings(p), n = base.length;
-  const tw = p.w - 2 * JUMP_RUN, td = p.d - 2 * JUMP_RUN, s = jumpPadSize(p), rt = Math.max(0.05, Math.min(p.w, p.d) * 0.28 - JUMP_RUN);
-  const pos: number[] = [], idx: number[] = [];
-  for (let i = 0; i < n; i++) pos.push(base[i]![0], 0, base[i]![1], top[i]![0], H, top[i]![1]);
-  for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(2 * i, 2 * i + 1, 2 * j, 2 * j, 2 * i + 1, 2 * j + 1); }
-  const rampGeo = new THREE.BufferGeometry();
-  rampGeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  rampGeo.setIndex(idx);
-  rampGeo.computeVertexNormals();
-  const ramp = new THREE.Mesh(rampGeo, st.body);
-  ramp.receiveShadow = true;
-  g.add(ramp);
-  const cap = new THREE.Shape(top.map(([x, z]) => new THREE.Vector2(x, -z)));
-  const capGeo = new THREE.ShapeGeometry(cap);
-  capGeo.rotateX(-Math.PI / 2);
-  const plate = new THREE.Mesh(capGeo, st.body);
-  plate.position.y = H;
-  plate.receiveShadow = true;
-  g.add(plate);
+  const st = STRUCT!, H = JUMP_H;
+  const tw = p.w - 2 * JUMP_RUN, td = p.d - 2 * JUMP_RUN, s = jumpPadSize(p), rt = jumpCorner(p) - JUMP_RUN;
+  const hull = jumpHull(p), ball = new THREE.SphereGeometry(hull.r, 12, 6).getAttribute("position");
+  const pts: THREE.Vector3[] = [];
+  for (const [x, y, z] of hull.corners) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
+  const body = new THREE.Mesh(new ConvexGeometry(pts), st.body);
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
   const deck = new THREE.Group();
   deck.position.y = H;
   g.add(deck);
-  // Launch square: a light frame, the dark grille, an orange rim, all painted on the top.
-  const square = new THREE.Group();
+  // Launch square: a light frame, the dark grille, an orange rim, all painted on the top, their
+  // corners rounded alike.
+  const square = new THREE.Group(), rs = ventRound(s, s);
   deck.add(square);
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(s + 0.3, 0.001, s + 0.3), st.body);
+  const frame = new THREE.Mesh(flatShape(roundRect(new THREE.Shape(), s + 0.3, s + 0.3, rs + 0.15)), st.body);
   frame.position.y = LAYER / 2;
   square.add(frame);
-  square.add(vent(s, s));
-  for (const [x, z, a, b] of [[0, -s / 2, s + 0.1, 0.05], [0, s / 2, s + 0.1, 0.05], [-s / 2, 0, 0.05, s + 0.1], [s / 2, 0, 0.05, s + 0.1]] as const) {
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(a, 0.001, b), KICKER_ORANGE);
-    rim.position.set(x, 3 * LAYER, z);
-    square.add(rim);
-  }
+  square.add(dotGrille(s));
+  const rimShape = roundRect(new THREE.Shape(), s + 0.05, s + 0.05, rs + 0.025);
+  rimShape.holes.push(roundRect(new THREE.Path(), s - 0.05, s - 0.05, rs - 0.025));
+  const rim = new THREE.Mesh(flatShape(rimShape), KICKER_ORANGE);
+  rim.position.y = 3 * LAYER;
+  square.add(rim);
   paint(square, "y");
-  // Three hovering squares, the jump's sign: amber frames with a faint fill, pulsing.
-  const bar = 0.06;
+  // Three hovering squares, the jump's sign: amber rounded frames with a faint fill, pulsing.
+  const bar = 0.06, ring = roundRect(new THREE.Shape(), s + bar, s + bar, rs + bar / 2);
+  ring.holes.push(roundRect(new THREE.Path(), s - bar, s - bar, rs - bar / 2));
+  const ringGeo = new THREE.ExtrudeGeometry(ring, { depth: bar, bevelEnabled: false, curveSegments: 8 }).rotateX(-Math.PI / 2).translate(0, -bar / 2, 0);
+  const fillGeo = flatShape(roundRect(new THREE.Shape(), s - bar, s - bar, rs - bar / 2));
   for (let k = 1; k <= 3; k++) {
     const sq = new THREE.Group();
     sq.position.y = (k * JUMP_REACH) / 3;
-    for (const [x, z, a, b] of [[0, -s / 2, s, bar], [0, s / 2, s, bar], [-s / 2, 0, bar, s - bar], [s / 2, 0, bar, s - bar]] as const) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(a, bar, b), JUMP_HOLO);
-      m.position.set(x, 0, z);
-      sq.add(m);
-    }
-    const fill = new THREE.Mesh(new THREE.PlaneGeometry(s - bar, s - bar), JUMP_HOLO_FILL);
-    fill.rotation.x = -Math.PI / 2;
+    sq.add(new THREE.Mesh(ringGeo, JUMP_HOLO));
+    const fill = new THREE.Mesh(fillGeo, JUMP_HOLO_FILL);
     fill.onBeforeRender = () => {
       const t = performance.now() / 1000, { period, amp, lag, taper } = JUMP_PULSE;
       const k1 = 1 - taper * (k - 1) + amp * Math.sin((2 * Math.PI * t) / period - lag * (k - 1));
@@ -997,8 +1069,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     deck.add(sq);
   }
   // The four ramp faces are alike: each gets a vent over most of its straight part, its group
-  // tilted to the slope with local +z pointing out and down it. Each corner gets an orange arc over
-  // the middle half of its curve.
+  // tilted to the slope with local +z pointing out and down it.
   const slope = Math.atan2(H, JUMP_RUN), slopeLen = Math.hypot(H, JUMP_RUN);
   for (let k = 0; k < 4; k++) {
     const o = new THREE.Group(), f = new THREE.Group(), along = k % 2 ? td : tw;
@@ -1010,15 +1081,19 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     g.add(o);
     paint(f, "y");
   }
-  // Shape angle a lands at (cos(a + phi), -sin(a + phi)) in x / z, so phi centres the arc on the corner.
-  const arc = Math.PI / 4, rr = Math.max(0.1, rt + JUMP_RUN / 2);
+  // Each corner: a light grey panel holding a white triangle outlined in dark grey, pointing up
+  // the slope, and an orange arc near the foot. Shape y runs down the slope (see cornerDecal).
+  // The fill is the outline's triangle shrunk about its incentre, so the dark border is even.
+  const t0 = -0.06, tb = 0.2, th = 0.31, e = 0.045, yb = t0 + 0.14, inc = (tb * th) / (tb + Math.hypot(tb, th)), k = (inc - e) / inc;
+  const tri = (q: number): [number, number][] => ([[0, yb - th], [tb, yb], [-tb, yb]] as [number, number][]).map(([x, y]) => [x * q, yb - inc + (y - yb + inc) * q]);
+  const shapes: [THREE.Shape, THREE.Material, number][] = [
+    [roundRect(new THREE.Shape(), 0.6, 0.46, 0.1, 0, t0), PALE, PAINT],
+    [roundPoly(new THREE.Shape(), tri(1), 0.05), st.tread, PAINT + LAYER],
+    [roundPoly(new THREE.Shape(), tri(k), 0.03), st.body, PAINT + 2 * LAYER],
+    [roundRect(new THREE.Shape(), 0.64, 0.08, 0.04, 0, 0.29), KICKER_ORANGE, PAINT],
+  ];
   for (const [sx, sz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]] as const) {
-    const light = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.035, 6, 16, arc), KICKER_ORANGE);
-    light.rotation.x = -Math.PI / 2;
-    light.rotation.z = Math.atan2(-sz, sx) - arc / 2;
-    // Sunk into the corner's slope until only a sliver of the tube shows, a painted arc.
-    light.position.set(sx * (tw / 2 - rt), H / 2 - 0.035 + PAINT, sz * (td / 2 - rt));
-    g.add(light);
+    for (const [shape, mat, lift] of shapes) g.add(cornerDecal(shape, mat, sx * (tw / 2 - rt), sz * (td / 2 - rt), Math.atan2(sz, sx), rt, lift));
   }
 }
 
@@ -1128,13 +1203,9 @@ export interface SceneEnv {
 // Distance haze: squared-exponential, so what is near stays clear and only the far reaches fade
 // (in play, a tenth hazed 45 out and over a third 90 out). The editor's is lighter, to see across its whole grid.
 export const FOG_PLAY = 0.0075, FOG_EDITOR = 0.0018;
-export function createScene(fog = FOG_PLAY): SceneEnv {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY_HORIZON);
-  scene.fog = new THREE.FogExp2(SKY_HORIZON, fog);
-  const sky = makeSky(), ocean = makeOcean();
-  sky.layers.set(SKY_LAYER);
-  scene.add(sky, ocean);
+// The sky light and the shadow-casting sun, shared by play, the editor and the thumbnails; point the
+// sun's shadow at a level with fitSun.
+export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
   // The sun carries most of the light, so what it can't reach (shadows) reads clearly darker.
   scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 0.7));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -1143,9 +1214,21 @@ export function createScene(fog = FOG_PLAY): SceneEnv {
   sun.shadow.mapSize.set(4096, 4096);
   const c = sun.shadow.camera;
   c.left = -36; c.right = 36; c.top = 36; c.bottom = -36; c.near = 1; c.far = 150;
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.03; // the shadow map re-renders as the sun tracks the ball; this keeps shallow faces from shimmering
+  sun.shadow.bias = -SHADOW_OFFSET / (c.far - c.near);
+  // Kept tiny: any more lifts the shadow off where the ball or a prop touches the floor (see SHADOW_OFFSET).
+  sun.shadow.normalBias = 0.005;
   scene.add(sun, sun.target);
+  return sun;
+}
+
+export function createScene(fog = FOG_PLAY): SceneEnv {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(SKY_HORIZON);
+  scene.fog = new THREE.FogExp2(SKY_HORIZON, fog);
+  const sky = makeSky(), ocean = makeOcean();
+  sky.layers.set(SKY_LAYER);
+  scene.add(sky, ocean);
+  const sun = addLights(scene);
   const t0 = performance.now();
   // Sky and sea ride along with the camera; their shaders work in world space so nothing swims.
   const tick = (camera: THREE.Camera) => {
@@ -1375,6 +1458,9 @@ export function posePlank(piece: THREE.Group, plank: THREE.Group, t: { x: number
 // Points the sun's shadow at the whole level, so every piece casts its shadow however far it is
 // from the camera: the shadow box is the level's bounds (the goal's beam aside) plus room for
 // moving platforms to travel. Level pieces stay put, so this is done once per build.
+// The shadow's depth offset in world units. bias is a share of the shadow camera's depth, so it is set
+// from this whenever that depth changes: a fixed share grows with the level and lifts contact shadows off the floor.
+const SHADOW_OFFSET = 0.005;
 export function fitSun(sun: THREE.DirectionalLight, built: Built) {
   const box = new THREE.Box3(), part = new THREE.Box3();
   built.group.updateMatrixWorld(true);
@@ -1385,6 +1471,7 @@ export function fitSun(sun: THREE.DirectionalLight, built: Built) {
   sun.position.copy(c).addScaledVector(SUN_DIR, r + 10);
   const cam = sun.shadow.camera;
   cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r; cam.near = 1; cam.far = 2 * r + 20;
+  sun.shadow.bias = -SHADOW_OFFSET / (cam.far - cam.near);
   cam.updateProjectionMatrix();
 }
 
@@ -1407,8 +1494,8 @@ export function buildLevel(level: Level, editor: boolean): Built {
     g.rotation.order = "YXZ"; // roll about the piece's own z axis, tilt about its x axis, then yaw
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
     if (p.type === "slab") { g.rotation.x = (p.tilt * Math.PI) / 180; g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180; }
-    if (p.type === "kicker" || p.type === "jump") g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180;
-    else if (pieceRoll(p)) g.rotation.z = (pieceRoll(p) * Math.PI) / 180;
+    if (p.type === "kicker" || p.type === "jump") { g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180; g.rotation.x = ((p.tilt ?? 0) * Math.PI) / 180; }
+    else if (pieceRoll(p) || pieceTilt(p)) { g.rotation.z = (pieceRoll(p) * Math.PI) / 180; g.rotation.x = (pieceTilt(p) * Math.PI) / 180; }
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g);
     if (p.type === "barrier") buildBarrier(g);
@@ -1439,10 +1526,15 @@ export function buildLevel(level: Level, editor: boolean): Built {
     }
     if (p.type === "slab" || p.type === "curve") {
       const rot = pieceRot(p);
-      const cuts: XZ[][] = holesOn(level, p).map((h) => h.map((v) => { const o = rotXZ(v[0] - p.x, v[1] - p.z, -rot); return [o.x, o.z] as XZ; }));
+      const cuts: XZ[][] = isTilted(p) ? holeCuts(level, p) : holesOn(level, p).map((h) => h.map((v) => { const o = rotXZ(v[0] - p.x, v[1] - p.z, -rot); return [o.x, o.z] as XZ; }));
       const geo = p.type === "slab"
         ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined, isBelt(p), isShaped(p) ? slabOutline(p) : undefined, isCurled(p) ? (v) => curlPoint(p, v) : undefined)
         : curveGeometry(p);
+      if (p.type === "curve" && p.roll) {
+        const a = geo.getAttribute("position");
+        for (let i = 0; i < a.count; i++) a.setXYZ(i, ...curveRollPoint(p, [a.getX(i), a.getY(i), a.getZ(i)]));
+        geo.computeVertexNormals();
+      }
       const m = new THREE.Mesh(geo, [mat.platform, mat.edge, mat.rim, mat.border]);
       m.receiveShadow = true;
       g.add(m);
@@ -1454,7 +1546,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
         movers.set(index, g);
       }
     }
-    if (p.type === "hole" && editor) buildHoleMarker(g, p.w, p.d);
+    if (p.type === "hole" && editor) buildHoleMarker(g, p);
     if (p.type === "ramp") {
       const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t));
       geo.rotateY(Math.PI / 2);

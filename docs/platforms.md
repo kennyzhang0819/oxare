@@ -61,7 +61,7 @@ A shaped slab is otherwise a plain slab: no tilt, roll, twist, treadmill or move
 
 ## Twisted slabs
 
-A slab with `twist` is in the welded floor like any other, laid as a grid of small quads (half a unit along it, one across) over its rolled top, so each quad is nearly flat and the creases between their triangles are too small for the ball to feel. Its flat end welds to the platform before it. The solid under each quad is built per triangle (as under a holed slab), since a convex hull over a warped quad's corners would bulge up through the rolling surface.
+A slab with `twist` is in the welded floor like any other, laid as a grid of small quads (half a unit along it, one across) so each is nearly flat and the creases between their triangles are too small for the ball to feel. The grid is laid out flat and the twist turns each point as it is emitted, depth and all, as a curled slab's strips are bent: the underside, walls and solids turn with the top and keep the slab's full thickness, so a slab twisted to upright is as solid there as anywhere (dropped straight down they would thin to nothing). Its flat end welds to the platform before it. The solid under each quad is built per triangle (as under a holed slab), since a convex hull over a warped quad's corners would bulge up through the rolling surface. A twisted slab that is also tilted or rolled is out of the welded floor, but collides as this same twisted floor turned into place.
 
 ## Curled slabs
 

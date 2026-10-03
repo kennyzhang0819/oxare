@@ -4,6 +4,7 @@ import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./lev
 import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
+import { slider } from "./slider.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -31,7 +32,6 @@ export class Game implements Mode {
   private prevRot = new THREE.Quaternion();
   private shown = new THREE.Vector3();
   private yaw = 0;
-  private yawVel = 0;
   private acc = 0;
   private last = 0;
   private raf = 0;
@@ -43,8 +43,18 @@ export class Game implements Mode {
   private tunePanel: HTMLElement | null = null;
   private pauseMenu: HTMLElement | null = null;
   private onResize = () => this.resize();
+  // Set when the game lets go of the mouse itself, so only the player's Esc out of the lock pauses.
+  private released = false;
+  private unlockedAt = -Infinity;
+  private onLock = () => {
+    if (document.pointerLockElement) return;
+    this.unlockedAt = performance.now();
+    if (this.released) { this.released = false; return; }
+    if (!this.done && !this.pauseMenu) this.togglePause();
+  };
   private onKey = (e: KeyboardEvent) => {
-    if (e.code === "Escape" && !this.done) this.togglePause();
+    // The Esc that ended a mouse lock has already paused.
+    if (e.code === "Escape" && !this.done && performance.now() - this.unlockedAt > 300) this.togglePause();
     if (e.code === "KeyT" && this.opts.admin && !(e.target instanceof HTMLInputElement)) this.toggleTune();
     if (e.code === "KeyR" && !(e.target instanceof HTMLInputElement)) this.fall();
   };
@@ -69,9 +79,11 @@ export class Game implements Mode {
     );
     ctx.overlay.append(this.hud);
     this.input.attach(ctx.canvas);
+    this.input.lock();
     if (this.input.tiltOn) this.input.calibrate();
     addEventListener("resize", this.onResize);
     addEventListener("keydown", this.onKey);
+    document.addEventListener("pointerlockchange", this.onLock);
     this.resize();
     void this.boot();
   }
@@ -104,11 +116,7 @@ export class Game implements Mode {
     this.input.update();
     const lookPx = this.input.takeLookPx();
     if (!this.done && !this.pauseMenu) {
-      // Turn rate chases the input with a short time constant: a brief tail after a key release or
-      // drag, while the total rotation of a drag stays exactly its distance times mouseSens.
-      const want = -this.input.steer * TUNING.yawRate - (lookPx * TUNING.mouseSens) / Math.max(dt, 1e-3);
-      this.yawVel += (want - this.yawVel) * (TUNING.yawEase > 0 ? 1 - Math.exp(-dt / TUNING.yawEase) : 1);
-      this.yaw += this.yawVel * dt;
+      this.yaw -= this.input.steer * TUNING.yawRate * dt + lookPx * TUNING.mouseSens;
       this.acc += dt;
       this.time += dt;
       while (this.acc >= STEP) {
@@ -212,8 +220,15 @@ export class Game implements Mode {
     this.savePrev();
   }
 
+  private releaseMouse() {
+    if (!document.pointerLockElement) return;
+    this.released = true;
+    document.exitPointerLock();
+  }
+
   private finish() {
     this.done = true;
+    this.releaseMouse();
     const progress = loadProgress();
     const prev = progress[this.level.id]?.best;
     const best = prev == null || this.time < prev;
@@ -237,7 +252,10 @@ export class Game implements Mode {
   // The in-game menu pauses the run (the clock and physics stop): Resume, Restart, Settings (the
   // player's settings, with Back to the menu) and Quit.
   private togglePause() {
-    if (this.pauseMenu) { this.pauseMenu.remove(); this.pauseMenu = null; this.yawVel = 0; return; }
+    // While playing the mouse stays locked (if that's on): closing the menu takes it again, and anything
+    // that lets it go (Esc, leaving the window) opens the menu.
+    if (this.pauseMenu) { this.pauseMenu.remove(); this.pauseMenu = null; this.input.lock(); return; }
+    this.releaseMouse();
     const card = h("div", { class: "card pause" });
     const menu = () => card.replaceChildren(
       h("h2", {}, "Paused"),
@@ -259,7 +277,8 @@ export class Game implements Mode {
   }
 
   private toggleTune() {
-    if (this.tunePanel) { this.tunePanel.remove(); this.tunePanel = null; return; }
+    if (this.tunePanel) { this.tunePanel.remove(); this.tunePanel = null; this.input.lock(); return; }
+    this.releaseMouse();
     const out = h("textarea", { readOnly: true });
     const refresh = () => { out.value = JSON.stringify(TUNING, null, 1); };
     const rows = (Object.keys(TUNING) as TuningKey[]).filter((k) => !PLAYER_KEYS.includes(k) && !FIXED_KEYS.includes(k)).map((k) => {
@@ -286,6 +305,8 @@ export class Game implements Mode {
     this.raf = -1;
     this.sim?.free();
     this.ball.dispose();
+    this.releaseMouse();
+    document.removeEventListener("pointerlockchange", this.onLock);
     this.input.detach();
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);
@@ -296,14 +317,15 @@ export class Game implements Mode {
 // The player's own settings, shown in the pause menu and under Options on the home screen.
 export function playerSettings(): HTMLElement {
   // Speeds read as a share of their default; camera distances in units.
-  const slider = (label: string, key: TuningKey, units = false) => {
+  const row = (label: string, key: TuningKey, units = false) => {
     const [min, max, step] = TUNING_RANGES[key];
-    const show = () => (units ? TUNING[key].toFixed(2).replace(/\.?0+$/, "") : `${Math.round((TUNING[key] / DEFAULT_TUNING[key]) * 100)}%`);
+    const show = (v = TUNING[key]) => (units ? v.toFixed(2).replace(/\.?0+$/, "") : `${Math.round((v / DEFAULT_TUNING[key]) * 100)}%`);
     const val = h("span", {}, show());
-    const range = h("input", { type: "range", min, max, step, value: TUNING[key],
-      oninput: () => { TUNING[key] = Number(range.value); val.textContent = show(); saveTuning(); } }) as HTMLInputElement;
-    return h("label", {}, h("span", {}, label), val, range);
+    const range = slider({ min, max, step, value: TUNING[key], mark: DEFAULT_TUNING[key], label, text: show,
+      onInput: (v) => { TUNING[key] = v; val.textContent = show(v); saveTuning(); } });
+    return h("div", { class: "field" }, h("span", {}, label), val, range);
   };
+  const lock = h("input", { type: "checkbox", checked: Input.mouseLockEnabled(), onchange: () => Input.setMouseLock(lock.checked) }) as HTMLInputElement;
   // Tilt steering: on asks for motion access where the device needs it; refused, it stays off.
   const note = h("div", { class: "hint" });
   const tilt = h("input", { type: "checkbox", checked: Input.tiltAvailable() && Input.tiltEnabled(), disabled: !Input.tiltAvailable(),
@@ -313,10 +335,12 @@ export function playerSettings(): HTMLElement {
       if (!(await Input.requestTilt())) { tilt.checked = false; note.textContent = "Motion access was not allowed."; }
     } }) as HTMLInputElement;
   return h("div", { class: "settings" },
-    slider("Turn speed (keys)", "yawRate"),
-    slider("Mouse sensitivity", "mouseSens"),
-    slider("Camera distance", "camDist", true),
-    slider("Camera height", "camHeight", true),
+    row("Turn speed (keys)", "yawRate"),
+    row("Mouse sensitivity", "mouseSens"),
+    h("label", { class: "toggle", title: "On: click the game to capture the mouse, which then turns the camera as far as you like; Esc lets it go. Off: drag to turn" },
+      h("span", {}, "Lock mouse to camera"), lock),
+    row("Camera distance", "camDist", true),
+    row("Camera height", "camHeight", true),
     h("label", { class: "toggle", title: "Steer and throttle by tilting a phone or tablet; the angle it is held at when switched on is level" }, h("span", {}, "Tilt to steer"), tilt),
     Input.tiltAvailable() ? note : h("div", { class: "hint" }, "Tilt needs a phone or tablet."),
   );

@@ -28,15 +28,18 @@ function topPolys(level: Level): Poly[] {
       const hx = p.w / 2, hz = p.d / 2;
       const outline = isShaped(p) ? slabOutline(p).map(([x, z]) => W(x, z)) : [W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)];
       if (p.type === "slab" && p.twist) {
-        // A grid of small quads over the rolled top, half a unit along it and one across, so each
-        // is nearly flat; the long sides carry the lip as on any slab.
+        // A grid of small quads, half a unit along and one across, laid out flat; the twist turns each
+        // at emission, its depth with it, so the underside, walls and solids keep the slab's full
+        // thickness however far it turns (dropped straight down they would thin to nothing upright).
         const n = Math.max(1, Math.ceil(p.d * 2)), k = Math.max(1, Math.ceil(p.w));
         const zs = Array.from({ length: n + 1 }, (_, i) => p.d / 2 - (i / n) * p.d), xs = Array.from({ length: k + 1 }, (_, j) => -hx + (j / k) * p.w);
-        const at = (x: number, z: number): V => { const t = twistPoint(p, [x, 0, z]); return { v: W(t[0], t[2]), y: snap(p.y + t[1]) }; };
-        const grid = zs.map((z) => xs.map((x) => at(x, z)));
-        const rim = [...grid.map((r) => r[k]!.v), ...grid.slice().reverse().map((r) => r[0]!.v)];
+        const warp = (x: number, y: number, z: number): V3 => {
+          const l = rotXZ(x - p.x, z - p.z, -rot), t = twistPoint(p, [l.x, y - p.y, l.z]), o = rotXZ(t[0], t[2], rot);
+          return [snap(p.x + o.x), snap(p.y + t[1]), snap(p.z + o.z)];
+        };
+        const grid = zs.map((z) => xs.map((x): V => ({ v: W(x, z), y: p.y })));
         for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) {
-          out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(rim, m), narrow: false, warped: true });
+          out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(outline, m), narrow: false, warped: true, warp });
         }
       } else if (isCurled(p)) {
         // Half-unit strips along the flat layout; the curl bends each at emission. The near edge

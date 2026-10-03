@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { beanAt, beanDist, beanTrack, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -293,6 +293,66 @@ for (const [name, from, push] of [
   if (peak < 3 || side > -0.5) { failed = true; console.error(`FAIL jump-rolled: peak y ${peak.toFixed(2)}, sideways speed ${side.toFixed(2)} (want a launch thrown toward -x)`); }
   else console.log(`ok jump-rolled: launched to y ${peak.toFixed(2)}, thrown sideways at ${side.toFixed(2)} m/s`);
 }
+// A tilted jump pad launches along its own up too: tilted 20 degrees its up leans toward local +z, so a
+// ball set down on its launch square is thrown up and that way.
+{
+  const pad = { type: "jump", x: 0, y: 0, z: -10, w: 4, d: 4, rot: 0, rise: 4, tilt: 20 } as const;
+  const level = testLevel({ id: "jump-tilted", name: "jump-tilted", pieces: [
+    { type: "start", x: -4, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -12, w: 12, d: 40, rot: 0, fences: {} },
+    pad,
+    { type: "goal", x: 4, y: 0, z: 0, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  const at = frameToWorld(pad, [0, JUMP_H + BALL_RADIUS + 0.05, 0]);
+  sim.ball.setTranslation({ x: at[0], y: at[1], z: at[2] }, true);
+  sim.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  let peak = -Infinity, back = 0;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(0, 0, -1); const b = sim.ball.translation(), v = sim.ball.linvel(); peak = Math.max(peak, b.y); back = Math.max(back, v.z); }
+  sim.free();
+  if (peak < 3 || back < 1) { failed = true; console.error(`FAIL jump-tilted: peak y ${peak.toFixed(2)}, speed toward +z ${back.toFixed(2)} (want a launch thrown that way)`); }
+  else console.log(`ok jump-tilted: launched to y ${peak.toFixed(2)}, thrown toward +z at ${back.toFixed(2)} m/s`);
+}
+// A jump pad riding a moving platform launches wherever the platform has carried it, not only at its
+// level-placed spot: a ball set down on it, moving with it, 3 seconds into the run is thrown its rise up.
+{
+  const level = testLevel({ id: "jump-moving", name: "jump-moving", pieces: [
+    { type: "start", x: -20, y: 0, z: 0 },
+    { type: "slab", x: -20, y: 0, z: 4, w: 8, d: 16, rot: 0 },
+    { type: "slab", x: 0, y: 0, z: 0, w: 6, d: 6, rot: 0, move: { speed: 3, wait: 0, offset: 0, loop: "pingpong", stops: [{ x: 14, y: 0, z: 0, wait: 0 }] } },
+    { type: "jump", x: 0, y: 0, z: 0, w: 4, d: 4, rot: 0, rise: 4 },
+    { type: "goal", x: -20, y: 0, z: 8, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  const body = sim.movers[0]!.body;
+  for (let i = 0; i < 360; i++) sim.step(0, 0, -1);
+  const p0 = body.translation();
+  sim.step(0, 0, -1);
+  const p1 = body.translation();
+  sim.ball.setTranslation({ x: p1.x, y: p1.y + JUMP_H + BALL_RADIUS + 0.05, z: p1.z }, true);
+  sim.ball.setLinvel({ x: (p1.x - p0.x) / STEP, y: 0, z: (p1.z - p0.z) / STEP }, true);
+  let peak = -Infinity;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(0, 0, -1); peak = Math.max(peak, sim.ball.translation().y - BALL_RADIUS - JUMP_H); }
+  sim.free();
+  if (p1.x < 3 || peak < 3.5) { failed = true; console.error(`FAIL jump-moving: platform at x ${p1.x.toFixed(2)}, peak ${peak.toFixed(2)} above the pad (want a launch near its rise of 4)`); }
+  else console.log(`ok jump-moving: platform carried to x ${p1.x.toFixed(2)}, peaked ${peak.toFixed(2)} above the pad`);
+}
+// Tilted props rest on the floor as drawn: a crate tilted 90 lies on its front face (centre d/2 up) and a
+// barrel tilted 90 lies on its side (centre r up), neither dropping nor popping when the physics starts.
+for (const prop of [{ type: "crate", x: 0, y: 0, z: -6, w: 1, h: 2, d: 1.4, rot: 0, tilt: 90 }, { type: "barrel", x: 0, y: 0, z: -6, r: 0.4, h: 1.4, rot: 0, tilt: 90 }] as const) {
+  const level = testLevel({ id: "tilted-prop", name: "tilted prop", pieces: [
+    { type: "start", x: 0, y: 0, z: 4 },
+    { type: "slab", x: 0, y: 0, z: -4, w: 10, d: 20, rot: 0, fences: {} },
+    prop,
+    { type: "goal", x: 3, y: 0, z: 4, r: 1 },
+  ] });
+  const sim = await createSim(level), body = sim.crates[0]!.body, want = prop.type === "crate" ? prop.d / 2 : prop.r;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 120 * 2; i++) { sim.step(0, 0, -1); const y = body.translation().y; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+  sim.free();
+  if (lo < want - 0.03 || hi > want + 0.05) { failed = true; console.error(`FAIL tilted-prop: ${prop.type} tilted 90 rode between y ${lo.toFixed(3)} and ${hi.toFixed(3)}, want ${want}`); }
+  else console.log(`ok tilted-prop: ${prop.type} tilted 90 rests at y ${lo.toFixed(3)} (want ${want})`);
+}
 // A blockade, a pillar and a column in the lane must stop the ball, not let it through or pop it up.
 for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "pillar", x: 0, y: 0, z: -8 }, { type: "column", x: 0, y: 0, z: -8, h: 3 }]) {
   const level = testLevel({ id: `stop-${piece.type}`, name: piece.type, pieces: [
@@ -566,6 +626,105 @@ for (const [name, wall] of [
   sim.free();
   if (minZ < -11.6) { failed = true; console.error(`FAIL wall: ball went through a ${name} slab (z ${minZ.toFixed(2)})`); }
   else console.log(`ok wall: ${name} slab stops the ball at z ${minZ.toFixed(2)}`);
+}
+// A rolled curve is solid as drawn: rolled over (180) its underside faces up, and a ball dropped on it
+// mid-arc rests on that face, mirrored about the entry's centre line, instead of where the flat top would be.
+for (const roll of [180, 150]) {
+  const curve = { type: "curve", x: 0, y: 2, z: -20, inner: 8, outer: 16, rot: 0, roll } as const;
+  const level = testLevel({ id: "curve-roll", name: "curve roll", pieces: [
+    { type: "start", x: -30, y: 0, z: 0 },
+    { type: "slab", x: -30, y: 0, z: -5, w: 8, d: 16, rot: 0, fences: {} },
+    curve,
+    { type: "goal", x: -30, y: 0, z: -10, r: 1 },
+  ] });
+  const c = curveStrip(curve as Curve), u = c.s + (c.len - 2 * c.s) / 2, [ax, az] = c.at(u, (curve.inner + curve.outer) / 2);
+  const face = curveRollPoint(curve as Curve, [ax, -PLATFORM_THICKNESS, az]);
+  const sim = await createSim(level);
+  sim.ball.setTranslation({ x: curve.x + face[0], y: curve.y + face[1] + 1.5, z: curve.z + face[2] }, true);
+  sim.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  // Closest the ball's centre comes to the face's plane before it can roll off a sloped one.
+  const n: [number, number, number] = [Math.sin((roll * Math.PI) / 180), -Math.cos((roll * Math.PI) / 180), 0];
+  let near = Infinity;
+  for (let i = 0; i < 150; i++) {
+    sim.step(0, 0, -1);
+    const b = sim.ball.translation();
+    near = Math.min(near, (b.x - curve.x - face[0]) * n[0] + (b.y - curve.y - face[1]) * n[1] + (b.z - curve.z - face[2]) * n[2]);
+  }
+  sim.free();
+  if (Math.abs(near - BALL_RADIUS) > 0.05) { failed = true; console.error(`FAIL curve-roll ${roll}: ball came within ${near.toFixed(3)} of the rolled face (radius ${BALL_RADIUS})`); }
+  else console.log(`ok curve-roll ${roll}: ball landed on the rolled face (centre ${near.toFixed(3)} from it)`);
+}
+// A slab twisted 30 meets a C curve rolled 30 about its end b exactly: the end it turns about stays put.
+{
+  const slab = { type: "slab", x: 0, y: 0, z: -52, w: 8, d: 16, rot: 0, tilt: 0, twist: 30 } as Slab;
+  const curve = { type: "curve", x: 8, y: 0, z: -60, inner: 8, outer: 16, rot: 0, sweep: 180, roll: 30, rollAt: "b" } as Curve;
+  const c = curveStrip(curve);
+  let gap = 0;
+  for (const k of [0, 0.5, 1]) {
+    const t = twistPoint(slab, [-4 + 8 * k, 0, -slab.d / 2]), [x, z] = c.at(c.len, curve.outer - 8 * k), v = curveRollPoint(curve, [x, 0, z]);
+    gap = Math.max(gap, Math.hypot(slab.x + t[0] - curve.x - v[0], slab.y + t[1] - curve.y - v[1], slab.z + t[2] - curve.z - v[2]));
+  }
+  if (gap > 1e-6) { failed = true; console.error(`FAIL curve-roll-at-b: twisted slab and rolled C curve miss by ${gap.toFixed(4)}`); }
+  else console.log("ok curve-roll-at-b: a 30 twist meets a C curve rolled 30 about its end b exactly");
+  // Its other end lands on the grid, (17, 10) here rather than (17.32, 10), so a slab rolled 30 there meets it.
+  const leg = { x: 17, y: 10, z: -52, d: 16, roll: 30 };
+  let miss = 0;
+  for (const k of [0, 0.5, 1]) {
+    const [x, z] = c.at(0, curve.inner + 8 * k), v = curveRollPoint(curve, [x, 0, z]), t = (leg.roll * Math.PI) / 180, lx = -4 + 8 * k;
+    miss = Math.max(miss, Math.hypot(curve.x + v[0] - leg.x - lx * Math.cos(t), curve.y + v[1] - leg.y - lx * Math.sin(t), curve.z + v[2] - leg.z + leg.d / 2));
+  }
+  // A point right on the line where end b's straight meets the arc lands where its neighbours do (-0 trap).
+  const on = curveRollPoint(curve, [2 * c.s - curve.outer, 0, -c.s]), near = curveRollPoint(curve, [2 * c.s - curve.outer, 0, -c.s + 1e-9]);
+  miss = Math.max(miss, Math.hypot(on[0] - near[0], on[1] - near[1], on[2] - near[2]));
+  if (miss > 1e-6) { failed = true; console.error(`FAIL curve-roll-grid: the swinging end misses a rolled slab at x 17 by ${miss.toFixed(4)}`); }
+  else console.log("ok curve-roll-grid: the swinging end of a C rolled 30 lands on the grid, where a slab rolled 30 meets it");
+}
+// A hole can be cut into an upright wall: a slab rolled 90 across the ball's way stops it, and with a hole
+// turned the same way on its face, from the floor up, the ball rolls on through.
+for (const holed of [false, true]) {
+  const wall = { type: "slab", x: 0, y: 2, z: -12, w: 4, d: 10, rot: 90, tilt: 0, roll: 90, fences: {} } as const;
+  const at = frameToWorld(wall, [-1.15, 0, 0]);
+  const level = testLevel({ id: "wall-hole", name: "wall hole", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -9, w: 10, d: 34, rot: 0, fences: {} },
+    wall,
+    ...(holed ? [{ type: "hole", x: at[0], y: at[1], z: at[2], w: 1.5, d: 2, rot: 90, roll: 90 }] : []),
+    { type: "goal", x: 3, y: 0, z: -20, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let minZ = 0;
+  for (let i = 0; i < 120 * 5; i++) { sim.step(1, 0, -1); minZ = Math.min(minZ, sim.ball.translation().z); }
+  sim.free();
+  const ok = holed ? minZ < -14 : minZ > -12;
+  if (!ok) { failed = true; console.error(`FAIL wall-hole: ${holed ? "ball did not get through the hole" : "ball got through the wall"} (z ${minZ.toFixed(2)})`); }
+  else console.log(`ok wall-hole: ${holed ? "ball rolled through the hole in the wall" : "the wall without a hole stops the ball"} (z ${minZ.toFixed(2)})`);
+}
+// A slab rolled and twisted (n01's: rolled 90, twisted 90 over 32) collides as drawn, twist and all: a ball
+// set over whichever face points up, anywhere along it, comes to rest on that face, not through it.
+{
+  const slab = { type: "slab", x: 6, y: 22, z: -6, w: 8, d: 32, rot: 90, tilt: 0, roll: 90, twist: 90, fences: {} } as const;
+  const level = testLevel({ id: "twist-rolled", name: "twist rolled", pieces: [
+    { type: "start", x: 40, y: 0, z: 0 }, { type: "slab", x: 40, y: 0, z: -2, w: 8, d: 8, rot: 0, fences: {} }, slab, { type: "goal", x: 40, y: 0, z: -4, r: 1 },
+  ] });
+  const face = (lz: number, y: number) => frameToWorld(slab, twistPoint(slab as unknown as Slab, [0, y, lz]));
+  let worst = Infinity, at = 0;
+  for (const lz of [-14, -8, 0, 8]) {
+    const a = face(lz, 0), b = face(lz, 1);
+    let n = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], t = a;
+    if (n[1]! < 0) { n = n.map((v) => -v); t = face(lz, -PLATFORM_THICKNESS); }
+    const sim = await createSim(level);
+    sim.ball.setTranslation({ x: t[0] + n[0]! * 1.5, y: t[1] + n[1]! * 1.5, z: t[2] + n[2]! * 1.5 }, true);
+    sim.ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    for (let i = 0; i < 180; i++) {
+      sim.step(0, 0, -1);
+      const q = sim.ball.translation(), d = (q.x - t[0]) * n[0]! + (q.y - t[1]) * n[1]! + (q.z - t[2]) * n[2]!;
+      if (d < worst) { worst = d; at = lz; }
+    }
+    sim.free();
+  }
+  if (worst < BALL_RADIUS - 0.05) { failed = true; console.error(`FAIL twist-rolled: the ball sank ${(BALL_RADIUS - worst).toFixed(3)} into the drawn face at z ${at} (through it below ${BALL_RADIUS})`); }
+  else console.log(`ok twist-rolled: a rolled, twisted slab holds the ball on its drawn face everywhere (closest ${worst.toFixed(3)})`);
 }
 // A hanging bridge: at rest it sags a little below its hinge line; the ball rolls down onto it,
 // across the planks and back up the far platform's lip, and the chain never comes apart.

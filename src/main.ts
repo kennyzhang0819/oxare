@@ -13,7 +13,7 @@ import { Loading } from "./loading.ts";
 import { Menu } from "./menu.ts";
 import { loadThumbIndex } from "./thumbs.ts";
 import { loadTuning } from "./tuning.ts";
-import type { Level } from "./level.ts";
+import { worldOf, type Level } from "./level.ts";
 
 export interface Ctx { renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement; overlay: HTMLElement }
 export interface Mode { dispose(): void }
@@ -46,8 +46,8 @@ function menu() {
 function playLevel(i: number) {
   const level = LEVELS[i];
   if (!level) return show(() => new Loading(ctx, menu));
-  // A player's next level skips hidden ones; from the admin panel every level is next in turn.
-  const next = LEVELS.findIndex((l, k) => k > i && (admin || !l.hidden));
+  // Next is the next level in the same world; a player's skips hidden ones, the admin panel's does not.
+  const next = LEVELS.findIndex((l, k) => k > i && worldOf(l) === worldOf(level) && (admin || !l.hidden));
   show(() => new Game(ctx, level, {
     admin,
     onExit: menu,

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { cloneLevel, type Level } from "./level.ts";
+import { cloneLevel, WORLDS, worldOf, type Level, type World } from "./level.ts";
 import { LEVELS } from "./levels/index.ts";
 import { blankLevel } from "./editor.ts";
 import { loadProgress, playerSettings } from "./game.ts";
@@ -8,14 +8,62 @@ import { levelThumbSrc, saveThumb } from "./thumbs.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
-// The worlds along the top of the level select. Every level is in Classic for now; Neo is still to
-// come, shown but locked.
-const WORLDS: { name: string; locked: boolean }[] = [{ name: "Classic", locked: false }, { name: "Neo", locked: true }];
-const worldTabs = () => h("div", { class: "world-tabs", role: "tablist" },
-  ...WORLDS.map((w, i) => h("button", {
-    class: i === 0 ? "world-tab active" : "world-tab", role: "tab", "aria-selected": String(i === 0), disabled: w.locked, title: w.locked ? `${w.name}: locked` : w.name,
-  }, w.locked ? h("span", { class: "lock", innerHTML: LOCK_ICON }) : null, w.name)),
-);
+// Worlds players can't open yet: shown with a lock. The admin panel opens every world.
+const LOCKED: World[] = [];
+// The world tab open, kept while the menu is rebuilt.
+let tab: World = "classic";
+// The level select: back, world tabs and tools in a bar along the top with the view switch and pager
+// under them, and one page of levels scrolling below. Only the page shown is built, pictures included.
+const VIEW_KEY = "balling.levelView";
+const PAGE_SIZE = { grid: 24, list: 50 };
+type View = keyof typeof PAGE_SIZE;
+let view: View = "grid";
+try { if (localStorage.getItem(VIEW_KEY) === "list") view = "list"; } catch { /* grid */ }
+// The first level of the page shown, kept while the menu is rebuilt (after a duplicate or delete) and across a view switch.
+let first = 0;
+const GRID_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>';
+const LIST_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><rect x="1" y="2" width="14" height="3" rx="1.2"/><rect x="1" y="6.5" width="14" height="3" rx="1.2"/><rect x="1" y="11" width="14" height="3" rx="1.2"/></svg>';
+// `levels` lists the LEVELS indices shown in a world; `item` draws one of them, `n` its number there.
+interface Browse { admin: boolean; start: HTMLElement[]; end: HTMLElement[]; levels(world: World): number[]; item(i: number, n: number, view: View): HTMLElement }
+const levelSelect = (b: Browse) => {
+  const tabs = h("div", { class: "world-tabs", role: "tablist" }), tools = h("div", { class: "level-tools" }), scroll = h("div", { class: "level-scroll" });
+  const locked = (w: World) => !b.admin && LOCKED.includes(w);
+  if (locked(tab)) tab = "classic";
+  let shown = b.levels(tab);
+  const pages = () => Math.max(1, Math.ceil(shown.length / PAGE_SIZE[view]));
+  const go = (page: number) => { first = Math.max(0, Math.min(pages() - 1, page)) * PAGE_SIZE[view]; render(); scroll.scrollTop = 0; };
+  const render = () => {
+    shown = b.levels(tab);
+    tabs.replaceChildren(...WORLDS.map((w) => h("button", {
+      class: w.id === tab ? "world-tab active" : "world-tab", role: "tab", "aria-selected": String(w.id === tab), disabled: locked(w.id), title: locked(w.id) ? `${w.name}: locked` : w.name,
+      onclick: () => { if (w.id !== tab) { tab = w.id; first = 0; render(); scroll.scrollTop = 0; } },
+    }, locked(w.id) ? h("span", { class: "lock", innerHTML: LOCK_ICON }) : null, w.name)));
+    const count = shown.length;
+    const size = PAGE_SIZE[view], last = pages() - 1, page = Math.min(Math.floor(first / size), last), from = page * size, to = Math.min(count, from + size);
+    const at = h("input", { type: "number", min: 1, max: last + 1, value: page + 1, title: "Go to page", onchange: () => go(Number(at.value) - 1) }) as HTMLInputElement;
+    const pick = (v: View, label: string, icon: string) => h("button", { class: v === view ? "active" : "", "aria-pressed": String(v === view), title: `${label} view`,
+      onclick: () => { view = v; try { localStorage.setItem(VIEW_KEY, v); } catch { /* this visit only */ } render(); } }, h("span", { class: "icon", innerHTML: icon }), label);
+    tools.replaceChildren(
+      h("div", { class: "view-toggle" }, pick("grid", "Grid", GRID_ICON), pick("list", "List", LIST_ICON)),
+      h("span", { class: "count" }, count ? `${from + 1}–${to} of ${count}` : "No levels yet"),
+      ...(last > 0 ? [h("div", { class: "pager" },
+        h("button", { title: "First page", disabled: page === 0, onclick: () => go(0) }, "«"),
+        h("button", { title: "Previous page (←)", disabled: page === 0, onclick: () => go(page - 1) }, "‹"),
+        h("label", {}, "Page", at, `of ${last + 1}`),
+        h("button", { title: "Next page (→)", disabled: page === last, onclick: () => go(page + 1) }, "›"),
+        h("button", { title: "Last page", disabled: page === last, onclick: () => go(last) }, "»"),
+      )] : []),
+    );
+    const items = h("div", { class: view === "grid" ? "level-grid" : "level-list" });
+    for (let k = from; k < to; k++) items.append(b.item(shown[k]!, k + 1, view));
+    scroll.replaceChildren(items);
+  };
+  render();
+  return {
+    el: h("div", { class: "level-select" }, h("div", { class: "level-top" }, h("div", { class: "start" }, ...b.start), tabs, h("div", { class: "end" }, ...b.end), tools), scroll),
+    turn: (by: number) => go(Math.floor(first / PAGE_SIZE[view]) + by),
+  };
+};
 const LOCK_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="2.5" y="7" width="11" height="8" rx="2" fill="currentColor"/></svg>';
 // The title in the menu buttons' frosted fill and border, the border thicker along the top. The two
 // fills are masked apart so they never overlap and stack their transparency.
@@ -45,6 +93,7 @@ export class Menu implements Mode {
   private onResize = () => this.resize();
   private onKey: (e: KeyboardEvent) => void;
   private back: (() => void) | null = null;
+  private turnPage: ((by: number) => void) | null = null;
   private onDown: ((e: PointerEvent) => void) | null = null;
 
   constructor(ctx: Ctx, opts: MenuOpts) {
@@ -59,6 +108,7 @@ export class Menu implements Mode {
       if (e.code === "KeyS" && e.ctrlKey && e.shiftKey) { e.preventDefault(); opts.onToggleAdmin(); }
       else if (e.code === "Escape" && ctx.overlay.querySelector(".more-menu:not([hidden])")) this.closeMore();
       else if (e.code === "Escape" && this.back) this.back();
+      else if ((e.code === "ArrowLeft" || e.code === "ArrowRight") && this.turnPage && !(e.target instanceof HTMLInputElement)) this.turnPage(e.code === "ArrowLeft" ? -1 : 1);
     };
     addEventListener("keydown", this.onKey);
     if (!opts.admin) {
@@ -69,6 +119,7 @@ export class Menu implements Mode {
       const show = (title: boolean, back: (() => void) | null, ...children: HTMLElement[]) => {
         slot.hidden = !title;
         this.back = back;
+        this.turnPage = null;
         body.replaceChildren(...children);
       };
       const home = () => show(true, null,
@@ -78,18 +129,18 @@ export class Menu implements Mode {
         ));
       const levels = () => {
         const progress = loadProgress();
-        show(false, home,
-          worldTabs(),
-          // Hidden levels are the admin's playgrounds; players see and number only the public ones.
-          h("div", { class: "level-grid" },
-            ...LEVELS.flatMap((l, i) => (l.hidden ? [] : [i])).map((i, n) => { const l = LEVELS[i]!; return h("button", { class: "level-card", onclick: () => opts.onPlay(i) },
-              h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "" }),
-              h("span", { class: "name" }, `${n + 1}. ${l.name}`),
-              h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : "--:--.--"),
-            ); }),
-          ),
-          h("button", { class: "menu-btn small", onclick: home }, "Back"),
-        );
+        // Hidden levels are the admin's playgrounds; players see and number only the public ones.
+        const select = levelSelect({ admin: false, start: [h("button", { class: "menu-btn small", onclick: home }, "Back")], end: [],
+          levels: (w) => LEVELS.flatMap((l, i) => (l.hidden || worldOf(l) !== w ? [] : [i])), item: (i, n, v) => {
+          const l = LEVELS[i]!;
+          return h("button", { class: v === "grid" ? "level-card" : "level-row", onclick: () => opts.onPlay(i) },
+            h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "", loading: "lazy" }),
+            h("span", { class: "name" }, `${n}. ${l.name}`),
+            h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : "--:--.--"),
+          );
+        } });
+        show(false, home, select.el);
+        this.turnPage = select.turn;
       };
       const options = () => show(true, home,
         h("div", { class: "card options" }, h("h2", {}, "Options"), playerSettings()),
@@ -98,14 +149,14 @@ export class Menu implements Mode {
       home();
       return;
     }
-    const card = (level: Level, label: string, sub: string, play: () => void) => {
+    const card = (level: Level, label: string, sub: string, play: () => void, v: View) => {
       const more = h("div", { class: "more-menu", hidden: true },
-        h("button", { onclick: () => void duplicateLevel(level) }, "Duplicate"),
-        h("button", { onclick: () => void setHidden(level, !level.hidden) }, level.hidden ? "Make public" : "Make hidden"),
+        h("button", { onclick: () => void duplicateLevel(level) }, "Duplicate"),        h("button", { onclick: () => void rewrite(level, (l) => { if (l.hidden) delete l.hidden; else l.hidden = true; }, "Changing visibility") }, level.hidden ? "Make public" : "Make hidden"),
+        ...WORLDS.filter((w) => w.id !== worldOf(level)).map((w) => h("button", { onclick: () => void rewrite(level, (l) => { if (w.id === "classic") delete l.world; else l.world = w.id; }, "Moving the level") }, `Move to ${w.name}`)),
         h("button", { class: "delete", onclick: () => void deleteLevel(level) }, "Delete"),
       );
-      return h("div", { class: level.hidden ? "level-card hidden-level" : "level-card" },
-        h("button", { class: "thumb", title: "Play", onclick: play }, h("img", { src: levelThumbSrc(ctx.renderer, level), alt: "" })),
+      return h("div", { class: `${v === "grid" ? "level-card" : "level-row"}${level.hidden ? " hidden-level" : ""}` },
+        h("button", { class: "thumb", title: "Play", onclick: play }, h("img", { src: levelThumbSrc(ctx.renderer, level), alt: "", loading: "lazy" })),
         h("span", { class: "name" }, label),
         h("span", { class: "best" }, sub),
         h("div", { class: "actions" },
@@ -130,18 +181,18 @@ export class Menu implements Mode {
         alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
-    // Rewrites the level's file public or hidden, like the editor's Save.
-    const setHidden = async (level: Level, hide: boolean) => {
+    // Rewrites the level's file with `change` made (public or hidden, its world), like the editor's Save.
+    const rewrite = async (level: Level, change: (next: Level) => void, what: string) => {
       this.closeMore();
-      if (!import.meta.env.DEV) { alert("Changing a level's visibility only works in local dev (npm run dev)."); return; }
+      if (!import.meta.env.DEV) { alert(`${what} only works in local dev (npm run dev).`); return; }
       const next = cloneLevel(level);
-      if (hide) next.hidden = true; else delete next.hidden;
+      change(next);
       try {
         const res = await fetch("/__level/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next) });
         if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
         opts.onChanged();
       } catch (err) {
-        alert(`Changing visibility failed: ${err instanceof Error ? err.message : String(err)}`);
+        alert(`${what} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
     // Re-renders and saves every level's menu picture (after a change to how pieces look).
@@ -157,7 +208,7 @@ export class Menu implements Mode {
       } catch (err) {
         alert(`Saving thumbnails failed: ${err instanceof Error ? err.message : String(err)}`);
         button.disabled = false;
-        button.textContent = "Rebuild thumbnails";
+        button.textContent = "Rebuild thumbs";
       }
     };
     // Saves a copy under the next free id, like the editor's Save.
@@ -183,22 +234,18 @@ export class Menu implements Mode {
     };
     this.onDown = (e) => { if (!(e.target as Element).closest?.(".more, .more-menu")) this.closeMore(); };
     addEventListener("pointerdown", this.onDown);
-    ctx.overlay.append(
-      h("div", { class: "menu" },
-        worldTabs(),
-        h("div", { class: "level-grid" },
-          ...LEVELS.map((l, i) => card(l, `${i + 1}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i))),
-          h("button", { class: "level-card plus", title: "New level", onclick: () => opts.onEdit(blankLevel()) },
-            h("span", { class: "plus-mark" }, "+"),
-            h("span", { class: "name" }, "New level"),
-          ),
-        ),
-        h("div", { class: "row", style: "display:flex;gap:10px" },
-          h("button", { class: "menu-btn small", onclick: (e: Event) => void rebuildThumbs(e.currentTarget as HTMLButtonElement) }, "Rebuild thumbnails"),
-          h("button", { class: "menu-btn small", onclick: () => opts.onToggleAdmin() }, "Back to levels (Ctrl+Shift+S)"),
-        ),
-      ),
-    );
+    const select = levelSelect({
+      admin: true,
+      start: [h("button", { class: "menu-btn small", title: "Back to the player's levels (Ctrl+Shift+S)", onclick: () => opts.onToggleAdmin() }, "Back")],
+      end: [
+        h("button", { class: "menu-btn small primary", title: "Start a blank level in the editor", onclick: () => opts.onEdit({ ...blankLevel(), ...(tab !== "classic" ? { world: tab } : {}) }) }, "+ New level"),
+        h("button", { class: "menu-btn small", title: "Re-render and save every level's menu picture", onclick: (e: Event) => void rebuildThumbs(e.currentTarget as HTMLButtonElement) }, "Rebuild thumbs"),
+      ],
+      levels: (w) => LEVELS.flatMap((l, i) => (worldOf(l) === w ? [i] : [])),
+      item: (i, n, v) => { const l = LEVELS[i]!; return card(l, `${n}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i), v); },
+    });
+    this.turnPage = select.turn;
+    ctx.overlay.append(h("div", { class: "menu" }, select.el));
   }
 
   private closeMore() {
