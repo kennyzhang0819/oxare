@@ -1,6 +1,7 @@
 {
   "id": "14",
   "name": "Magnetic",
+  "thumb": {"x": 42, "y": 4.5, "z": -96, "r": 4},
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "goal", "x": 76, "y": 5, "z": -14, "r": 1},

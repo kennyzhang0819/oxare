@@ -1,6 +1,7 @@
 {
   "id": "13",
   "name": "Wall jumps",
+  "thumb": {"x": -2, "y": 2.5, "z": -13, "r": 8},
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "slab", "x": 0, "y": 0, "z": -4, "w": 8, "d": 16, "rot": 0, "tilt": 0},

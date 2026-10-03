@@ -24,7 +24,7 @@ const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
 const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
 // A bean's skin: slippery, so it shoves the ball on rather than dragging it along.
 const BEAN_FRICTION = 0.3;
-// A bean throws the ball off itself like a bumper's side, at this share of the bumper's kick.
+// A bean throws the ball off itself like a bumper's side, never slower than this.
 const BEAN_KICK = 0.5;
 // A gate's chain link: light beside the cube it holds.
 const GATE_LINK_MASS = 0.02;
@@ -822,7 +822,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const n = qrot(q, { x: rx / d, y: ry / d, z: rz / d }), bv = bn.vel;
         const vin = (v0.x - bv.x) * n.x + (v0.y - bv.y) * n.y + (v0.z - bv.z) * n.z;
         if (vin >= 0) continue;
-        const v = ball.linvel(), vn = (v.x - bv.x) * n.x + (v.y - bv.y) * n.y + (v.z - bv.z) * n.z, out = Math.max(TUNING.bumperKick * BEAN_KICK, -vin * TUNING.bumperBounce);
+        const v = ball.linvel(), vn = (v.x - bv.x) * n.x + (v.y - bv.y) * n.y + (v.z - bv.z) * n.z, out = Math.max(BEAN_KICK, -vin * TUNING.bumperBounce);
         if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }

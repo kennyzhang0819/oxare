@@ -662,18 +662,21 @@ export function moverShift(p: Mover, t: number): { x: number; y: number; z: numb
 
 // Bean: a striped capsule prop that glides along a node path laid out like a tube's and shoves
 // whatever it meets out of its way. (x, y, z) is its first node and `path` the rest, relative to it
-// before `rot`; a node's y is the surface the bean rolls on there, its centre `r` above it. `bend`
+// before `rot`; a node's y is the surface the bean rolls on there, its centre `r` (the ball's radius) above it. `bend`
 // rounds a corner, `mid` curves a segment and `smooth` makes the path one curve, as on a tube. It
 // lies along the way it sets off (turned `turn` degrees from that about the vertical: 90 lies it
-// across it) and keeps that one orientation for the whole run, never rolling or turning, `len` from
-// tip to tip, and glides BEAN_LIFT above the surface at `speed`: `pingpong`
+// across it) and keeps that one orientation for the whole run, or with `face` "follow" turns to
+// keep lying along the way it is going (turned `turn`), its tip leading, round every bend and
+// back on the return. It never rolls, is `len` from tip to tip, and glides BEAN_LIFT above the
+// surface at `speed`: `pingpong`
 // runs the path out and back, easing out of and into a stop at each end and waiting `wait` seconds
 // there; `loop` closes the path with a straight run from the last node back to the first (that
 // corner rounded like the last node's; a last node placed on the first closes it itself, with that
 // segment's curve) and goes round without a pause. `offset` starts it that many seconds into its
 // schedule. Its place is a pure function of time, so the physics, the picture and the editor agree.
 export type Bean = Piece & { type: "bean" };
-export const BEAN_R = 0.6, BEAN_LEN = 2.4, BEAN_SPEED = 6;
+// A bean is as fat as the ball; its `r` is always BEAN_R, never set per bean.
+export const BEAN_R = BALL_RADIUS, BEAN_LEN = 2, BEAN_SPEED = 6;
 // A bean floats this far above the surface it follows.
 export const BEAN_LIFT = 0.05;
 // Over this distance a ping-pong bean rolls up to speed from a stop and back down into one.
@@ -759,9 +762,9 @@ export function beanDist(p: Bean, len: number, t: number): number {
   return u < wait ? len : len - run(u - wait);
 }
 
-// The bean's centre and turn in world space at time t: its turn is fixed, lying along the track's
-// first segment turned `turn` degrees about the vertical, however the track winds on. `d` is the
-// level heading along the track there.
+// The bean's centre and turn in world space at time t: lying along the track's first segment
+// turned `turn` degrees about the vertical, however the track winds on, or, following, along its
+// way there with its tip leading, flipped on the return. `d` is the level heading along the track.
 export interface BeanPose { x: number; y: number; z: number; q: Quat; d: V3 }
 export function beanAt(p: Bean, track: BeanTrack, t: number): BeanPose {
   const s = beanDist(p, track.len, t), pts = track.pts, n = pts.length;
@@ -769,13 +772,35 @@ export function beanAt(p: Bean, track: BeanTrack, t: number): BeanPose {
   for (let lo = 0, hi = n - 2; lo <= hi; ) { const m = (lo + hi) >> 1; if (track.s[m + 1]! < s) lo = m + 1; else { i = m; hi = m - 1; } }
   const a = pts[Math.min(i, n - 1)]!, b = pts[Math.min(i + 1, n - 1)]!, L = track.s[i + 1] !== undefined ? track.s[i + 1]! - track.s[i]! : 0;
   const f = L > 1e-9 ? (s - track.s[i]!) / L : 0, c = add(a, sub(b, a), f);
-  const fwd = rotXZ(0, -1, p.rot);
+  const fwd = rotXZ(0, -1, p.rot), m = n - 1;
+  // The level heading of segment k, or the piece's own where a segment has no run.
+  const seg = (k: number): V3 => {
+    const u = pts[k]!, v = pts[k + 1]!, h = Math.hypot(v[0] - u[0], v[2] - u[2]);
+    return h > 1e-6 ? [(v[0] - u[0]) / h, 0, (v[2] - u[2]) / h] : [fwd.x, 0, fwd.z];
+  };
+  // The track turns at each point of its line, so blend each segment's heading with its neighbour's
+  // across the halves either side of that point; a loop's line closes, so its ends neighbour each other.
+  const closed = m > 1 && Math.hypot(...sub(pts[0]!, pts[m]!)) < 1e-6;
+  const near = (k: number) => (closed ? (k + m) % m : Math.max(0, Math.min(m - 1, k)));
   let d: V3 = [fwd.x, 0, fwd.z];
-  if (L > 1e-9) { const h = Math.hypot(b[0] - a[0], b[2] - a[2]); if (h > 1e-6) d = [(b[0] - a[0]) / h, 0, (b[2] - a[2]) / h]; }
-  let d0: V3 = [fwd.x, 0, fwd.z];
-  if (n > 1) { const h0 = Math.hypot(pts[1]![0] - pts[0]![0], pts[1]![2] - pts[0]![2]); if (h0 > 1e-6) d0 = [(pts[1]![0] - pts[0]![0]) / h0, 0, (pts[1]![2] - pts[0]![2]) / h0]; }
-  const axis = rotXZ(d0[0], d0[2], p.turn ?? 0);
-  return { x: c[0], y: c[1], z: c[2], q: quatYTo(axis.x, 0, axis.z), d };
+  if (m > 0) {
+    const here = seg(i), other = seg(near(f < 0.5 ? i - 1 : i + 1)), w = Math.abs(f - 0.5);
+    const bx = here[0] * (1 - w) + other[0] * w, bz = here[2] * (1 - w) + other[2] * w, bh = Math.hypot(bx, bz);
+    d = bh > 1e-6 ? [bx / bh, 0, bz / bh] : here;
+  }
+  const d0: V3 = m > 0 ? seg(0) : [fwd.x, 0, fwd.z];
+  let along = d0;
+  if (p.face === "follow") {
+    // Which way it is travelling: forward unless the next instant is behind this one, or, held
+    // at a stop, unless it came in backwards.
+    let dir = Math.sign(beanDist(p, track.len, t + 1e-3) - s);
+    if (dir === 0) dir = Math.sign(s - beanDist(p, track.len, t - 1e-3)) || 1;
+    along = [d[0] * dir, 0, d[2] * dir];
+  }
+  const axis = rotXZ(along[0], along[2], p.turn ?? 0);
+  // Laid flat along +x, then yawed to the axis: a shortest-arc turn would roll its pattern as the heading sweeps.
+  const q = quatMul(quatAboutY(Math.atan2(-axis.z, axis.x)), quatYTo(1, 0, 0));
+  return { x: c[0], y: c[1], z: c[2], q, d };
 }
 
 // Older levels fence a platform's sides on the platform itself: per side true along its whole
@@ -803,7 +828,7 @@ export type Piece =
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number })
   | (At & { type: "barrel"; r: number; h: number; rot: number; roll?: number })
   | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number; slide?: "z" })
-  | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; turn?: number; path: TubeNode[]; smooth?: true })
+  | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; turn?: number; face?: "follow"; path: TubeNode[]; smooth?: true })
   | (At & { type: "jump"; w: number; d: number; rot: number; rise: number; roll?: number })
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
@@ -1673,8 +1698,8 @@ export function validateLevel(raw: unknown): Level {
       case "stool": return { type: "stool", ...at, w: num(p.w ?? STOOL_W, "w"), h: num(p.h ?? STOOL_H, "h"), d: num(p.d ?? STOOL_D, "d"), rot: num(p.rot ?? 0, "rot"),
         track: num(p.track ?? STOOL_TRACK, "track"), offset: num(p.offset ?? 0, "offset"), ...(p.slide === "z" ? { slide: "z" as const } : {}) };
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
-      case "bean": return { type: "bean", ...at, rot: num(p.rot ?? 0, "rot"), r: num(p.r ?? BEAN_R, "r"), len: num(p.len ?? BEAN_LEN, "len"), speed: num(p.speed ?? BEAN_SPEED, "speed"),
-        wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", ...(p.turn ? { turn: num(p.turn, "turn") } : {}), path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
+      case "bean": return { type: "bean", ...at, rot: num(p.rot ?? 0, "rot"), r: BEAN_R, len: num(p.len ?? BEAN_LEN, "len"), speed: num(p.speed ?? BEAN_SPEED, "speed"),
+        wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", ...(p.turn ? { turn: num(p.turn, "turn") } : {}), ...(p.face === "follow" ? { face: "follow" as const } : {}), path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: GOAL_R };
       case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };

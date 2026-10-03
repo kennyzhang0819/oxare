@@ -53,7 +53,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["roll", 15]],
   barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
-  bean: [["rot", 15], ["turn", 15], ["r", 0.1], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
+  bean: [["rot", 15], ["turn", 15], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
   jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [["rot", 15], ["roll", 15]],
@@ -581,6 +581,15 @@ export class Editor implements Mode {
           h("option", { value: "loop", selected: p.loop === "loop" }, "loop: last node back to start"),
         ) as HTMLSelectElement;
         props.append(h("label", {}, "route", loop));
+        const face = h("select", { title: "Fixed keeps the bean lying one way (along its first segment, turned by turn) for the whole run; follow turns it to lie along its way, tip first, round every bend and back on the return", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (face.value === "follow") p.face = "follow"; else delete p.face;
+          this.commit(before);
+        } },
+          h("option", { value: "fixed", selected: p.face !== "follow" }, "fixed: one way all run"),
+          h("option", { value: "follow", selected: p.face === "follow" }, "follow: tip leads the path"),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "facing", face));
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
       if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") this.body.append(this.tubePanel(p));

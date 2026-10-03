@@ -3,7 +3,7 @@ import { Input } from "./input.ts";
 import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./level.ts";
 import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
-import { DEFAULT_TUNING, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
+import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -262,7 +262,7 @@ export class Game implements Mode {
     if (this.tunePanel) { this.tunePanel.remove(); this.tunePanel = null; return; }
     const out = h("textarea", { readOnly: true });
     const refresh = () => { out.value = JSON.stringify(TUNING, null, 1); };
-    const rows = (Object.keys(TUNING) as TuningKey[]).filter((k) => !PLAYER_KEYS.includes(k)).map((k) => {
+    const rows = (Object.keys(TUNING) as TuningKey[]).filter((k) => !PLAYER_KEYS.includes(k) && !FIXED_KEYS.includes(k)).map((k) => {
       const [min, max, step] = TUNING_RANGES[k];
       const val = h("span", {}, String(TUNING[k]));
       const range = h("input", { type: "range", min, max, step, value: TUNING[k],

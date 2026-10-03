@@ -58,6 +58,8 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
 export const DEFAULT_TUNING: Tuning = { ...TUNING };
 // The player's own settings (Options and the pause menu), kept out of the tune panel and its Reset.
 export const PLAYER_KEYS: TuningKey[] = ["yawRate", "mouseSens", "camDist", "camHeight"];
+// Settled values: not in the tune panel and never read back from the browser, so they are what the code says.
+export const FIXED_KEYS: TuningKey[] = ["bumperBounce", "bumperKick", "magnetForce", "magnetHold"];
 const KEY = "balling.tuning";
 
 export function loadTuning(): void {
@@ -65,6 +67,7 @@ export function loadTuning(): void {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Tuning>;
     for (const k of Object.keys(TUNING) as TuningKey[]) {
+      if (FIXED_KEYS.includes(k)) continue;
       const v = saved[k];
       if (typeof v !== "number" || !Number.isFinite(v)) continue;
       const [lo, hi] = TUNING_RANGES[k];
