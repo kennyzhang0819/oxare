@@ -123,8 +123,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (!isMoving(p)) return;
     const at = moverAt(p, 0);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z));
-    const q = qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
-    world.createCollider(slabFriction(platformHull(p.w, p.d).setRotation(q), q), body);
+    world.createCollider(platformHull(p.w, p.d).setRotation(qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)))).setFriction(1), body);
     const m = { index, body, piece: p };
     movers.push(m);
     moverOf.set(index, m);
@@ -190,7 +189,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
       // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
-      fixed(slabFriction(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q), q));
+      fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1));
       return;
     }
     for (const b of pieceBoxes(p)) {
@@ -623,7 +622,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       if (wh > cap) push = [(wx * (cap / wh) - rx) / STEP, push[1], (wz * (cap / wh) - rz) / STEP];
       push = [push[0] + extra[0], push[1] + extra[1], push[2] + extra[2]];
       // Wall grip: off the ground, a steep surface the ball is pressed against carries up to wallGrip of
-      // its weight, no more than the press (friction 1) allows, and never drags it back along the wall.
+      // its weight, no more than the press (friction 1) allows.
       if (TUNING.wallGrip > 0) {
         let press = 0, grounded = false;
         world.contactPairsWith(ballCollider, (other) => {
@@ -724,9 +723,3 @@ function body_rot(body: RAPIER.RigidBody, angle: number) {
   body.setNextKinematicRotation({ x: 0, y: Math.sin(angle / 2), z: 0, w: Math.cos(angle / 2) });
 }
 
-// A tilted slab standing near upright is a wall: no engine friction with the ball, so it never drags
-// the ball back; wall grip holds the ball up instead.
-function slabFriction(desc: RAPIER.ColliderDesc, q: Quat): RAPIER.ColliderDesc {
-  const up = qrot(q, { x: 0, y: 1, z: 0 });
-  return Math.abs(up.y) < 0.3 ? desc.setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min) : desc.setFriction(1);
-}
