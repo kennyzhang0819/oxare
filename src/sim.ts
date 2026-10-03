@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -20,6 +20,8 @@ const SEESAW_MASS = 0.5;
 // Stool: as heavy as the ball, so it gives way to a roll but not to a tap, and damped so it stops
 // soon after the ball stops pushing.
 const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
+// Crates, barrels and a gate's hanging cube: one light, slippery, barely bouncy body each.
+const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
 // Facets round a rail in the physics; a flat one faces the ball (see railSweep).
 const RAILS_SIDES = 24;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
@@ -28,11 +30,15 @@ const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
 const FLOOR_GROUPS = (0x0004 << 16) | 0xffff, BARREL_GROUPS = (0x0002 << 16) | 0xfff9;
 // A sliding kicker's wedge, which reaches below the surface it stands on and so never meets the floor.
 const OFF_FLOOR_GROUPS = (0x0008 << 16) | 0xfffb;
+// A gate's arches and bar, its cube, which meets the arches but not the bar, and its chain, which
+// wraps the bar and so meets neither.
+const ARCH_GROUPS = (0x0010 << 16) | 0xffff, BAR_GROUPS = (0x0040 << 16) | 0xffff;
+const CUBE_GROUPS = (0x0020 << 16) | 0xffbf, CHAIN_GROUPS = (0x0020 << 16) | 0xffaf;
 
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
 export interface SimBridge { index: number; planks: RAPIER.RigidBody[] }
-// Planks, seesaws and stools: one body each, drawn by its piece group. `frozen` is set while a plank
+// Planks, seesaws, stools and gates' cubes: one body each, drawn by its piece group. `frozen` is set while a plank
 // or seesaw with `freeze` waits to be touched: its collider, checked each step.
 export interface SimPlank { index: number; body: RAPIER.RigidBody; frozen?: RAPIER.Collider }
 // `chord` is the horizontal unit direction from entrance to exit (zero if they share x and z).
@@ -74,8 +80,8 @@ const zQuat = (deg: number): Quat => { const h = (deg * Math.PI) / 360; return {
 // A moving or tilted slab's collider: the convex hull of its drawn mesh, rounded lip and all.
 const platformHull = (w: number, d: number): RAPIER.ColliderDesc =>
   RAPIER.ColliderDesc.convexHull(new Float32Array(platformMesh(w, d, PLATFORM_THICKNESS, PLATFORM_LIP, 1).positions))!;
-// A quarter turn about z: a cylinder's axis from y onto x.
-const Z90 = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
+// A quarter turn about z: a cylinder's axis from y onto x; about x, from y onto z.
+const Z90 = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }, X90 = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
 // The rotation taking +y onto the unit vector (x, y, z).
 const yTo = (x: number, y: number, z: number): Quat => {
   if (y < -0.999999) return { x: 1, y: 0, z: 0, w: 0 };
@@ -204,6 +210,14 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           .setFriction(1),
       );
     }
+    if (p.type === "gate") {
+      for (const pts of gateHulls(p)) {
+        const desc = RAPIER.ColliderDesc.roundConvexHull(new Float32Array(pts.flat()), GATE_ROUND);
+        if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setRotation(yQuat(rot)).setFriction(0.6).setCollisionGroups(ARCH_GROUPS));
+      }
+      // The bar is the drawn rod, its rounded ends hidden in the beams.
+      fixed(RAPIER.ColliderDesc.capsule(p.d / 2, RAIL_R).setTranslation(p.x, p.y + gateHang(p).pivot, p.z).setRotation(qmul(yQuat(rot), X90)).setFriction(0.6).setCollisionGroups(BAR_GROUPS));
+    }
     if (p.type === "fence") fenceColliders(p);
     if (p.type === "rails") {
       // One welded mesh per rail, with a flat facet turned to where the ball touches it.
@@ -285,7 +299,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     );
     const cr = p.type === "crate" ? propRound(p.w, p.h, p.d) : propRound(2 * p.r, p.h, 2 * p.r);
     const desc = p.type === "crate" ? RAPIER.ColliderDesc.roundCuboid(p.w / 2 - cr, p.h / 2 - cr, p.d / 2 - cr, cr) : RAPIER.ColliderDesc.roundCylinder(p.h / 2 - cr, p.r - cr, cr);
-    world.createCollider(desc.setMass(0.2).setFriction(0.35).setRestitution(0.1), body);
+    world.createCollider(desc.setMass(PROP_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION), body);
     crates.push({ index, body });
   });
 
@@ -407,6 +421,29 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const pl: SimPlank = { index, body, frozen: p.freeze ? board : undefined };
     planks.push(pl);
     carryWhileFrozen(index, pl);
+  });
+
+  // A gate's chain and cube are one rigid body, its origin on the pivot on the bar's axis, hung there
+  // on a ball joint: the ball knocks the cube swinging like a barrel, and a hard knock stops it
+  // against an arch's beam.
+  level.pieces.forEach((p, index) => {
+    if (p.type !== "gate") return;
+    const yaw = yQuat(p.rot), hang = gateHang(p), C = GATE_CUBE, r = propRound(C, C, C);
+    const pivot = anchorBody(index, { x: p.x, y: p.y + hang.pivot, z: p.z }, yaw), at = shifted(index, { x: p.x, y: p.y + hang.pivot, z: p.z });
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setRotation(yaw)
+        .setGravityScale(TUNING.propGravity).setCcdEnabled(true).setCanSleep(false),
+    );
+    world.createCollider(
+      RAPIER.ColliderDesc.roundCuboid(C / 2 - r, C / 2 - r, C / 2 - r, r).setTranslation(0, hang.cube - hang.pivot, 0).setMass(PROP_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION).setCollisionGroups(CUBE_GROUPS), body,
+    );
+    // The chain as one rod as thick as a link is wide, from the top link's end down to the cube.
+    const top = gateLinks(p)[0]! + GATE_LINK.stretch * GATE_CHAIN_R, len = top + hang.chain;
+    world.createCollider(
+      RAPIER.ColliderDesc.capsule(len / 2 - GATE_CHAIN_R, GATE_CHAIN_R).setTranslation(0, top - len / 2, 0).setMass(0.01).setFriction(0.3).setCollisionGroups(CHAIN_GROUPS), body,
+    );
+    world.createImpulseJoint(RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }), pivot, body, true).setContactsEnabled(false);
+    planks.push({ index, body });
   });
 
   // A stool slides along its track and nothing else: an exact prismatic link (a multibody joint,

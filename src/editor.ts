@@ -23,7 +23,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "bridge", "hole"]],
-  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "pillar", "hoop"]],
+  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -45,6 +45,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
+  gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["rot", 15], ["roll", 15]],
@@ -404,7 +405,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "support" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }

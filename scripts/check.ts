@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES } from "../src/tuning.ts";
@@ -256,6 +256,32 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
   sim.free();
   if (minZ < -8 || maxY > 1.2) { failed = true; console.error(`FAIL stop-${piece.type}: ball passed the ${piece.type} (z ${minZ.toFixed(2)}, y ${maxY.toFixed(2)})`); }
   else console.log(`ok stop-${piece.type}: ${piece.type} holds the ball`);
+}
+// A gate's cube hangs still on its chain until the ball rolls into it, which knocks it swinging and
+// never gets inside it; a ball rolling past beside the cube goes through the arch untouched.
+for (const [name, x, hits] of [["gate-hit", 0, true], ["gate-past", 2.5, false]] as const) {
+  const level = testLevel({ id: name, name, pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -12, w: 8, d: 32, rot: 0 },
+    { type: "gate", x: 0, y: 0, z: -10, w: 8, d: 6, h: 5, rot: 0 },
+    { type: "goal", x: 0, y: 0, z: -20, r: 1 },
+  ] });
+  const sim = await createSim(level, { x, y: 0, z: -2 });
+  const cube = sim.planks.find((pl) => level.pieces[pl.index]!.type === "gate")!.body, rest = cube.translation();
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  const still = Math.hypot(cube.translation().x - rest.x, cube.translation().z - rest.z);
+  let swing = 0, minZ = 0, near = Infinity;
+  for (let i = 0; i < 120 * 4; i++) {
+    sim.step(1, 0, -1);
+    const c = cube.translation(), com = cube.worldCom(), b = sim.ball.translation();
+    swing = Math.max(swing, Math.hypot(com.x - c.x, com.z - c.z));
+    minZ = Math.min(minZ, b.z);
+    near = Math.min(near, Math.hypot(b.x - com.x, b.y - com.y, b.z - com.z));
+  }
+  sim.free();
+  const bad = still > 0.01 || near < GATE_CUBE / 2 + BALL_RADIUS - 0.05 || (hits ? swing < 0.3 : swing > 0.01 || minZ > -14);
+  if (bad) { failed = true; console.error(`FAIL ${name}: cube drifted ${still.toFixed(3)} at rest, swung ${swing.toFixed(2)}, ball came ${near.toFixed(2)} from its centre and reached z ${minZ.toFixed(2)}`); }
+  else console.log(`ok ${name}: cube swung ${swing.toFixed(2)}, ball came no nearer its centre than ${near.toFixed(2)}`);
 }
 // From full speed with forward held, a 1-high kicker on the end of a platform carries the ball over
 // an 8 gap onto the next one.
