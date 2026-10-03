@@ -78,9 +78,8 @@ export class Game implements Mode {
       h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
     );
     ctx.overlay.append(this.hud);
-    this.input.attach(ctx.canvas);
+    this.input.attach(ctx.canvas, ctx.overlay);
     this.input.lock();
-    if (this.input.tiltOn) this.input.calibrate();
     addEventListener("resize", this.onResize);
     addEventListener("keydown", this.onKey);
     document.addEventListener("pointerlockchange", this.onLock);
@@ -326,14 +325,7 @@ export function playerSettings(): HTMLElement {
     return h("div", { class: "field" }, h("span", {}, label), val, range);
   };
   const lock = h("input", { type: "checkbox", checked: Input.mouseLockEnabled(), onchange: () => Input.setMouseLock(lock.checked) }) as HTMLInputElement;
-  // Tilt steering: on asks for motion access where the device needs it; refused, it stays off.
-  const note = h("div", { class: "hint" });
-  const tilt = h("input", { type: "checkbox", checked: Input.tiltAvailable() && Input.tiltEnabled(), disabled: !Input.tiltAvailable(),
-    onchange: async () => {
-      note.textContent = "";
-      if (!tilt.checked) { Input.disableTilt(); return; }
-      if (!(await Input.requestTilt())) { tilt.checked = false; note.textContent = "Motion access was not allowed."; }
-    } }) as HTMLInputElement;
+  const touch = h("input", { type: "checkbox", checked: Input.touchSliderEnabled(), onchange: () => Input.setTouchSlider(touch.checked) }) as HTMLInputElement;
   return h("div", { class: "settings" },
     row("Turn speed (keys)", "yawRate"),
     row("Mouse sensitivity", "mouseSens"),
@@ -341,7 +333,6 @@ export function playerSettings(): HTMLElement {
       h("span", {}, "Lock mouse to camera"), lock),
     row("Camera distance", "camDist", true),
     row("Camera height", "camHeight", true),
-    h("label", { class: "toggle", title: "Steer and throttle by tilting a phone or tablet; the angle it is held at when switched on is level" }, h("span", {}, "Tilt to steer"), tilt),
-    Input.tiltAvailable() ? note : h("div", { class: "hint" }, "Tilt needs a phone or tablet."),
+    h("label", { class: "toggle", title: "On a touch screen: a slider on the left throttles (up forward, down back) and a drag anywhere else turns. Off: a drag is a joystick" }, h("span", {}, "Touch slider"), touch),
   );
 }

@@ -5,6 +5,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #8ec5ff; }
 *::-webkit-scrollbar { display: none; }
 input, textarea { user-select: text; -webkit-user-select: text; }
 canvas#game { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+/* The touch slider: a see-through throttle bar on the left with a knob that rides it and springs back. */
+.throttle { position: absolute; left: calc(20px + env(safe-area-inset-left)); bottom: calc(24px + env(safe-area-inset-bottom)); width: 66px; height: min(44vh, 280px);
+  border-radius: 33px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.5); touch-action: none; user-select: none;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.throttle[hidden] { display: none; }
+.throttle-mid { position: absolute; left: 14px; right: 14px; top: 50%; height: 2px; margin-top: -1px; border-radius: 1px; background: rgba(255,255,255,0.55); pointer-events: none; }
+.throttle-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.85); box-shadow: 0 4px 14px rgba(16,35,58,0.18); }
 #overlay { position: fixed; inset: 0; pointer-events: none; }
 #overlay > * { pointer-events: auto; }
 button { font: inherit; border: 0; border-radius: 8px; padding: 8px 14px; background: #1f2a3a; color: #fff; cursor: pointer; }
