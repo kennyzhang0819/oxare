@@ -31,6 +31,7 @@ export const TUBE = { glass: TUBE_GLASS };
 export const RAILS = { rail: WHITE, stripe: CYAN };
 export const GATE = { cube: DARK_GREY };
 export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: ORANGE, bed: DARK_GREY };
+export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
 
 // Effects, not pieces, keep their own colours: the jump pad's rising squares, the magnet's aura and
 // the ball. (The goal's beam is drawn in its own shader.)

@@ -392,7 +392,7 @@ export const TUBE_BEND = 1.5;
 export interface TubeNode { x: number; y: number; z: number; bend: number; mid?: { x: number; y: number; z: number } }
 export type Tube = Piece & { type: "tube" };
 // Anything laid along a node path: tubes and rails.
-export type PathPiece = Piece & { type: "tube" | "rails" | "fence" };
+export type PathPiece = Piece & { type: "tube" | "rails" | "fence" | "bean" };
 type PathLike = { path: TubeNode[]; smooth?: true };
 
 type V3 = [number, number, number];
@@ -660,6 +660,117 @@ export function moverShift(p: Mover, t: number): { x: number; y: number; z: numb
   return { x: a.x - p.x, y: a.y - p.y, z: a.z - p.z };
 }
 
+// Bean: a striped capsule prop that rolls along a node path laid out like a tube's and shoves
+// whatever it meets out of its way. (x, y, z) is its first node and `path` the rest, relative to it
+// before `rot`; a node's y is the surface the bean rolls on there, its centre `r` above it. `bend`
+// rounds a corner, `mid` curves a segment and `smooth` makes the path one curve, as on a tube. It
+// lies across its heading, `len` from tip to tip, and rolls over the surface at `speed`: `pingpong`
+// runs the path out and back, easing out of and into a stop at each end and waiting `wait` seconds
+// there; `loop` closes the path with a straight run from the last node back to the first (that
+// corner rounded like the last node's; a last node placed on the first closes it itself, with that
+// segment's curve) and goes round without a pause. `offset` starts it that many seconds into its
+// schedule. Its place is a pure function of time, so the physics, the picture and the editor agree.
+export type Bean = Piece & { type: "bean" };
+export const BEAN_R = 0.6, BEAN_LEN = 2.4, BEAN_SPEED = 3;
+// Over this distance a ping-pong bean rolls up to speed from a stop and back down into one.
+export const BEAN_EASE = 1.5;
+export interface Quat { x: number; y: number; z: number; w: number }
+export const quatMul = (a: Quat, b: Quat): Quat => ({
+  w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+  y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+  z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+});
+// The rotation taking +y onto the unit vector (x, y, z).
+export const quatYTo = (x: number, y: number, z: number): Quat => {
+  if (y < -0.999999) return { x: 1, y: 0, z: 0, w: 0 };
+  const w = 1 + y, l = Math.hypot(z, x, w);
+  return { x: z / l, y: 0, z: -x / l, w: w / l };
+};
+export const quatAboutY = (rad: number): Quat => ({ x: 0, y: Math.sin(rad / 2), z: 0, w: Math.cos(rad / 2) });
+
+// A bean's centre line in world space, from its first node: the points, how far along each is, and the whole length.
+export interface BeanTrack { pts: V3[]; s: number[]; len: number }
+export function beanTrack(p: Bean): BeanTrack {
+  const pts = beanLine(p).map((v): V3 => { const o = rotXZ(v[0], v[2], p.rot); return [p.x + o.x, p.y + v[1], p.z + o.z]; });
+  const s = [0];
+  for (let i = 1; i < pts.length; i++) s.push(s[i - 1]! + Math.hypot(...sub(pts[i]!, pts[i - 1]!)));
+  return { pts, s, len: s[s.length - 1] ?? 0 };
+}
+// The centre line in local space. An open run is the path's rings. A loop is the path wrapped round
+// on itself (the last two nodes, the whole round, the first two again) so every corner, the two of
+// the closing run included, rounds as an inside corner does, then cut where the round repeats: at
+// the middle of the closing run, or at the first node where that run is curved or the path smooth.
+function beanLine(p: Bean): V3[] {
+  const lift = p.r, c = tubeNodes(p, lift);
+  if (c.length < 2) return [c[0]!];
+  if (p.loop !== "loop") { const rings = tubeRings(p, lift); return rings.length ? rings.map((q) => q.c) : [c[0]!]; }
+  const closed = Math.hypot(...sub(c[c.length - 1]!, c[0]!)) < 1e-6;
+  const liftMid = (m?: { x: number; y: number; z: number }) => (m ? { mid: { x: m.x, y: m.y + lift, z: m.z } } : {});
+  const N: TubeNode[] = [{ x: 0, y: lift, z: 0, bend: 0 }, ...p.path.map((n) => ({ x: n.x, y: n.y + lift, z: n.z, bend: n.bend, ...liftMid(n.mid) }))];
+  const last = closed ? N.pop()! : N[N.length - 1]!;
+  if (N.length < 2) return [c[0]!];
+  const k = N.length - 1, first: TubeNode = { ...N[0]!, bend: last.bend, ...(closed && last.mid ? { mid: last.mid } : {}) };
+  const at = (n: TubeNode): V3 => [n.x, n.y, n.z];
+  let line: V3[], cut: V3;
+  if (p.smooth) {
+    cut = at(first);
+    line = smoothCurve([at(N[k - 1]!), at(N[k]!), cut, ...N.slice(1).map(at), cut, at(N[1]!)]);
+  } else {
+    const M: TubeNode = { x: (N[k]!.x + first.x) / 2, y: (N[k]!.y + first.y) / 2, z: (N[k]!.z + first.z) / 2, bend: 0 };
+    const round = first.mid ? [first] : [M, first];
+    const seq = [N[k - 1]!, N[k]!, ...round, ...N.slice(1), ...round, N[1]!];
+    cut = at(first.mid ? first : M);
+    const o = at(seq[0]!), rel = (n: TubeNode): TubeNode => ({ ...n, x: n.x - o[0], y: n.y - o[1], z: n.z - o[2], ...(n.mid ? { mid: { x: n.mid.x - o[0], y: n.mid.y - o[1], z: n.mid.z - o[2] } } : {}) });
+    line = tubeRings({ path: seq.slice(1).map(rel) }, 0).map((q) => add(q.c, o));
+  }
+  // The segments of the line through the cut point: the round runs from the first to the last.
+  const through = (i: number) => {
+    const a = line[i]!, b = line[i + 1]!, d = sub(b, a), L2 = dot(d, d);
+    const u = L2 < 1e-12 ? 0 : Math.max(0, Math.min(1, dot(sub(cut, a), d) / L2));
+    return Math.hypot(...sub(add(a, d, u), cut)) < 1e-6;
+  };
+  let i1 = -1, i2 = -1;
+  for (let i = 0; i + 1 < line.length; i++) if (through(i)) { if (i1 < 0) i1 = i; i2 = i; }
+  if (i1 < 0 || i2 <= i1) return [c[0]!];
+  const out = [cut, ...line.slice(i1 + 1, i2 + 1), cut];
+  return out.filter((v, i) => i === 0 || Math.hypot(...sub(v, out[i - 1]!)) > 1e-9);
+}
+
+// How far along its track (from the first node) a bean is at time t: round and round at its speed
+// on a loop; out and back on a ping-pong, from rest to full speed over BEAN_EASE and back to rest
+// over the same at the far end, waiting `wait` at each end.
+export function beanDist(p: Bean, len: number, t: number): number {
+  const v = Math.max(1e-3, p.speed), tt = t + p.offset;
+  if (len < 1e-9) return 0;
+  if (p.loop === "loop") { const period = len / v; return (((tt % period) + period) % period) * v; }
+  const E = Math.min(len / 2, BEAN_EASE), tE = (2 * E) / v, T = (len + 2 * E) / v, wait = Math.max(0, p.wait);
+  const run = (u: number) => (u < tE ? (v * u * u) / (2 * tE) : u < T - tE ? E + v * (u - tE) : len - (v * (T - u) * (T - u)) / (2 * tE));
+  const cycle = 2 * (wait + T);
+  let u = ((tt % cycle) + cycle) % cycle;
+  if (u < wait) return 0;
+  u -= wait;
+  if (u < T) return run(u);
+  u -= T;
+  return u < wait ? len : len - run(u - wait);
+}
+
+// The bean's centre and turn in world space at time t: lying across the track's heading there and
+// rolled by the distance it has come, so it rolls over the surface and back the other way on the
+// return. `d` is the level heading along the track.
+export interface BeanPose { x: number; y: number; z: number; q: Quat; d: V3 }
+export function beanAt(p: Bean, track: BeanTrack, t: number): BeanPose {
+  const s = beanDist(p, track.len, t), pts = track.pts, n = pts.length;
+  let i = 0;
+  for (let lo = 0, hi = n - 2; lo <= hi; ) { const m = (lo + hi) >> 1; if (track.s[m + 1]! < s) lo = m + 1; else { i = m; hi = m - 1; } }
+  const a = pts[Math.min(i, n - 1)]!, b = pts[Math.min(i + 1, n - 1)]!, L = track.s[i + 1] !== undefined ? track.s[i + 1]! - track.s[i]! : 0;
+  const f = L > 1e-9 ? (s - track.s[i]!) / L : 0, c = add(a, sub(b, a), f);
+  const fwd = rotXZ(0, -1, p.rot);
+  let d: V3 = [fwd.x, 0, fwd.z];
+  if (L > 1e-9) { const h = Math.hypot(b[0] - a[0], b[2] - a[2]); if (h > 1e-6) d = [(b[0] - a[0]) / h, 0, (b[2] - a[2]) / h]; }
+  return { x: c[0], y: c[1], z: c[2], q: quatMul(quatYTo(d[2], 0, -d[0]), quatAboutY(s / p.r)), d };
+}
+
 // Older levels fence a platform's sides on the platform itself: per side true along its whole
 // length, false for none, or [from, to] spans along it (units, or degrees on a curve's arcs),
 // measured clockwise round the platform seen from above. Loading turns them into fence pieces.
@@ -685,6 +796,7 @@ export type Piece =
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number })
   | (At & { type: "barrel"; r: number; h: number; rot: number; roll?: number })
   | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number; slide?: "z" })
+  | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; path: TubeNode[]; smooth?: true })
   | (At & { type: "jump"; w: number; d: number; rot: number; rise: number; roll?: number })
   | (At & { type: "hole"; w: number; d: number; rot: number })
   | (At & { type: "spinner"; length: number; speed: number })
@@ -698,7 +810,7 @@ export type Piece =
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "stool", "block", "spinner", "tube", "hoop", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "stool", "bean", "block", "spinner", "tube", "hoop", "goal", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
@@ -1011,7 +1123,7 @@ export function respawnY(level: Level): number {
   for (const p of level.pieces) {
     low = Math.min(low, p.y);
     if (p.type === "ramp") low = Math.min(low, p.y + p.rise * LAYER_H);
-    if (p.type === "tube" || p.type === "rails" || p.type === "fence") for (const n of p.path) low = Math.min(low, p.y + n.y);
+    if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") for (const n of p.path) low = Math.min(low, p.y + n.y);
     if (p.type === "slab" && p.move) for (const s of p.move.stops) low = Math.min(low, p.y + s.y);
   }
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
@@ -1242,6 +1354,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "barrel": return { type, x, y, z, r: BARREL_R, h: BARREL_H, rot: 0 };
     case "jump": return { type, x, y, z, w: JUMP_W, d: JUMP_D, rot: 0, rise: JUMP_RISE };
     case "stool": return { type, x, y, z, w: STOOL_W, h: STOOL_H, d: STOOL_D, rot: 0, track: STOOL_TRACK, offset: 0 };
+    case "bean": return { type, x, y, z, rot: 0, r: BEAN_R, len: BEAN_LEN, speed: BEAN_SPEED, wait: 0, offset: 0, loop: "pingpong", path: [{ x: 0, y: 0, z: -12, bend: 0 }] };
     case "spinner": return { type, x, y, z, length: 8, speed: 1.2 };
     case "goal": return { type, x, y, z, r: GOAL_R };
     case "hoop": return { type, x, y, z, rot: 0 };
@@ -1392,6 +1505,10 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
+    if (p.type === "bean" && p.r <= 0) out.push(`piece ${i}: bean r must be positive`);
+    if (p.type === "bean" && p.len < 2 * p.r) out.push(`piece ${i}: bean len must be at least twice its r`);
+    if (p.type === "bean" && p.speed <= 0) out.push(`piece ${i}: bean speed must be positive`);
+    if (p.type === "bean" && p.wait < 0) out.push(`piece ${i}: bean wait can't be negative`);
     if (p.type === "jump" && Math.min(p.w, p.d) < 2 * JUMP_RUN + 1) out.push(`piece ${i}: jump pad w and d must be at least ${2 * JUMP_RUN + 1}`);
     if (p.type === "jump" && p.rise <= 0) out.push(`piece ${i}: jump pad rise must be positive`);
     if (p.type === "stool" && p.track < (stoolAxis(p) === "z" ? p.d : p.w)) out.push(`piece ${i}: stool track must be at least its ${stoolAxis(p) === "z" ? "depth" : "width"}`);
@@ -1532,6 +1649,8 @@ export function validateLevel(raw: unknown): Level {
       case "stool": return { type: "stool", ...at, w: num(p.w ?? STOOL_W, "w"), h: num(p.h ?? STOOL_H, "h"), d: num(p.d ?? STOOL_D, "d"), rot: num(p.rot ?? 0, "rot"),
         track: num(p.track ?? STOOL_TRACK, "track"), offset: num(p.offset ?? 0, "offset"), ...(p.slide === "z" ? { slide: "z" as const } : {}) };
       case "hole": return { type: "hole", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
+      case "bean": return { type: "bean", ...at, rot: num(p.rot ?? 0, "rot"), r: num(p.r ?? BEAN_R, "r"), len: num(p.len ?? BEAN_LEN, "len"), speed: num(p.speed ?? BEAN_SPEED, "speed"),
+        wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
       case "goal": return { type: "goal", ...at, r: GOAL_R };
       case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };

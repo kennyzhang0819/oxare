@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, beltRods, isBelt, crateRound, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, beltRods, isBelt, crateRound, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -22,6 +22,8 @@ const SEESAW_MASS = 0.5;
 const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
 // Crates and barrels: one light, slippery, barely bouncy body each; a gate's cube shares the feel.
 const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
+// A bean's skin: slippery, so it shoves the ball on rather than dragging it round with its roll.
+const BEAN_FRICTION = 0.3;
 // A gate's chain link: light beside the cube it holds.
 const GATE_LINK_MASS = 0.02;
 // A gate's cube: heavier than a barrel, and dragged by a force against its speed each step (a body's
@@ -45,7 +47,7 @@ const CUBE_GROUPS = (0x0080 << 16) | 0xffdf, LINK_GROUPS = (0x0020 << 16) | 0xff
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
 export interface SimBridge { index: number; planks: RAPIER.RigidBody[] }
-// Planks, seesaws, stools and gates' cubes: one body each, drawn by its piece group. `frozen` is set while a plank
+// Planks, seesaws, stools, sliding kickers and beans: one body each, drawn by its piece group. `frozen` is set while a plank
 // or seesaw with `freeze` waits to be touched: its collider, checked each step.
 export interface SimPlank { index: number; body: RAPIER.RigidBody; frozen?: RAPIER.Collider }
 // `chord` is the horizontal unit direction from entrance to exit (zero if they share x and z).
@@ -77,7 +79,6 @@ export function yQuat(deg: number): { x: number; y: number; z: number; w: number
   const h = (deg * Math.PI) / 360;
   return { x: 0, y: Math.sin(h), z: 0, w: Math.cos(h) };
 }
-type Quat = { x: number; y: number; z: number; w: number };
 // v turned by q (v' = q v q*), and by q's inverse.
 const qrot = (q: Quat, v: { x: number; y: number; z: number }) => {
   const ix = q.w * v.x + q.y * v.z - q.z * v.y, iy = q.w * v.y + q.z * v.x - q.x * v.z, iz = q.w * v.z + q.x * v.y - q.y * v.x, iw = -q.x * v.x - q.y * v.y - q.z * v.z;
@@ -91,18 +92,6 @@ const platformHull = (w: number, d: number): RAPIER.ColliderDesc =>
   RAPIER.ColliderDesc.convexHull(new Float32Array(platformMesh(w, d, PLATFORM_THICKNESS, PLATFORM_LIP, 1).positions))!;
 // A quarter turn about z: a cylinder's axis from y onto x; about x, from y onto z.
 const Z90 = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }, X90 = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
-// The rotation taking +y onto the unit vector (x, y, z).
-const yTo = (x: number, y: number, z: number): Quat => {
-  if (y < -0.999999) return { x: 1, y: 0, z: 0, w: 0 };
-  const w = 1 + y, l = Math.hypot(z, x, w);
-  return { x: z / l, y: 0, z: -x / l, w: w / l };
-};
-const qmul = (a: Quat, b: Quat): Quat => ({
-  w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-  x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-  y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-  z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-});
 
 let ready: Promise<void> | null = null;
 export function initPhysics(): Promise<void> {
@@ -527,6 +516,19 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     planks.push({ index, body });
   });
 
+  // A bean rolls its track on a kinematic body, set each step to where its schedule says, so it
+  // shoves the ball and any free prop it meets aside with nothing to stop it. Its collider is the
+  // capsule drawn, lying along its own y and turned to lie across its heading (beanAt).
+  const beans: { body: RAPIER.RigidBody; piece: Bean; track: BeanTrack }[] = [];
+  level.pieces.forEach((p, index) => {
+    if (p.type !== "bean") return;
+    const track = beanTrack(p), at = beanAt(p, track, 0);
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z).setRotation(at.q));
+    world.createCollider(RAPIER.ColliderDesc.capsule(Math.max(0, p.len / 2 - p.r), p.r).setFriction(BEAN_FRICTION), body);
+    beans.push({ body, piece: p, track });
+    planks.push({ index, body });
+  });
+
   let time = 0;
   const fallY = respawnY(level);
 
@@ -769,6 +771,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       }
       ball.addForce({ x: push[0], y: push[1], z: push[2] }, true);
       for (const m of movers) m.body.setNextKinematicTranslation(moverAt(m.piece, time + STEP));
+      for (const b of beans) { const at = beanAt(b.piece, b.track, time + STEP); b.body.setNextKinematicTranslation(at); b.body.setNextKinematicRotation(at.q); }
       for (const c of carried) {
         if (c.active && !c.active()) continue;
         const d = moverShift(c.mover.piece, time + STEP);

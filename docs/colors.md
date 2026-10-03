@@ -4,14 +4,14 @@ Every color a level's pieces are drawn in lives in `src/palette.ts`. The pieces 
 
 | Color | Value | Worn by |
 |---|---|---|
-| `WHITE` | #e9eef3 | platform lips, rims and tiles, the bodies of nearly every prop, pillars, supports, columns, gates and their links, barriers, rings, fences and rails, the start pad, circuit-board pads, the shine on a crate's screen |
+| `WHITE` | #e9eef3 | platform lips, rims and tiles, the bodies of nearly every prop, pillars, supports, columns, gates and their links, barriers, rings, fences and rails, the start pad, circuit-board pads, the shine on a crate's screen, a bean's bands and dots |
 | `BLACK` | #343b43 | reserved: the goal disc, the platforms' side strip and the magnet (groove and upper disc), and nothing else |
-| `LIGHT_GREY` | #b4bdc5 | light accents: circuit-board traces and chips, the line under a platform's lip and along it, pillar rings and support bars, blockade plates, barrier grilles, goal spokes and hub, plank tint, the crate's plate and screen, treadmill rods |
-| `DARK_GREY` | #5f6975 | dark accents: the circuit board itself, prop trim and panel edges, every kicker's tread (sliding ones too), the stool's screens, jump pad vents, hinges, pillar slats and support trim, the crate's cross and screen frame, the gate's cube, the treadmill rods' grooves and its opening's walls |
+| `LIGHT_GREY` | #b4bdc5 | light accents: circuit-board traces and chips, the line under a platform's lip and along it, pillar rings and support bars, blockade plates, barrier grilles, goal spokes and hub, plank tint, the crate's plate and screen, treadmill rods, a bean's rounded ends |
+| `DARK_GREY` | #5f6975 | dark accents: the circuit board itself, prop trim and panel edges, every kicker's tread (sliding ones too), the stool's screens, jump pad vents, hinges, pillar slats and support trim, the crate's cross and screen frame, the gate's cube, the treadmill rods' grooves and its opening's walls, a bean's dotted body |
 | `CYAN` | #2fe6ff | the light strip on everything that glows, and the rails' stripe |
 | `GREEN` | #3fe87a | planks', bridges' and sliding pieces' light, the crate's corners |
 | `ORANGE` | #ff7a2e | the kicker's strips, the treadmill's chevrons |
-| `RED` | #ff2b2b | the bumper's band, the magnet's light |
+| `RED` | #ff2b2b | the bumper's band, the magnet's light, a bean's stripes |
 | `DARK_RED` | #6e2630 | the magnet's lower disc |
 | `TUBE_GLASS` | #5ad2e6 | tubes and hoops |
 

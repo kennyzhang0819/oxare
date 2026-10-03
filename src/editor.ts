@@ -23,7 +23,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "stool", "bean", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -53,6 +53,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["roll", 15]],
   barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
+  bean: [["rot", 15], ["r", 0.1], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
   jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   pillar: [["rot", 15], ["roll", 15]],
@@ -131,6 +132,8 @@ const midOf = (ns: WorldNode[], k: number): P3 => ns[k]!.mid ?? { x: (ns[k - 1]!
 const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
 // Pull every curve point back inside its segment's box (see fitMid), after any path edit.
 const fitMids = (p: PathPiece) => p.path.forEach((n, k) => { if (n.mid) n.mid = fitMid(p, k, n.mid); });
+// How far above its nodes a path piece's handles sit: at the rail, the bean's centre or the tube's.
+const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : TUBE_R);
 
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
@@ -142,7 +145,7 @@ function settle(level: Level, p: Piece) {
   }
   if (p.type === "plank" && p.side) { attachToEdge(level, p); return; }
   if (p.type === "rails") { attachRailEnds(level, p); return; }
-  if (p.type === "fence") {
+  if (p.type === "fence" || p.type === "bean") {
     const y = surfaceAt(level, p.x, p.z);
     if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
     p.path.forEach((n, k) => {
@@ -557,8 +560,19 @@ export class Editor implements Mode {
           pick("end b", p.b, ends, (v) => { p.b = v; settle(this.level, p); }),
         );
       }
+      if (p.type === "bean") {
+        const loop = h("select", { title: "Ping-pong rolls the path out and back, waiting at each end; loop closes it with a straight run back to the first node and goes round", onchange: () => {
+          const before = JSON.stringify(this.level);
+          p.loop = loop.value === "loop" ? "loop" : "pingpong";
+          this.commit(before);
+        } },
+          h("option", { value: "pingpong", selected: p.loop === "pingpong" }, "ping-pong: out and back"),
+          h("option", { value: "loop", selected: p.loop === "loop" }, "loop: last node back to start"),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "route", loop));
+      }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
-      if (p.type === "tube" || p.type === "rails") this.body.append(this.tubePanel(p));
+      if (p.type === "tube" || p.type === "rails" || p.type === "bean") this.body.append(this.tubePanel(p));
       if (p.type === "slab" && !p.belt && !p.twist && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
       if (p.type === "slab" && !p.belt && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
@@ -613,7 +627,7 @@ export class Editor implements Mode {
 
   private selectedTube(): PathPiece | null {
     const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" ? p : null;
+    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" || p?.type === "bean" ? p : null;
   }
 
   // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
@@ -624,7 +638,7 @@ export class Editor implements Mode {
     if (!p) { this.node = -1; this.mid = -1; return; }
     if (this.node > p.path.length) this.node = -1;
     if (this.mid > p.path.length) this.mid = -1;
-    const ns = tubeWorld(p), lift = p.type === "fence" ? FENCE_RAIL_Y : TUBE_R;
+    const ns = tubeWorld(p), lift = pathLift(p);
     ns.forEach((n, k) => {
       const color = k === this.node ? 0xffd23f : 0xffffff;
       const m = new THREE.Mesh(new THREE.SphereGeometry(k === this.node ? 0.42 : 0.34, 16, 10), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
@@ -718,7 +732,7 @@ export class Editor implements Mode {
       const last = k === p.path.length, end = k === 0 || last;
       const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.mid = -1; this.refresh(); } } },
         h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
-      if (k === 0) row.append(h("span", { class: "hint" }, "mouth at x y z"));
+      if (k === 0) row.append(h("span", { class: "hint" }, `${p.type === "tube" ? "mouth" : "start"} at x y z`));
       else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
       if (!end && !smoothPath) {
         const smooth = n.bend > 0;
@@ -1114,7 +1128,7 @@ export class Editor implements Mode {
         const before = JSON.stringify(this.level);
         this.node = (hit.object.userData.tubeMid as number) - 1;
         this.splitNode();
-        const n = tubeNodeWorld(tp, this.node), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(n.y + (tp.type === "fence" ? FENCE_RAIL_Y : TUBE_R))), pt = new THREE.Vector3();
+        const n = tubeNodeWorld(tp, this.node), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(n.y + pathLift(tp))), pt = new THREE.Vector3();
         if (this.ray.ray.intersectPlane(plane, pt)) {
           this.nodeDrag = { plane, off: new THREE.Vector3(n.x - pt.x, 0, n.z - pt.z), before };
           this.controls.enabled = false;

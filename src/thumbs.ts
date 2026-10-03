@@ -50,7 +50,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
 }
 
 const LW = 360, LH = 225;
-const FEATURED: PieceType[] = ["gate", "tube", "rails", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
+const FEATURED: PieceType[] = ["gate", "tube", "rails", "bean", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
 const levelCache = new Map<string, string>();
 
 // Menu card pictures are saved as files in public/thumbs/<id>.png, with index.json naming, for each

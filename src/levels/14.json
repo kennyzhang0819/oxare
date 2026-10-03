@@ -1,0 +1,16 @@
+{
+  "id": "14",
+  "name": "Beans",
+  "hidden": true,
+  "pieces": [
+    { "type": "start", "x": 0, "y": 0, "z": 2 },
+    { "type": "slab", "x": 0, "y": 0, "z": -8, "w": 8, "d": 24, "rot": 0, "tilt": 0 },
+    { "type": "bean", "x": 0, "y": 0, "z": -4, "rot": 0, "r": 0.6, "len": 2.4, "speed": 3, "wait": 0.5, "offset": 0, "loop": "pingpong", "path": [{ "x": 0, "y": 0, "z": -12, "bend": 0 }] },
+    { "type": "slab", "x": 0, "y": 0, "z": -32, "w": 24, "d": 24, "rot": 0, "tilt": 0 },
+    { "type": "column", "x": 0, "y": 0, "z": -32, "h": 4 },
+    { "type": "bean", "x": 4, "y": 0, "z": -32, "rot": 0, "r": 0.6, "len": 2.4, "speed": 4, "wait": 0, "offset": 0, "loop": "loop", "smooth": true, "path": [{ "x": -4, "y": 0, "z": -4, "bend": 0 }, { "x": -8, "y": 0, "z": 0, "bend": 0 }, { "x": -4, "y": 0, "z": 4, "bend": 0 }] },
+    { "type": "slab", "x": 0, "y": 0, "z": -56, "w": 16, "d": 24, "rot": 0, "tilt": 0 },
+    { "type": "bean", "x": -6, "y": 0, "z": -46, "rot": 0, "r": 0.6, "len": 2.4, "speed": 4, "wait": 0, "offset": 0, "loop": "pingpong", "path": [{ "x": 12, "y": 0, "z": 0, "bend": 0 }, { "x": 0, "y": 0, "z": -18, "bend": 0 }, { "x": 12, "y": 0, "z": -18, "bend": 0 }] },
+    { "type": "goal", "x": 0, "y": 0, "z": -66, "r": 1 }
+  ]
+}

@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, beltRods, isBelt, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, TILE, ballTextures, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
+import { BALL_RADIUS, beltRods, isBelt, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_BEND_R, SUPPORT_D, SUPPORT_GAP, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { BUMPER, EFFECTS, GATE, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
@@ -759,6 +759,39 @@ function buildBarrel(g: THREE.Group, r: number, h: number) {
   }
 }
 
+// Bean: one capsule lying across its track, wrapped in its own texture (beanTexture): its uv runs
+// tip to tip along the capsule, so the bands sit where the straight part meets the caps whatever the
+// size. The bean group is returned for the physics to pose; it starts where its schedule has it at
+// time 0, and in the editor its track is drawn on the surface, like a stool's slide.
+const BEAN_MATS = new Map<string, THREE.MeshStandardMaterial>();
+function beanGeometry(r: number, len: number): THREE.BufferGeometry {
+  const h = len / 2 - r, pts: THREE.Vector2[] = [];
+  for (let k = 0; k <= 12; k++) { const a = -Math.PI / 2 + (k / 12) * (Math.PI / 2); pts.push(new THREE.Vector2(r * Math.cos(a), -h + r * Math.sin(a))); }
+  for (let k = 0; k <= 12; k++) { const a = (k / 12) * (Math.PI / 2); pts.push(new THREE.Vector2(r * Math.cos(a), h + r * Math.sin(a))); }
+  const geo = new THREE.LatheGeometry(pts, 48), pos = geo.attributes.position!, uv = geo.attributes.uv!;
+  for (let i = 0; i < pos.count; i++) uv.setY(i, (pos.getY(i) + len / 2) / len);
+  return geo;
+}
+function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
+  const track = beanTrack(p), key = `${p.r},${p.len}`;
+  let mat = BEAN_MATS.get(key);
+  if (!mat) { mat = new THREE.MeshStandardMaterial({ map: beanTexture(p.r, p.len), roughness: 0.5, metalness: 0.08 }); BEAN_MATS.set(key, mat); }
+  if (editor && track.pts.length > 1) {
+    const pts = track.pts.map((v) => { const l = rotXZ(v[0] - p.x, v[2] - p.z, -p.rot); return new THREE.Vector3(l.x, v[1] - p.y - p.r + 0.05, l.z); });
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ROUTE_MAT);
+    line.renderOrder = 9;
+    g.add(line);
+  }
+  const bean = new THREE.Group();
+  const body = new THREE.Mesh(beanGeometry(p.r, p.len), mat);
+  body.castShadow = body.receiveShadow = true;
+  bean.add(body);
+  g.add(bean);
+  const at = beanAt(p, track, 0);
+  posePlank(g, bean, at, at.q);
+  return bean;
+}
+
 // Pushable crate: one textured cube, placed by the physics body each frame.
 function buildCrate(g: THREE.Group, w: number, h: number, d: number) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 6, crateRound(w, h, d)), STRUCT!.crate);
@@ -1374,6 +1407,7 @@ export function buildLevel(level: Level, editor: boolean): Built {
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
+    if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
     if (p.type === "support") buildSupport(g, p);
     if (p.type === "gate") bridges.set(index, buildGate(g, p));

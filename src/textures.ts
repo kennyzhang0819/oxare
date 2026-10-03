@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BARRIER, BLOCKADE, BOARD, CRATE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
+import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
 import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
@@ -410,6 +410,51 @@ function goalDisc(): THREE.Texture {
   const tx = new THREE.CanvasTexture(c);
   tx.colorSpace = THREE.SRGBColorSpace;
   return tx;
+}
+
+// Bean wrap: u once round, v from tip to tip along its length, drawn to the bean's own size so the
+// pattern never stretches: light grey caps; at each end of the straight part a red stripe, a white
+// band and a red stripe; between them the dark body dotted white in staggered rows that go round
+// evenly, so the wrap has no seam. One texture per size.
+const BEAN_PX = 160, BEAN_DOT = 0.055, BEAN_ROW = 0.22, BEAN_COL = 0.3;
+const beanWraps = new Map<string, THREE.Texture>();
+export function beanTexture(r: number, len: number): THREE.Texture {
+  const key = `${r},${len}`, hit = beanWraps.get(key);
+  if (hit) return hit;
+  const circ = 2 * Math.PI * r, W = Math.max(8, Math.round(BEAN_PX * circ)), H = Math.max(8, Math.round(BEAN_PX * len));
+  const [c, ctx] = canvas2x(W, H);
+  const px = (u: number) => u * BEAN_PX;
+  // A band `a` to `b` along the axis from each tip, mirrored about the middle.
+  const band = (a: number, b: number, color: number) => {
+    ctx.fillStyle = css(color);
+    ctx.fillRect(0, px(a), W, px(b) - px(a));
+    ctx.fillRect(0, px(len - b), W, px(b) - px(a));
+  };
+  const in0 = r + 0.17;
+  band(0, len / 2, BEAN.cap);
+  band(in0, len / 2, BEAN.body);
+  band(r - 0.05, r, BEAN.stripe);
+  band(r, r + 0.12, BEAN.band);
+  band(r + 0.12, in0, BEAN.stripe);
+  // Dots: rows centred on the middle, columns an even share of the way round, every other row
+  // shifted half a column, each dot drawn again a turn either side so one crossing the seam joins up.
+  const cols = Math.max(4, Math.round(circ / BEAN_COL)), colW = circ / cols, mid = len / 2;
+  const rows = Math.max(1, Math.floor((len - 2 * in0 - 2 * BEAN_DOT) / BEAN_ROW));
+  ctx.fillStyle = css(BEAN.dot);
+  for (let i = 0; i < rows; i++) {
+    const y = mid + (i - (rows - 1) / 2) * BEAN_ROW, off = i % 2 ? colW / 2 : 0;
+    for (let j = 0; j < cols; j++) for (const turn of [-circ, 0, circ]) {
+      ctx.beginPath();
+      ctx.arc(px(j * colW + off + turn), px(y), px(BEAN_DOT), 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.wrapS = THREE.RepeatWrapping;
+  beanWraps.set(key, t);
+  return t;
 }
 
 // Blockade side: a motherboard plate between two stacks of cyan light bars, which

@@ -3,6 +3,7 @@ import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
 import { BALL_RADIUS, beltRods, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
+import { beanAt, beanDist, beanTrack, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES } from "../src/tuning.ts";
 
@@ -192,6 +193,45 @@ for (const [name, rot, slide, from, dir, expect] of [
   const blocked = expect.slid || (dir[0] ? ball.x < -1 - BALL_RADIUS + 0.1 : ball.z > -6 + 0.5 + BALL_RADIUS - 0.1);
   if (!atEnd || drift > 0.01 || !blocked) { failed = true; console.error(`FAIL stool-${name}: stool at x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)}, ball z ${ball.z.toFixed(2)}`); }
   else console.log(`ok stool-${name}: ${expect.slid ? "slid to the track end" : "held still and stopped the ball"} (x ${t.x.toFixed(3)} z ${t.z.toFixed(3)}, off-track drift ${drift.toFixed(4)})`);
+}
+// A bean rolls its track as a pure function of time (the physics body is exactly where beanAt says,
+// lying level across its heading) and shoves a resting ball out of its way; a loop's track closes
+// on itself and comes round to the start each period; a ping-pong run holds its speed between the
+// eased ends and rests at the far node.
+{
+  const level = testLevel({ id: "bean-push", name: "bean push", pieces: [
+    { type: "start", x: -6, y: 0, z: -14 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 16, d: 16, rot: 0, fences: {} },
+    { type: "bean", x: -7, y: 0, z: -6, rot: 0, speed: 4, path: [{ x: 14, y: 0, z: 0, bend: 0 }] },
+    { type: "goal", x: 6, y: 0, z: -14, r: 1 },
+  ] });
+  const bean = level.pieces[2] as Bean, track = beanTrack(bean);
+  const sim = await createSim(level, { x: 0, y: 0, z: -6 });
+  const body = sim.planks[0]!.body;
+  let off = 0, lean = 0;
+  for (let i = 0; i < 120 * 4; i++) {
+    sim.step(0, 0, 0);
+    const want = beanAt(bean, track, sim.time), t = body.translation(), q = body.rotation();
+    off = Math.max(off, Math.hypot(t.x - want.x, t.y - want.y, t.z - want.z));
+    // The capsule's own axis (its local y) turned by the body: level means no y in it.
+    lean = Math.max(lean, Math.abs(1 - 2 * (q.x * q.x + q.z * q.z)));
+  }
+  const ball = sim.ball.translation(), s = beanDist(bean, track.len, sim.time);
+  sim.free();
+  const shoved = ball.x > 3 || ball.y < -1;
+  if (!shoved || off > 1e-6 || lean > 1e-6 || Math.abs(track.len - 14) > 1e-9 || s < 13) { failed = true; console.error(`FAIL bean-push: ball at x ${ball.x.toFixed(2)} y ${ball.y.toFixed(2)}, body off its schedule by ${off.toExponential(2)}, axis lean ${lean.toExponential(2)}, track ${track.len.toFixed(2)}, at ${s.toFixed(2)}`); }
+  else console.log(`ok bean-push: ball shoved to x ${ball.x.toFixed(2)} y ${ball.y.toFixed(2)}, body on its schedule, axis level`);
+}
+{
+  const bean = { type: "bean", x: 4, y: 0, z: 0, rot: 0, r: 0.6, len: 2.4, speed: 3, wait: 0, offset: 0, loop: "loop", smooth: true, path: [{ x: -4, y: 0, z: -4, bend: 0 }, { x: -8, y: 0, z: 0, bend: 0 }, { x: -4, y: 0, z: 4, bend: 0 }] } as Bean;
+  const track = beanTrack(bean), first = track.pts[0]!, last = track.pts[track.pts.length - 1]!, period = track.len / bean.speed;
+  const a = beanAt(bean, track, 0), b = beanAt(bean, track, period), c = beanAt(bean, track, period / 3);
+  const closed = Math.hypot(...first.map((v, k) => v - last[k]!)) < 1e-9, back = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-6, round = Math.abs(Math.hypot(c.x, c.z) - 4) < 0.3 && Math.hypot(c.x - a.x, c.z - a.z) > 4;
+  // A ping-pong run: full speed in the middle, at rest exactly at the far node at the end of the run.
+  const pp = { ...bean, loop: "pingpong", smooth: undefined, path: [{ x: -12, y: 0, z: 0, bend: 0 }] } as Bean, pt = beanTrack(pp), T = (pt.len + 3) / pp.speed;
+  const v = (beanDist(pp, pt.len, 2.05) - beanDist(pp, pt.len, 1.95)) / 0.1, end = beanDist(pp, pt.len, T), past = beanDist(pp, pt.len, T + 0.2);
+  if (!closed || !back || !round || Math.abs(v - 3) > 1e-6 || Math.abs(end - 12) > 1e-9 || past >= 12) { failed = true; console.error(`FAIL bean-track: loop closed ${closed}, back at start ${back}, round the centre ${round}, run speed ${v.toFixed(3)}, far end at ${end.toFixed(3)} then ${past.toFixed(3)}`); }
+  else console.log(`ok bean-track: loop of ${track.len.toFixed(2)} closes and comes round each ${period.toFixed(2)}s; ping-pong runs at ${v.toFixed(2)} and rests at its far node`);
 }
 // A jump pad's launch square throws the ball its rise (4 layers) up from the pad's top, keeping its
 // speed and heading over the ground; rolling up the ramp and over the top beside the square does nothing.
