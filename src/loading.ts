@@ -3,7 +3,6 @@ import { LEVELS } from "./levels/index.ts";
 import { BALL_RADIUS } from "./level.ts";
 import { buildLevel, createScene, initMaterials, makeBall } from "./scene.ts";
 import { createSim, initPhysics } from "./sim.ts";
-import { GlassTitle } from "./title.ts";
 import { h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -54,14 +53,12 @@ export class Loading implements Mode {
     camera.position.set(4, 3, 6);
     camera.lookAt(0, 0, 0);
     env.scene.add(camera);
-    const title = new GlassTitle(renderer, camera, h("div"), "OXARE");
     env.tick(camera);
     renderer.compile(env.scene, camera);
     // A real frame plus one reflection pass hits the shadow and cube-camera variants compile() skips.
     ball.reflect(renderer, env);
     env.render(renderer, camera);
     ball.dispose();
-    title.dispose();
     await this.step(3, n, "Building the first level");
     const sim = await createSim(level);
     sim.free();

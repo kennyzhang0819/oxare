@@ -16,13 +16,13 @@ export const BALL_RADIUS = 0.5;
 export const SPINNER_HEIGHT = 0.6;
 export const SPINNER_WIDTH = 0.4;
 export const BLOCKADE_W = 2, BLOCKADE_H = 1.5, BLOCKADE_D = 2;
-export const PILLAR_R = 0.7, PILLAR_H = 2.2;
+export const PILLAR_R = 0.6, PILLAR_H = 2.6;
 export const BARRIER_W = 2.5, BARRIER_H = 1.4, BARRIER_D = 0.5;
 // A barrier is a rounded pod BARRIER_LEG off the surface on two legs, the pod's top at BARRIER_H.
 export const BARRIER_LEG = 0.16, BARRIER_R = 0.2, BARRIER_LEG_R = 0.12, BARRIER_LEG_X = BARRIER_W / 2 - 0.85;
 // Corner rounding of a block and a blockade, drawn and solid alike.
 export const BLOCK_R = 0.3, BLOCKADE_R = 0.18;
-export const CRATE_W = 2, CRATE_H = 1.2, CRATE_D = 1.5;
+export const CRATE_W = 2, CRATE_H = 1.2, CRATE_D = 2;
 // Barrel: a crate that is an upright cylinder, radius r and h tall, its rims rounded by propRound.
 export const BARREL_R = 0.4, BARREL_H = 1.4;
 // The barrel's outline as [radius, y] about its centre, bottom centre round to top centre: the same
@@ -36,6 +36,8 @@ export function barrelProfile(r: number, h: number): [number, number][] {
 }
 // Corner rounding of a crate or stool of the given size, drawn and solid alike.
 export const propRound = (w: number, h: number, d: number): number => Math.min(0.08, w / 2, h / 2, d / 2) * 0.99;
+// A crate is rounded much more than other props, drawn and solid alike.
+export const crateRound = (w: number, h: number, d: number): number => Math.min(0.22, w / 2, h / 2, d / 2) * 0.99;
 // The spinner's fixed hub, the goal's disc and the glow ring round it, and the bridge's hinge
 // barrels and wall lugs: all drawn and solid alike.
 export const SPINNER_HUB_R = 0.35;
@@ -78,15 +80,22 @@ export const GOAL_R = 1;
 // deep, so the ball rests with its centre START_PAD_REST above the pad's base.
 export const START_PAD_R = 1.03, START_PAD_H = 0.22, START_PAD_BOWL = 0.75, START_PAD_DIP = 0.16;
 export const START_PAD_REST = START_PAD_H - START_PAD_DIP + BALL_RADIUS;
-// The pad's outline as [radius, y], outside in: the chamfered skirt, the flat rim, then the bowl, a
-// spherical dish down to the centre. Revolved about the pad's axis; drawn and solid alike.
+// The pad's outer top edge is rounded by START_PAD_EDGE, in START_PAD_EDGE_N steps.
+export const START_PAD_EDGE = 0.12, START_PAD_EDGE_N = 6;
+// The pad's outline as [radius, y], outside in: the upright side rounding over onto the flat rim,
+// then the bowl, a spherical dish down to the centre. Revolved about the pad's axis; drawn and solid
+// alike. The side runs to index START_PAD_EDGE_N + 1, the rim on to the next.
 export function startPadProfile(): [number, number][] {
   const a = START_PAD_BOWL, s = START_PAD_DIP, rho = (a * a + s * s) / (2 * s), n = 10;
   const bowl = Array.from({ length: n }, (_, k): [number, number] => {
     const r = a * (1 - (k + 1) / n);
     return [r, START_PAD_H - s + (rho - Math.sqrt(rho * rho - r * r))];
   });
-  return [[START_PAD_R, 0], [START_PAD_R - 0.08, START_PAD_H], [a, START_PAD_H], ...bowl];
+  const e = START_PAD_EDGE, edge = Array.from({ length: START_PAD_EDGE_N + 1 }, (_, k): [number, number] => {
+    const t = (k / START_PAD_EDGE_N) * (Math.PI / 2);
+    return [START_PAD_R - e + e * Math.cos(t), START_PAD_H - e + e * Math.sin(t)];
+  });
+  return [[START_PAD_R, 0], ...edge, [a, START_PAD_H], ...bowl];
 }
 // Structures snap their centre to this grid and sit on the platform beneath them.
 export const STRUCT_GRID = 1;
@@ -112,7 +121,7 @@ export const RAIL_R = 0.11;
 // snaps it there); an in-between node's y is the height the ball rolls at. Each end attaches square
 // (see railsRings) at an offset added here (railEndAxis): `top` stands at fence-rail height over the
 // top and turns straight down into it like a fence rail's end; `side` goes level into the middle of
-// a side wall.
+// a side wall; `end` attaches to nothing and closes the rails (railsLines).
 export const RAILS_GAUGE = 0.92;
 export const RAILS_EMBED = 0.4, RAILS_WALL_REACH = 1.5;
 // The level, square stub at each end, and the radius the sloping middle bends into it on.
@@ -120,7 +129,7 @@ export const RAILS_STUB = 0.9, RAILS_STUB_BEND = 1;
 // The ball riding the rails sits this much below its height on a platform: level with it, the
 // rail ends would meet a fast ball head-on and kick it; this low, the ball settles onto them.
 export const RAILS_SINK = 0.005;
-export type RailEnd = "top" | "side";
+export type RailEnd = "top" | "side" | "end";
 // Rail axis height above the ball's rolling level, and the angle from straight up at which the
 // ball touches a rail (the physics turns a flat facet to face it: a vertex there bumps the ball).
 export const railsAxisY = (lines: 1 | 2): number =>
@@ -145,9 +154,12 @@ export const SIDE_PLANK_HINGE_Z = -(PLANK_T / 2 + 0.04);
 // ball's weight tips it. Thinner than a
 // knock-down plank so the ball rolls onto its low end without a big step.
 export const SEESAW_T = 0.1, SEESAW_PIVOT_H = 1.2, SEESAW_POST_W = 0.36, SEESAW_POST_D = 0.8;
-// The seesaw's posts are rounded boxes of SEESAW_POST_R, (SEESAW_PIVOT_H + 0.3) tall; a hub hangs
-// under the board's middle and an axle stub runs from each post into the board's edge, all solid.
-export const SEESAW_POST_R = 0.16, SEESAW_POST_H = SEESAW_PIVOT_H + 0.3;
+// The axle's height above the surface is the piece's `h` (SEESAW_PIVOT_H for a new one). Its posts
+// are rounded boxes of SEESAW_POST_R, SEESAW_POST_ABOVE taller than that; a hub hangs under the
+// board's middle and an axle stub runs from each post into the board's edge, all solid.
+export const seesawPivot = (p: Piece & { type: "seesaw" }): number => p.h;
+export const SEESAW_POST_R = 0.16, SEESAW_POST_ABOVE = 0.3;
+export const seesawPostH = (p: Piece & { type: "seesaw" }): number => seesawPivot(p) + SEESAW_POST_ABOVE;
 export const SEESAW_HUB = { inset: 0.3, h: 0.22, d: 0.6, r: 0.06, drop: 0.09 }, SEESAW_STUB = { r: 0.09, l: SEESAW_POST_W + 0.2, into: 0.03 };
 // A rim lies this far proud of the face it is painted on: a line, not a ledge.
 export const PAINT = 0.005;
@@ -182,7 +194,7 @@ export function plankPose(p: Piece & { type: "plank" }): { y: number; z: number;
 // Steepest a seesaw can sit before an end meets the surface, in degrees.
 export function seesawMaxTilt(p: Piece & { type: "seesaw" }): number {
   let lo = 0, hi = Math.PI / 2;
-  const clear = (a: number) => SEESAW_PIVOT_H - (p.d / 2) * Math.sin(a) - (SEESAW_T / 2) * Math.cos(a);
+  const clear = (a: number) => seesawPivot(p) - (p.d / 2) * Math.sin(a) - (SEESAW_T / 2) * Math.cos(a);
   for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (clear(m) > 0) lo = m; else hi = m; }
   return (lo * 180) / Math.PI;
 }
@@ -293,9 +305,10 @@ export function supportPillars(p: Piece & { type: "support" }): { x: number; z: 
 // bar joins the two beams' middles, and from its middle a chain of big links hangs one cube just
 // off the surface, free to swing.
 export const GATE_H = 5, GATE_D = 6, GATE_CORNER = 0.6, GATE_ROUND = 0.07;
-export const GATE_CUBE = 1.2, GATE_CUBE_LIFT = 0.4;
-// A link: a torus of radius r and wire t, stretched along the chain; links sit about `pitch` apart.
-export const GATE_LINK = { r: 0.17, t: 0.05, stretch: 1.6, pitch: 0.5 };
+export const GATE_CUBE = 1, GATE_CUBE_LIFT = 0.25;
+// A link: a "0" of round wire t thick, its middle line two half-rounds of radius r joined by
+// straight sides `straight` long each way from its centre.
+export const GATE_LINK = { r: 0.19, t: 0.06, straight: 0.16 };
 export const GATE_CHAIN_R = GATE_LINK.r + GATE_LINK.t;
 export type Gate = Piece & { type: "gate" };
 type XY = [number, number];
@@ -333,11 +346,12 @@ export function gateHang(p: Gate): { pivot: number; cube: number; chain: number 
   const pivot = p.h - SUPPORT_D / 2, cube = GATE_CUBE_LIFT + GATE_CUBE / 2;
   return { pivot, cube, chain: pivot - (cube + GATE_CUBE / 2) };
 }
-// The links' centres as heights from the pivot, top first: the top link's eye rests on the bar, the bottom
-// one's end on the cube, the rest spread evenly between.
+// The links' centres as heights from the pivot, top first: the top link's eye rests on the bar, the
+// bottom one's end on the cube, the rest spread evenly between, near the pitch at which each hangs
+// in the next with their wires touching. Every other link is turned a quarter about the chain.
 export function gateLinks(p: Gate): number[] {
-  const L = GATE_LINK, outer = L.stretch * (L.r + L.t), inner = L.stretch * (L.r - L.t);
-  const top = RAIL_R - inner, bottom = -gateHang(p).chain + outer, n = Math.max(2, Math.round((top - bottom) / L.pitch) + 1);
+  const L = GATE_LINK, outer = L.straight + L.r + L.t, inner = L.straight + L.r - L.t, pitch = 2 * (L.straight + L.r) - 2 * L.t;
+  const top = RAIL_R - inner, bottom = -gateHang(p).chain + outer, n = Math.max(2, Math.round((top - bottom) / pitch) + 1);
   return Array.from({ length: n }, (_, k) => top + ((bottom - top) * k) / (n - 1));
 }
 
@@ -354,12 +368,12 @@ export const TUBE_R = 0.51;
 export const TUBE_SOLID_WALL = 0.08;
 // Facets round the bore skin and the glass wall's outside, shared by drawing and physics.
 export const TUBE_SKIN_SIDES = 20, TUBE_WALL_SIDES = 20;
-// The mouth ring: a ring bent from the fences' and rails' own rail (RAIL_R thick, the same metal),
+// The mouth ring: a ring of rail RING_T thick (a little thinner than the fences' and rails' RAIL_R),
 // round each tube mouth; a hoop is one standing alone. Its opening is exactly the bore, so it lines up
 // with the tube's inside and never narrows it, and it is centred on the mouth, so the tube's end sits
-// inside it and it coats the end. RING_R is the radius to the rail's axis; RING_SIDES facets round the
+// inside it and it coats the end. RING_R is the radius to the ring's axis; RING_SIDES facets round the
 // rail and RING_SEGMENTS round the ring, drawn and solid alike.
-export const RING_R = TUBE_R + RAIL_R, RING_SIDES = 16, RING_SEGMENTS = 48;
+export const RING_T = 0.08, RING_R = TUBE_R + RING_T, RING_SIDES = 16, RING_SEGMENTS = 48;
 // Each mouth ring's centre and axis (the tube's direction there), from the tube's end rings.
 export function mouthRings(rings: TubeRing[]): { c: V3; d: V3 }[] {
   if (rings.length < 2) return [];
@@ -654,13 +668,13 @@ interface At { x: number; y: number; z: number }
 
 export type Piece =
   | (At & { type: "start" })
-  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; move?: Move })
+  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; move?: Move; belt?: true; shape?: SlabShape })
   | (At & { type: "curve"; inner: number; outer: number; rot: number })
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean })
-  | (At & { type: "seesaw"; w: number; d: number; rot: number; tilt: number; freeze?: boolean })
+  | (At & { type: "seesaw"; w: number; d: number; h: number; rot: number; tilt: number; freeze?: boolean })
   | (At & { type: "support"; w: number; h: number; rot: number })
   | (At & { type: "gate"; w: number; d: number; h: number; rot: number })
   | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number; roll?: number; track?: number; offset?: number; top?: number; wall?: "left" | "right" })
@@ -690,7 +704,7 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
   { name: "side kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: 1, d: KICKER_D, h: KICKER_H, rot: 0, top: 0.4, wall: "right" }) },
   { name: "sliding kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0, track: KICKER_TRACK, offset: 0 }) },
-  { name: "moving platform", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, move: newMove() }) },
+  { name: "treadmill", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 8, rot: 0, tilt: 0, belt: true }) },
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
@@ -706,12 +720,59 @@ export const isTilted = (p: Piece): boolean => p.type === "slab" && (p.tilt !== 
 // end (local -z), turning evenly between about the centre line of its top. twistAt is the roll at
 // local z in radians; twistPoint turns a local point with the cross-section it is in.
 export type Slab = Piece & { type: "slab" };
+// A shaped slab: each side's two ends pushed out (positive) or pulled in by these, and its middle
+// bowed out (positive) or in from the straight line between its ends, all in units. Sides are
+// named as fences' are (n is the far side, local -z; e is local +x) and a side's ends by the corners
+// they are at, so `e: { n: -1, s: 1 }` pulls the east side in at its north end and out at its south.
+export interface SideShape { n?: number; s?: number; e?: number; w?: number; bow?: number }
+export type SlabShape = Partial<Record<"n" | "e" | "s" | "w", SideShape>>;
+export const isShaped = (p: Piece): p is Slab & { shape: SlabShape } => p.type === "slab" && !!p.shape && Object.values(p.shape).some((s) => Object.values(s).some((v) => v));
+// A bowed side is sampled about this far apart.
+export const SHAPE_STEP = 1;
+// A slab's four sides in local space as point lists, clockwise seen from above (n, e, s, w), each
+// from its first corner to its last; a bowed side is a quadratic curve through its ends, sampled.
+export function slabSides(p: Slab): Record<"n" | "e" | "s" | "w", XZ[]> {
+  const hx = p.w / 2, hz = p.d / 2, sh = p.shape ?? {}, g = (v?: number) => v ?? 0;
+  const NW: XZ = [-(hx + g(sh.w?.n)), -(hz + g(sh.n?.w))], NE: XZ = [hx + g(sh.e?.n), -(hz + g(sh.n?.e))];
+  const SE: XZ = [hx + g(sh.e?.s), hz + g(sh.s?.e)], SW: XZ = [-(hx + g(sh.w?.s)), hz + g(sh.s?.w)];
+  const side = (a: XZ, b: XZ, bow: number, ox: number, oz: number): XZ[] => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!bow || len < 1e-6) return [a, b];
+    // The chord's normal that points the side's own way out, and the control point that bows the curve's middle by `bow`.
+    let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+    if (nx * ox + nz * oz < 0) { nx = -nx; nz = -nz; }
+    const cx = (a[0] + b[0]) / 2 + 2 * bow * nx, cz = (a[1] + b[1]) / 2 + 2 * bow * nz;
+    const n = Math.min(32, Math.max(2, Math.ceil(len / SHAPE_STEP)));
+    return Array.from({ length: n + 1 }, (_, k): XZ => {
+      const t = k / n, u = 1 - t;
+      return [u * u * a[0] + 2 * u * t * cx + t * t * b[0], u * u * a[1] + 2 * u * t * cz + t * t * b[1]];
+    });
+  };
+  return { n: side(NW, NE, g(sh.n?.bow), 0, -1), e: side(NE, SE, g(sh.e?.bow), 1, 0), s: side(SE, SW, g(sh.s?.bow), 0, 1), w: side(SW, NW, g(sh.w?.bow), -1, 0) };
+}
+// A slab's outline in local space, clockwise seen from above from its north-west corner.
+export function slabOutline(p: Slab): XZ[] {
+  const s = slabSides(p);
+  return [...s.n.slice(0, -1), ...s.e.slice(0, -1), ...s.s.slice(0, -1), ...s.w.slice(0, -1)];
+}
 // A kicker or jump pad can roll too: `roll` degrees about its own z axis (the way the ball runs over
 // it) through the middle of its base, before `rot`, so it stays standing on the surface.
 export function rollPoint(deg: number, v: [number, number, number]): [number, number, number] {
   const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
   return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
 }
+// Treadmill: a slab with `belt`, its tiled top and underside (everything inside BELT_FRAME of the
+// edge, where platformMesh starts its tiles) opened right through and filled with fat rods across
+// it (along local x), shared by both faces: as thick as the platform less BELT_GAP, centred in it.
+// They turn so their tops run toward local -z and their bottoms back (docs/levels.md).
+export const BELT_FRAME = PLATFORM_EDGE_INSET * 1.5, BELT_PITCH = 0.95, BELT_GAP = 0.04, BELT_MIN = 2;
+// The opening's half sizes, each rod's centre z (local; its axis is half the thickness down), radius and half length.
+export function beltRods(p: Slab): { ox: number; oz: number; z: number[]; r: number; half: number } {
+  const ox = p.w / 2 - BELT_FRAME, oz = p.d / 2 - BELT_FRAME, n = Math.max(1, Math.round((2 * oz) / BELT_PITCH)), pitch = (2 * oz) / n;
+  const r = Math.min(PLATFORM_THICKNESS - BELT_GAP, pitch - BELT_GAP) / 2;
+  return { ox, oz, z: Array.from({ length: n }, (_, i) => -oz + pitch * (i + 0.5)), r, half: ox - 0.02 };
+}
+export const isBelt = (p: Piece): p is Slab => p.type === "slab" && !!p.belt;
 export const twistAt = (p: Slab, z: number): number => (((p.twist ?? 0) * Math.PI) / 180) * Math.max(0, Math.min(1, (p.d / 2 - z) / p.d));
 export function twistPoint(p: Slab, v: [number, number, number]): [number, number, number] {
   const a = twistAt(p, v[2]), c = Math.cos(a), s = Math.sin(a);
@@ -756,6 +817,35 @@ export function fenceSides(p: Platform): FenceSide[] {
       { key: "b", len: ro - ri, at: (s, k) => ({ x: k, y: 0, z: -cl(ro - s, ri + k, ro - k) }), param: (_x, z) => ro + z },
       { key: "inner", len: 90, arc: true, knots: [knot, 90 - knot], at: (s, k) => edge(90 - s, ri + k, k), param: (x, z) => 90 - ang(x, z) },
     ];
+  }
+  if (isShaped(p)) {
+    // Each side as its point list: `s` runs along it, the rail `inset` in along the side's inward normal,
+    // with a knot at every sample so a fence bends with the curve.
+    const polySide = (key: string, pts: XZ[]): FenceSide => {
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1]! + Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]));
+      const len = cum[cum.length - 1]!;
+      const seg = (t: number) => { let i = 0; while (i < pts.length - 2 && cum[i + 1]! < t) i++; return i; };
+      return {
+        key, len, knots: cum.slice(1, -1),
+        at: (s, k) => {
+          const t = cl(s, k, len - k), i = seg(t), a = pts[i]!, b = pts[i + 1]!, l = cum[i + 1]! - cum[i]! || 1, f = (t - cum[i]!) / l;
+          const dx = (b[0] - a[0]) / l, dz = (b[1] - a[1]) / l;
+          return { x: a[0] + (b[0] - a[0]) * f - dz * k, y: 0, z: a[1] + (b[1] - a[1]) * f + dx * k };
+        },
+        param: (x, z) => {
+          let best = 0, bd = Infinity;
+          for (let i = 0; i + 1 < pts.length; i++) {
+            const a = pts[i]!, b = pts[i + 1]!, dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+            const f = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)), d = Math.hypot(a[0] + dx * f - x, a[1] + dz * f - z);
+            if (d < bd) { bd = d; best = cum[i]! + f * Math.sqrt(L2); }
+          }
+          return best;
+        },
+      };
+    };
+    const ss = slabSides(p);
+    return [polySide("n", ss.n), polySide("e", ss.e), polySide("s", ss.s), polySide("w", ss.w)];
   }
   const hx = p.w / 2, hz = p.d / 2;
   const pt = (x: number, z: number) => ({ x, y: p.type === "ramp" ? rampHeight(p, (hz - z) / p.d) : 0, z });
@@ -926,7 +1016,8 @@ export function respawnY(level: Level): number {
   }
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
 }
-export interface Level { id: string; name: string; thumb?: { x: number; y: number; z: number; r: number; yaw?: number }; pieces: Piece[] }
+// `hidden` keeps a level out of the player's list (a playground); without it a level is public.
+export interface Level { id: string; name: string; hidden?: true; thumb?: { x: number; y: number; z: number; r: number; yaw?: number }; pieces: Piece[] }
 
 export type PartKind = "platform" | "block";
 // `r` rounds every edge and corner, as drawn.
@@ -982,6 +1073,8 @@ export function rotXZ(x: number, z: number, deg: number): { x: number; z: number
 
 export type { XZ } from "./poly.ts";
 import type { XZ } from "./poly.ts";
+import { railsLoop } from "./geometry.ts";
+import earcut from "earcut";
 
 // A hole's outline in world XZ.
 export function holeFootprint(h: Piece & { type: "hole" }): XZ[] {
@@ -992,7 +1085,7 @@ export function holeFootprint(h: Piece & { type: "hole" }): XZ[] {
 
 // Holes cut into slab `p`: those resting on its top surface. Curves and ramps are not cut.
 export function holesOn(level: Level, p: Piece): XZ[][] {
-  if (p.type !== "slab" || isTilted(p) || isMoving(p) || p.twist) return [];
+  if (p.type !== "slab" || isTilted(p) || isMoving(p) || p.twist || p.belt) return [];
   const out: XZ[][] = [];
   for (const h of level.pieces) if (h.type === "hole" && Math.abs(h.y - p.y) < 1e-6) out.push(holeFootprint(h));
   return out;
@@ -1034,6 +1127,11 @@ export function platformFootprint(p: Piece): XZ[][] {
   const rot = pieceRot(p);
   const W = (x: number, z: number): XZ => { const o = rotXZ(x, z, rot); return [p.x + o.x, p.z + o.z]; };
   if (isTilted(p)) return [];
+  if (isShaped(p)) {
+    // The outline may be concave, so it is handed out as its triangles, each convex.
+    const o = slabOutline(p).map(([x, z]) => W(x, z)), t = earcut(o.flatMap((v) => v));
+    return Array.from({ length: t.length / 3 }, (_, k) => [o[t[k * 3]!]!, o[t[k * 3 + 1]!]!, o[t[k * 3 + 2]!]!]);
+  }
   if (p.type === "slab" || p.type === "ramp") {
     const hx = p.w / 2, hz = p.d / 2;
     return [[W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)]];
@@ -1128,7 +1226,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
     case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], smooth: true, lines: 2, a: "top", b: "top" };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
-    case "seesaw": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 10 };
+    case "seesaw": return { type, x, y, z, w: 4, d: 8, h: SEESAW_PIVOT_H, rot: 0, tilt: 10 };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
     case "gate": return { type, x, y, z, w: LANE_WIDTH, d: GATE_D, h: GATE_H, rot: 0 };
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
@@ -1169,7 +1267,7 @@ export type Rails = Piece & { type: "rails" };
 export const RAILS_TOP_Y = 0.45;
 export const railEndAxis = (end: RailEnd): number => (end === "top" ? RAILS_TOP_Y : -PLATFORM_THICKNESS / 2);
 // The same, as a rolling height (what an in-between node's y means).
-const railEndRoll = (p: Rails, end: RailEnd): number => railEndAxis(end) - (railsAxisY(p.lines) - RAILS_SINK);
+const railEndRoll = (p: Rails, end: RailEnd): number => (end === "end" ? 0 : railEndAxis(end) - (railsAxisY(p.lines) - RAILS_SINK));
 
 // Unit heading in local space for a yaw in degrees: 0 is local -z, turning like a piece's rot.
 const yawDir = (deg: number): V3 => { const o = rotXZ(0, -1, deg); return [o.x, 0, o.z]; };
@@ -1218,13 +1316,14 @@ export function railsRings(p: Rails, level?: Level): TubeRing[] {
   // Each end: its node lifted to the rail's axis level, the stub's far node, and the node past it.
   const end = (kind: RailEnd, node: V3, out: V3) => {
     const at: V3 = [node[0], node[1] + railEndRoll(p, kind), node[2]];
+    if (kind === "end") return { at, stub: add(at, out, RAILS_STUB), bend: 0 };
     if (kind === "side") return { at, stub: add(at, out, RAILS_STUB), past: add(at, out, -RAILS_EMBED), bend: 0 };
     const w = world(at), ground = (level ? surfaceAt(level, w.x, w.z) : null) ?? p.y + node[1];
     return { at, stub: add(at, out, RAILS_STUB), past: [at[0], ground - p.y - FENCE_RAIL_FOOT - lift, at[2]] as V3, bend: FENCE_RAIL_CORNER };
   };
   const a = end(p.a, [0, 0, 0], dirs.a);
   const b = end(p.b, local(lastNode), dirs.b);
-  const head = a.past;
+  const head = a.past ?? a.at;
   const rel = (v: { x: number; y: number; z: number }) => ({ x: v.x - head[0], y: v.y - head[1], z: v.z - head[2] });
   const node = (v: V3, bend: number, mid?: { x: number; y: number; z: number }): TubeNode => ({ ...rel({ x: v[0], y: v[1], z: v[2] }), bend, ...(mid ? { mid: rel(mid) } : {}) });
   // A smooth path runs from stub to stub, leaving and meeting each along the stub's own heading.
@@ -1236,7 +1335,7 @@ export function railsRings(p: Rails, level?: Level): TubeRing[] {
       // The segment that arrived at end b now arrives at its stub, curve point and all.
       node(b.stub, RAILS_STUB_BEND, lastNode.mid),
     ];
-  const path: TubeNode[] = [node(a.at, a.bend), ...between, node(b.at, b.bend), node(b.past, 0)];
+  const path: TubeNode[] = [...(a.past ? [node(a.at, a.bend)] : []), ...between, node(b.at, b.bend), ...(b.past ? [node(b.past, 0)] : [])];
   return tubeRings({ path }, lift).map((q) => ({ ...q, c: add(q.c, head) }));
 }
 
@@ -1244,6 +1343,17 @@ export function railsRings(p: Rails, level?: Level): TubeRing[] {
 export function railsRingsWorld(p: Rails, level?: Level): TubeRing[] {
   const r = (v: V3): V3 => { const o = rotXZ(v[0], v[2], p.rot); return [o.x, v[1], o.z]; };
   return railsRings(p, level).map((q) => ({ c: add([p.x, p.y, p.z], r(q.c)), d: r(q.d), m: r(q.m) }));
+}
+
+// Each rail as rings to railSweep at `off`, from the rails' `rings` (local or world), and the points
+// a single rail's `end` ends are capped at (a ball of RAIL_R). Two rails with an `end` end are one
+// line joined round it.
+export function railsLines(p: Rails, rings: TubeRing[]): { lines: { rings: TubeRing[]; off: number }[]; caps: V3[] } {
+  if (rings.length < 2) return { lines: [], caps: [] };
+  const closeA = p.a === "end", closeB = p.b === "end";
+  if (p.lines === 1) return { lines: [{ rings, off: 0 }], caps: [...(closeA ? [rings[0]!.c] : []), ...(closeB ? [rings[rings.length - 1]!.c] : [])] };
+  if (closeA || closeB) return { lines: [{ rings: railsLoop(rings, RAILS_GAUGE / 2, closeA, closeB), off: 0 }], caps: [] };
+  return { lines: [-RAILS_GAUGE / 2, RAILS_GAUGE / 2].map((off) => ({ rings, off })), caps: [] };
 }
 
 // The inward normal (x, z) of the platform side wall nearest (x, z), within RAILS_WALL_REACH.
@@ -1273,6 +1383,8 @@ export function levelProblems(level: Level): string[] {
   if (count("start") !== 1) out.push(`needs exactly one start, has ${count("start")}`);
   if (count("goal") !== 1) out.push(`needs exactly one goal, has ${count("goal")}`);
   level.pieces.forEach((p, i) => {
+    if (isBelt(p) && (isTilted(p) || isMoving(p) || p.twist)) out.push(`piece ${i}: a treadmill can't tilt, roll, twist or move`);
+    if (isBelt(p) && Math.min(p.w, p.d) < BELT_MIN) out.push(`piece ${i}: treadmill w and d must be at least ${BELT_MIN}`);
     if (p.type === "curve" && p.inner >= p.outer) out.push(`piece ${i}: curve inner must be less than outer`);
     if (p.type === "curve" && p.inner < 0) out.push(`piece ${i}: curve inner must be >= 0`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
@@ -1288,6 +1400,14 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "kicker" && p.top !== undefined && (p.top <= 0 || p.top > p.w)) out.push(`piece ${i}: a side kicker's top must be above 0 and at most its width`);
     if (p.type === "gate" && gateHang(p).chain < 1) out.push(`piece ${i}: gate h must be at least ${p.h - gateHang(p).chain + 1}`);
     if (p.type === "gate" && (p.w <= 0 || p.d < SUPPORT_W + 2 * GATE_CHAIN_R)) out.push(`piece ${i}: gate w must be positive and d at least ${SUPPORT_W + 2 * GATE_CHAIN_R}`);
+    if (isShaped(p)) {
+      const sh = p.shape, g = (v?: number) => v ?? 0;
+      if (p.tilt || p.roll || p.twist || p.belt || p.move) out.push(`piece ${i}: a shaped slab can't tilt, roll, twist, move or be a treadmill`);
+      const ends = [["north end", p.w + g(sh.e?.n) + g(sh.w?.n)], ["south end", p.w + g(sh.e?.s) + g(sh.w?.s)], ["east end", p.d + g(sh.n?.e) + g(sh.s?.e)], ["west end", p.d + g(sh.n?.w) + g(sh.s?.w)]] as const;
+      for (const [name, size] of ends) if (size < 1) out.push(`piece ${i}: the slab's ${name} must stay at least 1 across`);
+      if (g(sh.n?.bow) + g(sh.s?.bow) <= -(p.d - 1) || g(sh.e?.bow) + g(sh.w?.bow) <= -(p.w - 1)) out.push(`piece ${i}: the slab's sides bow in so far they meet`);
+    }
+    if (p.type === "seesaw" && seesawPivot(p) < SEESAW_T) out.push(`piece ${i}: seesaw h must be at least ${SEESAW_T}`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
   });
   for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
@@ -1308,6 +1428,8 @@ export function tubeRingsWorld(p: Tube): TubeRing[] {
 }
 
 
+const railEnd = (v: unknown): RailEnd => (v === "side" || v === "end" ? v : "top");
+
 function parsePath(raw: unknown, i: number): TubeNode[] {
   if (!Array.isArray(raw)) throw new Error(`piece ${i}: needs a path array`);
   return raw.map((q: unknown, k: number) => {
@@ -1324,6 +1446,22 @@ function parsePath(raw: unknown, i: number): TubeNode[] {
 const num = (v: unknown, what: string): number => {
   if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`${what} must be a finite number`);
   return v;
+};
+// A slab's shape from a level file: each side's ends and bow, with zeros and unknown keys dropped.
+const shape = (v: unknown): SlabShape | undefined => {
+  if (!v || typeof v !== "object") return undefined;
+  const out: SlabShape = {};
+  for (const side of ["n", "e", "s", "w"] as const) {
+    const raw = (v as Record<string, unknown>)[side];
+    if (!raw || typeof raw !== "object") continue;
+    const s: SideShape = {};
+    for (const k of side === "n" || side === "s" ? (["w", "e", "bow"] as const) : (["n", "s", "bow"] as const)) {
+      const n = (raw as Record<string, unknown>)[k];
+      if (typeof n === "number" && Number.isFinite(n) && n !== 0) s[k] = n;
+    }
+    if (Object.keys(s).length) out[side] = s;
+  }
+  return Object.keys(out).length ? out : undefined;
 };
 const fence = (v: unknown): Fence => {
   if (!Array.isArray(v)) return v === true;
@@ -1358,17 +1496,17 @@ export function validateLevel(raw: unknown): Level {
     const f = (p.fences ?? {}) as Record<string, unknown>;
     switch (p.type) {
       case "start": return { type: "start", ...at };
-      case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}),
+      case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}), ...(p.belt === true ? { belt: true as const } : {}), ...(shape(p.shape) ? { shape: shape(p.shape)! } : {}),
         ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"]);
       case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot") }, f, ["a", "outer", "b", "inner"]);
       case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"]);
       case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
-        lines: p.lines === 1 ? 1 : 2, a: p.a === "side" ? "side" : "top", b: p.b === "side" ? "side" : "top",
+        lines: p.lines === 1 ? 1 : 2, a: railEnd(p.a), b: railEnd(p.b),
         ...(typeof p.aYaw === "number" ? { aYaw: p.aYaw } : {}), ...(typeof p.bYaw === "number" ? { bYaw: p.bYaw } : {}) };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
-      case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}) };
+      case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), h: num(p.h ?? SEESAW_PIVOT_H, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}) };
       // Older levels have moving platforms as their own "mover" piece: a slab with its schedule inline.
       case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0, move: parseMove(p, i) };
       case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot"),
@@ -1404,7 +1542,7 @@ export function validateLevel(raw: unknown): Level {
   const pieces = [...parsed, ...fenced.flatMap(([q, spec]) => legacyFences(q, spec))];
   const t = r.thumb as Record<string, unknown> | undefined;
   const thumb = t ? { x: num(t.x, "thumb.x"), y: num(t.y, "thumb.y"), z: num(t.z, "thumb.z"), r: num(t.r, "thumb.r"), ...(t.yaw ? { yaw: num(t.yaw, "thumb.yaw") } : {}) } : undefined;
-  const level: Level = { id: r.id, name: r.name, ...(thumb ? { thumb } : {}), pieces };
+  const level: Level = { id: r.id, name: r.name, ...(r.hidden === true ? { hidden: true as const } : {}), ...(thumb ? { thumb } : {}), pieces };
   const problems = levelProblems(level);
   if (problems.length) throw new Error(`level ${level.id}: ${problems.join("; ")}`);
   return level;

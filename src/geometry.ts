@@ -125,6 +125,29 @@ export function railSweep(rings: SweepRing[], offset: number, r: number, sides: 
   return { positions: pos, indices: idx };
 }
 
+// Two rails `half` either side of `rings` as one line for railSweep (offset 0, which then faces the
+// rails' centre): out along the left rail, round a half circle at each closed end, back along the right.
+export function railsLoop(rings: SweepRing[], half: number, closeA: boolean, closeB: boolean, steps = 12): SweepRing[] {
+  const s = railSides(rings);
+  const at = (k: number) => rings.map((q, i): SweepRing => ({ ...q, c: [q.c[0] + s[i]![0] * half * k, q.c[1], q.c[2] + s[i]![2] * half * k] }));
+  const neg = (v: V3): V3 => [-v[0], -v[1], -v[2]];
+  const left = at(-1), right = at(1).reverse().map((q) => ({ c: q.c, d: neg(q.d), m: neg(q.m) }));
+  // Round the end at centre c heading out along h, from the rail on h's left to the one on its right.
+  const turn = (c: V3, h: V3): SweepRing[] => {
+    const f = Math.hypot(h[0], h[2]) || 1, d: V3 = [h[0] / f, 0, h[2] / f], side: V3 = [-d[2], 0, d[0]], out: SweepRing[] = [];
+    for (let k = 1; k < steps; k++) {
+      const a = (k * Math.PI) / steps, cs = Math.cos(a) * half, sn = Math.sin(a) * half;
+      const t: V3 = [Math.sin(a) * side[0] + Math.cos(a) * d[0], 0, Math.sin(a) * side[2] + Math.cos(a) * d[2]];
+      out.push({ c: [c[0] - side[0] * cs + d[0] * sn, c[1], c[2] - side[2] * cs + d[2] * sn], d: t, m: t });
+    }
+    return out;
+  };
+  const first = rings[0]!, last = rings[rings.length - 1]!;
+  if (closeA && closeB) return [...left, ...turn(last.c, last.d), ...right, ...turn(first.c, neg(first.d)), left[0]!];
+  if (closeB) return [...left, ...turn(last.c, last.d), ...right];
+  return [...right, ...turn(first.c, neg(first.d)), ...left];
+}
+
 // A thick-walled tube between radii `rIn` and `rOut` swept through `rings`, cut into one convex
 // block per ring pair per side, each as a point cloud for a convex hull. `rIn` must sit far enough
 // out that each block's flat inner face (a chord of the circle) clears the bore.

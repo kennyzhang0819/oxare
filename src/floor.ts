@@ -1,4 +1,4 @@
-import { PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
+import { beltRods, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -23,7 +23,7 @@ function topPolys(level: Level): Poly[] {
     const W = (x: number, z: number): XZ => { const o = rotXZ(x, z, rot); return [snap(p.x + o.x), snap(p.z + o.z)]; };
     if (p.type === "slab" || p.type === "ramp") {
       const hx = p.w / 2, hz = p.d / 2;
-      const outline = [W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)];
+      const outline = isShaped(p) ? slabOutline(p).map(([x, z]) => W(x, z)) : [W(-hx, -hz), W(hx, -hz), W(hx, hz), W(-hx, hz)];
       if (p.type === "slab" && p.twist) {
         // A grid of small quads over the rolled top, half a unit along it and one across, so each
         // is nearly flat; the long sides carry the lip as on any slab.
@@ -34,6 +34,12 @@ function topPolys(level: Level): Poly[] {
         const rim = [...grid.map((r) => r[k]!.v), ...grid.slice().reverse().map((r) => r[0]!.v)];
         for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) {
           out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(rim, m), narrow: false, warped: true });
+        }
+      } else if (p.type === "slab" && p.belt) {
+        // A treadmill's frame: the opening's edge drops square into the recess, with no lip.
+        const { ox, oz } = beltRods(p);
+        for (const region of cutRegion(outline, [[W(-ox, -oz), W(ox, -oz), W(ox, oz), W(-ox, oz)]])) {
+          out.push({ loops: region.map(snapXZ).map((q) => q.map((v) => ({ v, y: p.y }))), rim: (m) => onOutline(outline, m), narrow: false });
         }
       } else if (p.type === "slab") {
         for (const region of cutRegion(outline, holesOn(level, p))) {

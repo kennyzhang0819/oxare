@@ -1,0 +1,30 @@
+{
+  "id": "13",
+  "name": "Wall jumps",
+  "pieces": [
+    {"type": "start", "x": 0, "y": 0, "z": 0},
+    {"type": "slab", "x": 0, "y": 0, "z": -4, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "goal", "x": 42, "y": 0, "z": -17, "r": 1},
+    {"type": "slab", "x": 42, "y": 0, "z": -17, "w": 8, "d": 8, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": -5, "y": 3.5, "z": -16, "w": 8, "d": 16, "rot": 0, "tilt": 0, "roll": 90},
+    {"type": "kicker", "x": -3.5, "y": 0, "z": -10, "w": 1, "d": 3, "h": 1, "rot": 0, "top": 0.4, "wall": "left"},
+    {"type": "slab", "x": 0, "y": 0, "z": -28, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "slab", "x": 4, "y": 3.5, "z": -40, "w": 8, "d": 16, "rot": 0, "tilt": 0, "roll": 90},
+    {"type": "kicker", "x": 3.5, "y": 0, "z": -34, "w": 1, "d": 3, "h": 1, "rot": 0, "top": 0.4, "wall": "right"},
+    {"type": "slab", "x": 0, "y": 0, "z": -52, "w": 8, "d": 16, "rot": 0, "tilt": 0},
+    {"type": "jump", "x": 0, "y": 0, "z": -56, "w": 4, "d": 4, "rot": 0, "rise": 6},
+    {"type": "slab", "x": -2, "y": -4, "z": -88, "w": 4, "d": 16, "rot": 0, "tilt": 0, "roll": -30},
+    {"type": "curve", "x": 12, "y": -4, "z": -96, "inner": 8, "outer": 16, "rot": 90},
+    {"type": "slab", "x": 20, "y": -4, "z": -108, "w": 8, "d": 16, "rot": 90, "tilt": 0},
+    {"type": "barrier", "x": 26, "y": -4, "z": -111.5, "rot": 180},
+    {"type": "barrier", "x": 23, "y": -4, "z": -111.5, "rot": 180},
+    {"type": "barrier", "x": 26, "y": -4, "z": -104.5, "rot": 180},
+    {"type": "barrier", "x": 23, "y": -4, "z": -104.5, "rot": 180},
+    {"type": "crate", "x": 24, "y": -4, "z": -110, "w": 2, "h": 1.2, "d": 2, "rot": 90},
+    {"type": "crate", "x": 24, "y": -4, "z": -106, "w": 2, "h": 1.2, "d": 2, "rot": 90},
+    {"type": "crate", "x": 24, "y": -4, "z": -108, "w": 2, "h": 1.2, "d": 2, "rot": 90},
+    {"type": "barrier", "x": 27.5, "y": -4, "z": -110, "rot": 90},
+    {"type": "barrier", "x": 27.5, "y": -4, "z": -106, "rot": 90},
+    {"type": "barrier", "x": 22.5, "y": -4, "z": -108, "rot": 270}
+  ]
+}

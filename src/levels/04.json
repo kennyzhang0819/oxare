@@ -9,7 +9,7 @@
     {"type": "slab", "x": 0, "y": 0, "z": -56, "w": 8, "d": 16, "rot": 0, "tilt": 0},
     {"type": "curve", "x": 12, "y": 0, "z": -64, "inner": 8, "outer": 16, "rot": 90},
     {"type": "slab", "x": 20, "y": 0, "z": -76, "w": 8, "d": 16, "rot": 90, "tilt": 0},
-    {"type": "seesaw", "x": 24, "y": 0, "z": -76, "w": 4, "d": 8, "rot": 270, "tilt": 16},
+    {"type": "seesaw", "x": 24, "y": 0, "z": -76, "w": 4, "d": 8, "h": 1.2, "rot": 270, "tilt": 16},
     {"type": "ramp", "x": 40, "y": 1, "z": -76, "w": 8, "d": 24, "rot": 270, "rise": 4},
     {"type": "slab", "x": 64, "y": 6, "z": -60, "w": 8, "d": 8, "rot": 0, "tilt": 0},
     {"type": "curve", "x": 52, "y": 6, "z": -56, "inner": 8, "outer": 16, "rot": 270},

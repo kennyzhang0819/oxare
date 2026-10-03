@@ -11,6 +11,7 @@ import { Game } from "./game.ts";
 import { LEVELS, refreshLevels } from "./levels/index.ts";
 import { Loading } from "./loading.ts";
 import { Menu } from "./menu.ts";
+import { loadThumbIndex } from "./thumbs.ts";
 import { loadTuning } from "./tuning.ts";
 import type { Level } from "./level.ts";
 
@@ -39,17 +40,19 @@ try { localStorage.removeItem("balling.draft"); } catch { /* nothing kept */ }
 let admin = false;
 // The menu always reads the level files fresh first.
 function menu() {
-  void refreshLevels().then(() => show(() => new Menu(ctx, { admin, onPlay: playLevel, onEdit: edit, onChanged: menu, onToggleAdmin: () => { admin = !admin; menu(); } })));
+  void Promise.all([refreshLevels(), loadThumbIndex()]).then(() => show(() => new Menu(ctx, { admin, onPlay: playLevel, onEdit: edit, onChanged: menu, onToggleAdmin: () => { admin = !admin; menu(); } })));
 }
 
 function playLevel(i: number) {
   const level = LEVELS[i];
   if (!level) return show(() => new Loading(ctx, menu));
+  // A player's next level skips hidden ones; from the admin panel every level is next in turn.
+  const next = LEVELS.findIndex((l, k) => k > i && (admin || !l.hidden));
   show(() => new Game(ctx, level, {
     admin,
     onExit: menu,
     onRetry: () => playLevel(i),
-    onNext: LEVELS[i + 1] ? () => playLevel(i + 1) : undefined,
+    onNext: next >= 0 ? () => playLevel(next) : undefined,
   }));
 }
 

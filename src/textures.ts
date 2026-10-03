@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { BARRIER, BLOCKADE, BOARD, CRATE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
 import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
@@ -24,13 +25,13 @@ export function tileTexture(anisotropy: number): THREE.Texture {
     const wide = x + 1 < n && !taken.has(y * n + x + 1) && rnd() < 0.35;
     if (wide) taken.add(y * n + x + 1);
     const w = wide ? 2 : 1;
-    const l = 90 + rnd() * 5;
-    ctx.fillStyle = `hsl(210 10% ${l}%)`;
+    const k = 1 - (1 + Math.floor(rnd() * TILE_SHADES)) * TILE_STEP;
+    ctx.fillStyle = css(shade(PLATFORM.tile, k));
     ctx.fillRect(x * px, y * px, w * px, px);
-    ctx.fillStyle = `hsl(210 10% ${l + 2}%)`;
+    ctx.fillStyle = css(shade(PLATFORM.tile, k + 2 * TILE_STEP));
     ctx.fillRect(x * px, y * px, w * px, 2);
     ctx.fillRect(x * px, y * px, 2, px);
-    ctx.fillStyle = `hsl(210 10% ${l - 2}%)`;
+    ctx.fillStyle = css(shade(PLATFORM.tile, k - 2 * TILE_STEP));
     ctx.fillRect(x * px, y * px + px - 2, w * px, 2);
     ctx.fillRect((x + w) * px - 2, y * px, 2, px);
   }
@@ -39,6 +40,40 @@ export function tileTexture(anisotropy: number): THREE.Texture {
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = anisotropy;
   return t;
+}
+
+// Treadmill rod: u runs once round the rod, the way its top runs, v along BELT_TILE of its length.
+// Two staggered orange chevrons point toward -u (the way the surface runs under them) between dark
+// grooves along the rod; `glow` is the chevrons alone.
+export const BELT_TILE = 1.5;
+export function beltTextures(): { map: THREE.Texture; glow: THREE.Texture } {
+  const U = 512, V = 256;
+  const draw = (glow: boolean) => {
+    const [c, ctx] = canvas(U, V);
+    ctx.fillStyle = glow ? "#000" : css(TREADMILL.rod);
+    ctx.fillRect(0, 0, U, V);
+    if (!glow) {
+      ctx.fillStyle = css(TREADMILL.groove);
+      for (let k = 0; k < 8; k++) ctx.fillRect((k * U) / 8, 0, 3, V);
+    }
+    ctx.strokeStyle = css(TREADMILL.arrow);
+    ctx.lineWidth = 10;
+    ctx.lineJoin = "miter";
+    for (const [cx, cy] of [[U * 0.25, V * 0.25], [U * 0.75, V * 0.75]] as const) {
+      const dx = 44, dy = 70, t = 34;
+      ctx.beginPath();
+      ctx.moveTo(cx + dx, cy - dy); ctx.lineTo(cx - dx, cy); ctx.lineTo(cx + dx, cy + dy);
+      ctx.lineTo(cx + dx + t, cy + dy); ctx.lineTo(cx - dx + t, cy); ctx.lineTo(cx + dx + t, cy - dy);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  };
+  return { map: draw(false), glow: draw(true) };
 }
 
 export interface EdgeMaps { map: THREE.Texture; glow: THREE.Texture }
@@ -55,13 +90,14 @@ export function edgeTextures(): EdgeMaps {
     ctx.fillStyle = col; ctx.fillRect(0, y0, W, y1 - y0);
     ectx.fillStyle = glow ? col : "#000"; ectx.fillRect(0, y0, W, y1 - y0);
   };
-  band(0, 0.28, "#e6ebef");
-  band(0.28, 0.33, "#a3adb6");
-  band(0.33, 0.38, "#2fe6ff", true);
-  band(0.38, 0.62, "#343b43");
-  band(0.62, 0.67, "#2fe6ff", true);
-  band(0.67, 0.72, "#a3adb6");
-  band(0.72, 1, "#e6ebef");
+  const lip = css(PLATFORM.lip), line = css(PLATFORM.lipLine), cyan = css(PROPS.cyan);
+  band(0, 0.28, lip);
+  band(0.28, 0.33, line);
+  band(0.33, 0.38, cyan, true);
+  band(0.38, 0.62, css(PLATFORM.recess));
+  band(0.62, 0.67, cyan, true);
+  band(0.67, 0.72, line);
+  band(0.72, 1, lip);
   const mk = (cv: HTMLCanvasElement) => {
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -104,7 +140,7 @@ function circuitPanel(ctx: Ctx, px: number, py: number, pw: number, ph: number, 
 function drawBoard(ctx: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, round = false) {
   const rnd = seeded(seed);
   const P = 6, TW = 2.2;
-  const C = { edge: "#6f7a85", board: "#8d979f", trace: "#b4bdc5", pad: "#dfe5ea", hole: "#525c66", chip: "#3e464e", chipTop: "#4a535c", pin: "#dfe5ea", silk: "#dfe5ea" };
+  const C = { edge: css(BOARD.edge), board: css(BOARD.board), trace: css(BOARD.trace), pad: css(BOARD.pad), hole: css(BOARD.hole), chip: css(BOARD.chip), chipTop: css(BOARD.chipTop), pin: css(BOARD.pad), silk: css(BOARD.pad) };
   const ox = px + pw / 2, oy = py + ph / 2, R = Math.min(pw, ph) / 2;
   if (round) {
     ctx.fillStyle = C.edge; ctx.beginPath(); ctx.arc(ox, oy, R + 4, 0, Math.PI * 2); ctx.fill();
@@ -236,7 +272,7 @@ function drawBoard(ctx: Ctx, px: number, py: number, pw: number, ph: number, see
   }
   ctx.fillStyle = C.chip; ctx.fillRect(x, y, cpu, cpu);
   ctx.fillStyle = C.chipTop; ctx.fillRect(x + 1.5, y + 1.5, cpu - 3, cpu - 3);
-  ctx.fillStyle = "#6f7a85"; ctx.beginPath(); ctx.arc(x + 4.5, y + 4.5, 1.6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = C.edge; ctx.beginPath(); ctx.arc(x + 4.5, y + 4.5, 1.6, 0, Math.PI * 2); ctx.fill();
   for (const [mid, dir] of sides) bus([mid[0] + DIRS[dir]![0] * 4, mid[1] + DIRS[dir]![1] * 4], dir, along);
 
   // Two status lights where there is room.
@@ -253,7 +289,7 @@ function drawBoard(ctx: Ctx, px: number, py: number, pw: number, ph: number, see
 function stoolTopTexture(): THREE.Texture {
   const W = 256, H = 128;
   const [c, ctx] = canvas2x(W, H);
-  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = css(BOARD.edge); ctx.fillRect(0, 0, W, H);
   circuitPanel(ctx, 8, 8, W - 16, H - 16, 7, 22, 2.6);
   const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return mk(c);
@@ -263,7 +299,7 @@ function stoolTopTexture(): THREE.Texture {
 function bumperTopTexture(): THREE.Texture {
   const W = 256;
   const [c, ctx] = canvas2x(W, W);
-  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, W);
+  ctx.fillStyle = css(BOARD.edge); ctx.fillRect(0, 0, W, W);
   circuitPanel(ctx, 11, 11, W - 22, W - 22, 31, 26, 2.6, true);
   const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return mk(c);
@@ -273,7 +309,7 @@ function bumperTopTexture(): THREE.Texture {
 function barrelPanelTexture(): THREE.Texture {
   const W = 120, H = 200;
   const [c, ctx] = canvas2x(W, H);
-  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = css(BOARD.edge); ctx.fillRect(0, 0, W, H);
   circuitPanel(ctx, 6, 6, W - 12, H - 12, 41, 18, 2.6);
   const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return mk(c);
@@ -283,23 +319,23 @@ function barrelPanelTexture(): THREE.Texture {
 function barrierTextures(): [THREE.Texture, THREE.Texture] {
   const W = 512, H = 140;
   const [c, ctx] = canvas2x(W, H);
-  ctx.fillStyle = "#6f7a85"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = css(BOARD.edge); ctx.fillRect(0, 0, W, H);
   circuitPanel(ctx, 8, 8, W - 16, H - 16, 23, 24);
   const [gc, gctx] = canvas(128, 128);
-  gctx.fillStyle = "#b9c2c9"; gctx.fillRect(0, 0, 128, 128);
-  gctx.fillStyle = "#5d6873";
+  gctx.fillStyle = css(BARRIER.grille); gctx.fillRect(0, 0, 128, 128);
+  gctx.fillStyle = css(BARRIER.louvre);
   for (let y = 10; y < 128; y += 14) gctx.fillRect(8, y, 112, 6);
   const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return [mk(c), mk(gc)];
 }
 
-// Start pad: white top with a cyan ring and four grey circuit arcs; a centre disc of
-// concentric rings; a ribbed grey skirt around the side.
+// Start pad: a plain white top with the cyan ring; a centre disc of concentric rings; a plain
+// white side.
 function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Texture] {
   const S = 512, c0 = S / 2, R = S / 2;
   const [top, t] = canvas(S, S);
   const [glow, g] = canvas(S, S);
-  t.fillStyle = "#eef2f5"; t.fillRect(0, 0, S, S);
+  t.fillStyle = css(START_PAD.top); t.fillRect(0, 0, S, S);
   g.fillStyle = "#000"; g.fillRect(0, 0, S, S);
   const ring = (ctx: CanvasRenderingContext2D, r0: number, r1: number, col: string) => {
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c0, c0, R * r1, 0, Math.PI * 2); ctx.arc(c0, c0, R * r0, 0, Math.PI * 2, true); ctx.fill();
@@ -307,63 +343,51 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   // Only the rim outside the bowl shows this texture: lay its bands out across that, 0 at the
   // bowl's edge and 1 at the pad's.
   const q = START_PAD_BOWL / START_PAD_R, rim = (f: number) => q + f * (1 - q);
-  ring(t, rim(0.67), rim(0.88), "#2fe6ff");
-  ring(g, rim(0.67), rim(0.88), "#2fe6ff");
-  ring(t, rim(0.88), 1.0, "#dfe5ea");
-  // Circuit arcs with gaps on the axes.
-  const rnd = seeded(5);
-  for (let k = 0; k < 4; k++) {
-    const a0 = k * Math.PI / 2 + 0.16, a1 = (k + 1) * Math.PI / 2 - 0.16;
-    t.fillStyle = "#6f7a85";
-    t.beginPath(); t.arc(c0, c0, R * rim(0.55), a0, a1); t.arc(c0, c0, R * rim(0.1), a1, a0, true); t.closePath(); t.fill();
-    t.fillStyle = "#b6bfc7";
-    for (let i = 0; i < 9; i++) {
-      const a = a0 + 0.06 + rnd() * (a1 - a0 - 0.12), r = R * rim(0.17 + rnd() * 0.25), s = 4 + rnd() * 6;
-      const x = c0 + Math.cos(a) * r, y = c0 + Math.sin(a) * r;
-      if (rnd() < 0.6) t.fillRect(x, y, s, 4); else t.fillRect(x, y, 4, s);
-    }
-  }
+  ring(t, rim(0.3), rim(0.55), css(PROPS.cyan));
+  ring(g, rim(0.3), rim(0.55), css(PROPS.cyan));
   const [centre, cc] = canvas(S, S);
-  cc.fillStyle = "#b9c2c9"; cc.fillRect(0, 0, S, S);
+  cc.fillStyle = css(START_PAD.centre); cc.fillRect(0, 0, S, S);
   for (let i = 5; i >= 1; i--) {
-    cc.fillStyle = i % 2 ? "#9aa4ad" : "#aeb7bf";
+    cc.fillStyle = css(i % 2 ? START_PAD.centreDark : START_PAD.centreLight);
     cc.beginPath(); cc.arc(c0, c0, R * (i / 5) * 0.96, 0, Math.PI * 2); cc.fill();
-    cc.strokeStyle = "#5d6873"; cc.lineWidth = 4; cc.stroke();
+    cc.strokeStyle = css(START_PAD.groove); cc.lineWidth = 4; cc.stroke();
   }
-  const [skirt, sk] = canvas(384, 64);
-  sk.fillStyle = "#aeb7bf"; sk.fillRect(0, 0, 384, 64);
-  sk.fillStyle = "#5d6873";
-  for (let x = 0; x < 384; x += 24) sk.fillRect(x, 0, 4, 64);
-  sk.fillStyle = "#8f99a2"; sk.fillRect(0, 0, 384, 6);
+  const [skirt, sk] = canvas(64, 64);
+  sk.fillStyle = css(START_PAD.side); sk.fillRect(0, 0, 64, 64);
   const mk = (cv: HTMLCanvasElement) => { const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; return tx; };
   const sktx = mk(skirt); sktx.wrapS = THREE.RepeatWrapping; sktx.repeat.x = 2;
   return [mk(top), mk(glow), mk(centre), sktx];
 }
 
-// Crate face: white plate, a screen in the middle, green corner brackets that glow.
+// Crate face, on every face: a grey plate crossed by a dark band with stepped ends and a dark stem
+// up and down to a tab at each edge, a framed screen where they cross, and a green bracket glowing
+// round each corner, right at the edge so it wraps the rounded corner.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
   const S = 256;
-  const [c, ctx] = canvas(S, S);
-  const [e, ectx] = canvas(S, S);
-  ctx.fillStyle = "#d3dae0";
-  ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = "#eef2f5";
-  ctx.fillRect(14, 14, S - 28, S - 28);
-  ctx.fillStyle = "#6c757d";
-  ctx.fillRect(70, 86, 116, 84);
-  ctx.fillStyle = "#d4dde4";
-  ctx.fillRect(80, 96, 96, 64);
-  ctx.fillStyle = "#4e565e";
-  for (const [x, y, w, h] of [[36, 112, 22, 32], [198, 112, 22, 32], [112, 40, 32, 14], [112, 202, 32, 14]] as const) ctx.fillRect(x, y, w, h);
+  const [c, ctx] = canvas2x(S, S);
+  const [e, ectx] = canvas2x(S, S);
+  const box = (x0: number, y0: number, x1: number, y1: number, col: number) => { ctx.fillStyle = css(col); ctx.fillRect(x0, y0, x1 - x0, y1 - y0); };
+  box(0, 0, S, S, CRATE.body);
+  // The cross: a stem top to bottom, a band across with thinner ends, and a tab at each end of the stem.
+  box(106, 40, 150, 216, CRATE.cross);
+  box(70, 98, 186, 158, CRATE.cross);
+  box(34, 110, 70, 146, CRATE.cross);
+  box(186, 110, 222, 146, CRATE.cross);
+  for (const y of [28, 196]) { box(94, y, 162, y + 32, CRATE.cross); box(110, y + 9, 146, y + 23, CRATE.body); }
+  // An "=" at each end of the band, and a mark on the stem above and below the screen.
+  for (const x of [42, 196]) for (const y of [119, 131]) box(x, y, x + 18, y + 5, CRATE.body);
+  for (const y of [70, 178]) box(122, y, 134, y + 8, CRATE.body);
+  // The screen, framed by the cross, with a pale line along its top.
+  box(84, 92, 172, 164, CRATE.cross);
+  box(92, 100, 164, 156, CRATE.screen);
+  box(96, 104, 160, 107, CRATE.shine);
   ectx.fillStyle = "#000";
   ectx.fillRect(0, 0, S, S);
-  const arm = 44, t = 12, m = 10;
+  const arm = 66, t = 18;
   for (const target of [ctx, ectx]) {
-    target.fillStyle = "#39e07a";
-    for (const [x, y, sx, sy] of [[m, m, 1, 1], [S - m, m, -1, 1], [m, S - m, 1, -1], [S - m, S - m, -1, -1]] as const) {
-      target.fillRect(sx > 0 ? x : x - arm, sy > 0 ? y : y - t, arm, t);
-      target.fillRect(sx > 0 ? x : x - t, sy > 0 ? y : y - arm, t, arm);
-    }
+    target.fillStyle = css(CRATE.light);
+    for (const [x, y] of [[0, 0], [S - arm, 0], [0, S - t], [S - arm, S - t]] as const) target.fillRect(x, y, arm, t);
+    for (const [x, y] of [[0, 0], [S - t, 0], [0, S - arm], [S - t, S - arm]] as const) target.fillRect(x, y, t, arm);
   }
   const mk = (cv: HTMLCanvasElement) => { const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; return tx; };
   return [mk(c), mk(e)];
@@ -373,15 +397,15 @@ function crateFaces(): [THREE.Texture, THREE.Texture] {
 function goalDisc(): THREE.Texture {
   const S = 256;
   const [c, ctx] = canvas(S, S);
-  ctx.fillStyle = "#2a3137";
+  ctx.fillStyle = css(GOAL.disc);
   ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = "#8d969e";
+  ctx.strokeStyle = css(GOAL.spokes);
   ctx.lineWidth = 3;
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
     ctx.beginPath(); ctx.moveTo(S / 2, S / 2); ctx.lineTo(S / 2 + Math.cos(a) * S * 0.46, S / 2 + Math.sin(a) * S * 0.46); ctx.stroke();
   }
-  ctx.fillStyle = "#b9c2c9";
+  ctx.fillStyle = css(GOAL.hub);
   ctx.beginPath(); ctx.arc(S / 2, S / 2, 10, 0, Math.PI * 2); ctx.fill();
   const tx = new THREE.CanvasTexture(c);
   tx.colorSpace = THREE.SRGBColorSpace;
@@ -393,8 +417,9 @@ function goalDisc(): THREE.Texture {
 // Magnet aura: red, strongest at the magnet's foot and fading out to nothing at its reach (the edge).
 export function magnetAuraTexture(): THREE.Texture {
   const W = 256, [c, ctx] = canvas(W, W), g = ctx.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2), r0 = MAGNET_R / MAGNET_REACH;
-  g.addColorStop(0, "rgba(255,40,40,0.55)");
-  for (let k = 0; k <= 8; k++) { const t = k / 8; g.addColorStop(r0 + (1 - r0) * t, `rgba(255,40,40,${(0.55 * (1 - t) ** 2).toFixed(3)})`); }
+  const rgb = [EFFECTS.magnetAura >> 16, (EFFECTS.magnetAura >> 8) & 255, EFFECTS.magnetAura & 255].join(",");
+  g.addColorStop(0, `rgba(${rgb},0.55)`);
+  for (let k = 0; k <= 8; k++) { const t = k / 8; g.addColorStop(r0 + (1 - r0) * t, `rgba(${rgb},${(0.55 * (1 - t) ** 2).toFixed(3)})`); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, W);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -406,17 +431,17 @@ export function structTextures(): StructMaps {
   const W = 304, H = 208;
   const [c, ctx] = canvas2x(W, H);
   const [e, ectx] = canvas2x(W, H);
-  ctx.fillStyle = "#e9eef3";
+  ctx.fillStyle = css(PROPS.white);
   ctx.fillRect(0, 0, W, H);
   ectx.fillStyle = "#000";
   ectx.fillRect(0, 0, W, H);
   for (const x0 of [22, W - 62]) {
-    ctx.fillStyle = "#c9d2da";
+    ctx.fillStyle = css(BLOCKADE.plate);
     ctx.fillRect(x0 - 6, 18, 52, H - 36);
     for (let k = 0; k < 5; k++) {
       const y = 26 + k * 33.5;
       for (const t of [ctx, ectx]) {
-        t.fillStyle = "#2fe6ff";
+        t.fillStyle = css(PROPS.cyan);
         t.beginPath();
         t.roundRect(x0, y, 40, 22, 6);
         t.fill();
@@ -425,18 +450,22 @@ export function structTextures(): StructMaps {
   }
   circuitPanel(ctx, 96, 26, W - 192, H - 52, 11, 18);
 
-  // Pillar wrap (u runs once around): twelve wide slats per tier, light rings between tiers.
-  const PW = 384, PH = 256, SLATS = 12;
+  // Pillar wrap (u runs once around, top of the body at the top): three tiers of twelve slats, the
+  // white between slats wider than the slats; a cyan band split by a white line above each tier;
+  // a white foot under the last, above the base ring.
+  const PW = 384, PH = 256, SLATS = 12, BAND = 16, GAP = 6, TIER = 54;
   const [pc, pctx] = canvas(PW, PH);
-  pctx.fillStyle = "#e3e9ee";
+  pctx.fillStyle = css(PILLAR.white);
   pctx.fillRect(0, 0, PW, PH);
-  const tier = PH / 3, period = PW / SLATS;
+  const period = PW / SLATS;
   for (let t = 0; t < 3; t++) {
-    const y0 = t * tier + 12, y1 = (t + 1) * tier - 12;
-    pctx.fillStyle = "#4f5a66";
-    for (let k = 0; k < SLATS; k++) pctx.fillRect(Math.round(k * period + period * 0.22), y0, Math.round(period * 0.56), y1 - y0);
-    pctx.fillStyle = "#c3ccd4";
-    pctx.fillRect(0, y1 + 4, PW, 4);
+    const b = t * (BAND + GAP + TIER + GAP), y0 = b + BAND + GAP;
+    pctx.fillStyle = css(PROPS.cyan);
+    pctx.fillRect(0, b, PW, BAND);
+    pctx.fillStyle = css(PILLAR.white);
+    pctx.fillRect(0, b + BAND / 2 - 2, PW, 4);
+    pctx.fillStyle = css(PILLAR.slate);
+    for (let k = 0; k < SLATS; k++) pctx.fillRect(Math.round(k * period + period * 0.31), y0, Math.round(period * 0.38), TIER);
   }
   const mk = (cv: HTMLCanvasElement) => {
     const t = new THREE.CanvasTexture(cv);
@@ -464,9 +493,9 @@ export function ballTextures(): BallMaps {
   const [e, ectx] = canvas(W, H);
   const [r, rctx] = canvas(W, H);
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#5592f2");
-  grad.addColorStop(0.5, "#417ee8");
-  grad.addColorStop(1, "#326bd2");
+  grad.addColorStop(0, css(EFFECTS.ball.light));
+  grad.addColorStop(0.5, css(EFFECTS.ball.mid));
+  grad.addColorStop(1, css(EFFECTS.ball.dark));
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
   ectx.fillStyle = "#000";
@@ -497,10 +526,10 @@ export function ballTextures(): BallMaps {
       }
     });
   };
-  stroke(ctx, "#86b4fa", 26, []);
-  stroke(ctx, "#143584", 14, []);
-  stroke(ctx, "#2fd9f2", 6, [150, 90]);
-  stroke(ectx, "#2fe6ff", 6, [150, 90]);
+  stroke(ctx, css(EFFECTS.ball.bevel), 26, []);
+  stroke(ctx, css(EFFECTS.ball.groove), 14, []);
+  stroke(ctx, css(EFFECTS.ball.dash), 6, [150, 90]);
+  stroke(ectx, css(PROPS.cyan), 6, [150, 90]);
   stroke(rctx, "#aaaaaa", 14, []);
 
   const mk = (cv: HTMLCanvasElement, srgb: boolean) => {

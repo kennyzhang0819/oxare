@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, isMoving, isShaped, type Slab, isSliding, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, STRUCT_GRID, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
-import { pieceThumbs } from "./thumbs.ts";
+import { pieceThumbs, saveThumb } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 import type { PlayFrom } from "./game.ts";
@@ -22,8 +22,8 @@ export function blankLevel(): Level {
 
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
-  ["Platforms", ["slab", "curve", "ramp", "bridge", "hole"]],
-  ["Interactables", ["kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
+  ["Platforms", ["slab", "curve", "ramp", "hole"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "stool", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -43,7 +43,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   rails: [["rot", 15]],
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
-  seesaw: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 1]],
+  seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
   support: [["w", 0.5], ["h", 1], ["rot", 15]],
   gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["roll", 15]],
@@ -152,7 +152,11 @@ function settle(level: Level, p: Piece) {
     return;
   }
   if (!isStructure(p)) return;
-  p.x = gridSnap(p.x); p.z = gridSnap(p.z);
+  if (p.type === "kicker" && p.top !== undefined) {
+    // A side kicker snaps by its wall side, which stands against a wall on a platform's edge.
+    const o = rotXZ(p.wall === "left" ? -p.w / 2 : p.w / 2, 0, p.rot);
+    p.x = r3(gridSnap(p.x + o.x) - o.x); p.z = r3(gridSnap(p.z + o.z) - o.z);
+  } else { p.x = gridSnap(p.x); p.z = gridSnap(p.z); }
   // A column keeps the y it is given: it often stands under the platform it holds up.
   if (p.type === "column") return;
   // So does a rolled prop: one stood out of a wall is placed by hand.
@@ -169,10 +173,11 @@ function attachToEdge(level: Level, p: Piece & { type: "plank" }) {
 }
 
 // Snap each rails end onto its platform: a side end onto the nearest open edge's wall face, a top
-// end over the platform beneath it, and either one's y to that platform's top.
+// end over the platform beneath it, and either one's y to that platform's top. An `end` end stays put.
 function attachRailEnds(level: Level, p: Piece & { type: "rails" }) {
   const ns = tubeWorld(p);
   for (const [end, n] of [[p.a, ns[0]!], [p.b, ns[ns.length - 1]!]] as const) {
+    if (end === "end") continue;
     if (end === "side") {
       const e = nearestOpenEdge(level, n.x, n.z, n.y, (v) => v);
       if (e) { n.x = e.x; n.z = e.z; n.y = e.y; }
@@ -295,7 +300,9 @@ export class Editor implements Mode {
   private panelShows = "";
   private raf = 0;
   private panel: HTMLElement;
+  private info = h("div", { class: "info" });
   private body = h("div", { class: "body" });
+  private inspector = h("div", { class: "editor inspector" }, this.body);
   private problems = h("div", { class: "problems" });
   private notice = h("div", { class: "notice" });
   private noticeTimer = 0;
@@ -336,6 +343,7 @@ export class Editor implements Mode {
     const thumbs = pieceThumbs(ctx.renderer);
 
     this.panel = h("div", { class: "editor" },
+      this.info,
       h("div", { class: "bar" },
         h("button", { onclick: () => this.play() }, "▶ Play"),
         this.hereBtn = h("button", { class: "ghost", title: "Play from a spot you click (P)", onclick: () => this.armDrop(!this.dropping) }, "▶ Play At") as HTMLButtonElement,
@@ -351,9 +359,8 @@ export class Editor implements Mode {
       ]).map((e) => h("button", { class: "pick", title: e.name, onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: e.name })))))),
       this.problems,
       this.notice,
-      this.body,
     );
-    ctx.overlay.append(h("button", { class: "editor-back", title: "Leave the editor", "aria-label": "Leave the editor", onclick: () => opts.onExit() }, "←"), this.panel);
+    ctx.overlay.append(h("button", { class: "editor-back", title: "Leave the editor", "aria-label": "Leave the editor", onclick: () => opts.onExit() }, "←"), this.inspector, this.panel);
     try { this.hitboxes = localStorage.getItem(HITBOX_KEY) === "1"; } catch { /* off */ }
     this.hitboxBtn.className = this.hitboxes ? "" : "ghost";
     ctx.canvas.addEventListener("pointerdown", this.down);
@@ -451,9 +458,11 @@ export class Editor implements Mode {
     this.panelShows = shows;
     queueMicrotask(() => { this.body.scrollTop = top; });
     clear(this.body);
+    clear(this.info);
     const name = h("input", { type: "text", value: this.level.name, oninput: () => { this.level.name = name.value; } });
     const id = h("input", { type: "text", value: this.level.id, oninput: () => { this.level.id = id.value.replace(/[^a-z0-9-]/g, "-"); } });
-    this.body.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id)));
+    this.info.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id)));
+    this.inspector.hidden = !this.sel.size;
     if (this.sel.size > 1) {
       this.body.append(
         h("h3", {}, `${this.sel.size} pieces selected`),
@@ -509,6 +518,14 @@ export class Editor implements Mode {
             } }, right ? "right" : "left"))));
         }
       }
+      if (p.type === "slab") {
+        const cb = h("input", { type: "checkbox", checked: !!p.belt, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) p.belt = true; else delete p.belt;
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "Rods instead of a tiled top, carrying the ball toward the far end (local -z); turn it with rot" }, h("label", {}, cb, "treadmill")));
+      }
       if (p.type === "stool") {
         const alongZ = p.slide === "z";
         props.append(h("div", { class: "checks" }, h("label", {}, "slides",
@@ -533,7 +550,7 @@ export class Editor implements Mode {
             ...options.map(([v, text]) => h("option", { selected: v === value }, text))) as HTMLSelectElement;
           return h("label", {}, label, sel);
         };
-        const ends: [RailEnd, string][] = [["top", "top: stands over it, turns down into it"], ["side", "side: goes into its wall"]];
+        const ends: [RailEnd, string][] = [["top", "top: stands over it, turns down into it"], ["side", "side: goes into its wall"], ["end", "end: stops in the air, closed round"]];
         props.append(
           pick("lines", p.lines, [[2, "2 rails"], [1, "1 rail"]], (v) => { p.lines = v; settle(this.level, p); }),
           pick("end a", p.a, ends, (v) => { p.a = v; settle(this.level, p); }),
@@ -542,7 +559,8 @@ export class Editor implements Mode {
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
       if (p.type === "tube" || p.type === "rails") this.body.append(this.tubePanel(p));
-      if (p.type === "slab") this.body.append(this.moverPanel(p));
+      if (p.type === "slab" && !p.belt && !p.twist && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
+      if (p.type === "slab" && !p.belt && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
           h("button", { class: "ghost", onclick: () => this.duplicate() }, "Duplicate"),
@@ -550,6 +568,31 @@ export class Editor implements Mode {
         ),
       );
     }
+  }
+
+  // A slab's shape: for each side, how far its two ends are pushed out (or in, negative) and how
+  // far its middle bows out (or in). All zero is a plain rectangle, and the shape is dropped.
+  private shapePanel(p: Slab): HTMLElement {
+    const panel = h("div", { class: "shape-panel" }, h("h3", {}, "Shape"));
+    const grid = h("div", { class: "shape", title: "Each side: how far its two ends are pushed out (negative pulls them in) and how far its middle bows out (negative bows it in), in units" });
+    grid.append(h("span", {}), h("span", { class: "head" }, "ends"), h("span", { class: "head" }), h("span", { class: "head" }, "bow"));
+    const rows: ["n" | "e" | "s" | "w", "n" | "s" | "e" | "w", "n" | "s" | "e" | "w"][] = [["n", "w", "e"], ["e", "n", "s"], ["s", "w", "e"], ["w", "n", "s"]];
+    for (const [side, a, b] of rows) {
+      grid.append(h("span", { class: "side" }, side));
+      for (const key of [a, b, "bow"] as const) {
+        const input = h("input", { type: "number", step: 0.5, value: p.shape?.[side]?.[key] ?? 0, onchange: () => {
+          const before = JSON.stringify(this.level), v = Math.round(Number(input.value) * 2) / 2;
+          const sh = p.shape ?? (p.shape = {}), s = sh[side] ?? (sh[side] = {});
+          if (v) s[key] = v; else delete s[key];
+          if (!Object.keys(s).length) delete sh[side];
+          if (!Object.keys(sh).length) delete p.shape;
+          this.commit(before);
+        } });
+        grid.append(h("label", { title: key === "bow" ? `how far the ${side} side's middle bows out` : `how far the ${side} side is pushed out at its ${key} end` }, key === "bow" ? "" : key, input));
+      }
+    }
+    panel.append(grid);
+    return panel;
   }
 
   // One button per side of the platform: adds a fence piece along that whole side, which is then
@@ -1250,6 +1293,8 @@ export class Editor implements Mode {
       if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
       const { file } = (await res.json()) as { file: string };
       this.flash(`Saved ${file}`);
+      // Its menu picture too, from the level as the menu will load it.
+      await saveThumb(this.ctx.renderer, validateLevel(cloneLevel(this.level))).catch((err: unknown) => this.flash(`Saved ${file}, but not its thumbnail: ${err instanceof Error ? err.message : String(err)}`, true));
     } catch (err) {
       this.flash(`Save failed: ${err instanceof Error ? err.message : String(err)}`, true);
     }

@@ -50,11 +50,41 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
 }
 
 const LW = 360, LH = 225;
-const FEATURED: PieceType[] = ["tube", "rails", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
+const FEATURED: PieceType[] = ["gate", "tube", "rails", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
 const levelCache = new Map<string, string>();
 
-// Menu card picture: the level's own `thumb` frame if it has one, else a close shot of its most
-// telling piece, first match in FEATURED.
+// Menu card pictures are saved as files in public/thumbs/<id>.png, with index.json naming, for each
+// level, the thumbKey its picture was taken from (dev: the editor's Save and the admin panel's
+// Rebuild thumbnails write them). A card uses its file while the key still matches, and renders the
+// level live (levelThumb) when the file is missing or the level has changed since.
+let saved: Record<string, string> = {};
+export async function loadThumbIndex(): Promise<void> {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}thumbs/index.json`, { cache: "no-store" });
+    if (res.ok) saved = (await res.json()) as Record<string, string>;
+  } catch { /* no saved pictures: every card renders live */ }
+}
+// What a level's picture depends on: its pieces and framing, not its name or visibility.
+export function thumbKey(level: Level): string {
+  const s = JSON.stringify({ thumb: level.thumb ?? null, pieces: level.pieces });
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+export function levelThumbSrc(renderer: THREE.WebGLRenderer, level: Level): string {
+  const key = thumbKey(level);
+  return saved[level.id] === key ? `${import.meta.env.BASE_URL}thumbs/${level.id}.png?v=${key}` : levelThumb(renderer, level);
+}
+// Renders the level's picture and saves it through the dev server.
+export async function saveThumb(renderer: THREE.WebGLRenderer, level: Level): Promise<void> {
+  const key = thumbKey(level);
+  const res = await fetch("/__thumb/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: level.id, key, png: levelThumb(renderer, level) }) });
+  if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
+  saved[level.id] = key;
+}
+
+// A card picture rendered live: the level's own `thumb` frame if it has one, else a close shot of
+// its most telling piece, first match in FEATURED.
 export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string {
   const key = JSON.stringify(level);
   const hit = levelCache.get(key);
@@ -90,6 +120,8 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   renderer.readRenderTargetPixels(rt, 0, 0, LW, LH, pixels);
   renderer.setRenderTarget(prevTarget);
   rt.dispose();
+  // The level was built only for this picture: free its geometry (materials are shared).
+  built.group.traverse((o) => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) o.geometry.dispose(); });
   const canvas = document.createElement("canvas");
   canvas.width = LW; canvas.height = LH;
   const ctx = canvas.getContext("2d")!;

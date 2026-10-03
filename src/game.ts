@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
 import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, makeBall, posePlank, type Built, type SceneEnv } from "./scene.ts";
+import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { clear, fmtTime, h } from "./ui.ts";
@@ -126,6 +126,7 @@ export class Game implements Mode {
     this.shown.set(p.x, p.y, p.z).lerp(this.prevPos, 1 - alpha);
     this.ball.mesh.position.copy(this.shown);
     this.ball.mesh.quaternion.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
+    turnBelts(this.built, sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);

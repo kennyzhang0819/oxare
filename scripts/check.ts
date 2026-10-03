@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, beltRods, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, platformHeightAt, fenceRings, type FencePiece, plankMounts, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES } from "../src/tuning.ts";
@@ -52,6 +52,15 @@ const curveLevel = testLevel({ id: "curve", name: "curve", pieces: [
   { type: "curve", x: 0, y: 0, z: 0, inner: 10, outer: 20, rot: 0, fences: {} },
   { type: "goal", x: 0, y: 0, z: -15, r: 2 },
 ] });
+// A shaped slab, 10 wide where it meets the start slab and 6 where it meets the far one, its sides
+// bowed in a little between: both seams weld, and the ball rolls its length flat.
+const shapedLevel = testLevel({ id: "shaped", name: "shaped", pieces: [
+  { type: "start", x: 0, y: 0, z: 0 },
+  { type: "slab", x: 0, y: 0, z: 0, w: 10, d: 10, rot: 0, fences: {} },
+  { type: "slab", x: 0, y: 0, z: -15, w: 8, d: 20, rot: 0, fences: {}, shape: { e: { n: -1, s: 1, bow: -0.5 }, w: { n: -1, s: 1, bow: -0.5 } } },
+  { type: "slab", x: 0, y: 0, z: -30, w: 6, d: 10, rot: 0, fences: {} },
+  { type: "goal", x: 0, y: 0, z: -30, r: 2 },
+] });
 const teeLevel = testLevel({ id: "tee", name: "tee", pieces: [
   { type: "start", x: 0, y: 0, z: 0 },
   { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 20, rot: 0, fences: {} },
@@ -61,7 +70,7 @@ const teeLevel = testLevel({ id: "tee", name: "tee", pieces: [
 // The floor is checked under fixed physics, so the result is about the floor's shape and not the
 // feel tuning: a faster or lighter ball skims the seam grooves without settling into them.
 const FLOOR_CHECK = { gravity: 5, throttleForce: 9, maxSpeed: 6.5 };
-for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [curveLevel, "arc"]] as const) {
+for (const [level, steer] of [[seamLevel, "line"], [teeLevel, "line"], [shapedLevel, "line"], [curveLevel, "arc"]] as const) {
   Object.assign(TUNING, FLOOR_CHECK);
   const sim = await createSim(level);
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
@@ -267,14 +276,14 @@ for (const [name, x, hits] of [["gate-hit", 0, true], ["gate-past", 2.5, false]]
     { type: "goal", x: 0, y: 0, z: -20, r: 1 },
   ] });
   const sim = await createSim(level, { x, y: 0, z: -2 });
-  const cube = sim.planks.find((pl) => level.pieces[pl.index]!.type === "gate")!.body, rest = cube.translation();
+  const cube = sim.bridges.find((b) => level.pieces[b.index]!.type === "gate")!.planks.at(-1)!, rest = cube.translation();
   for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
   const still = Math.hypot(cube.translation().x - rest.x, cube.translation().z - rest.z);
   let swing = 0, minZ = 0, near = Infinity;
   for (let i = 0; i < 120 * 4; i++) {
     sim.step(1, 0, -1);
-    const c = cube.translation(), com = cube.worldCom(), b = sim.ball.translation();
-    swing = Math.max(swing, Math.hypot(com.x - c.x, com.z - c.z));
+    const com = cube.translation(), b = sim.ball.translation();
+    swing = Math.max(swing, Math.hypot(com.x - rest.x, com.z - rest.z));
     minZ = Math.min(minZ, b.z);
     near = Math.min(near, Math.hypot(b.x - com.x, b.y - com.y, b.z - com.z));
   }
@@ -638,6 +647,50 @@ for (const [name, lines, end, mid] of [
     failed = true;
     console.error(`FAIL rails ends: side end square ${square} (axis y ${c[1]![1].toFixed(3)}), level stub ${sideStub.toFixed(2)}; top end down ${down}, level stub ${topStub.toFixed(2)}`);
   } else console.log(`ok rails ends: side end level into the wall's middle, top end straight down, level stubs ${sideStub.toFixed(2)} and ${topStub.toFixed(2)} long`);
+}
+// A closed (`end`) end catches a coasting ball: off a platform at half throttle onto two rails that
+// run down a little to a free end, let go on the rails, it rolls into the bend and stays on them.
+{
+  const level = testLevel({ id: "closed", name: "closed", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: 0, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "rails", x: 0, y: 0, z: -4, rot: 0, path: [{ x: 0, y: -1, z: -8, bend: 0 }], lines: 2, a: "side", b: "end" },
+    { type: "slab", x: 0, y: 0, z: 30, w: 4, d: 4, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: 30, r: 1 },
+  ] });
+  const sim = await createSim(level);
+  let far = 0;
+  for (let i = 0; i < 120 * 10; i++) { sim.step(sim.ball.translation().z > -9 ? 0.5 : 0, 0, -1); far = Math.min(far, sim.ball.translation().z); }
+  const p = sim.ball.translation();
+  sim.free();
+  if (Math.abs(p.x) > 0.3 || p.y < -1 || p.z < -12.5 || p.z > -10) {
+    failed = true;
+    console.error(`FAIL rails closed end: ball at x ${p.x.toFixed(2)} y ${p.y.toFixed(2)} z ${p.z.toFixed(2)} (furthest z ${far.toFixed(2)}), want it resting at the end near z -12`);
+  } else console.log(`ok rails closed end: the bend holds the ball (rests at z ${p.z.toFixed(2)}, furthest ${far.toFixed(2)})`);
+}
+// A treadmill between two platforms: an 8 deep one holds 7 rods; a ball left on it is carried off
+// onto the platform past its far end (local -z), and full throttle drives a ball back up it.
+{
+  const pieces = [
+    { type: "start", x: 0, y: 0, z: 10 },
+    { type: "slab", x: 0, y: 0, z: 8, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: 0, w: 8, d: 8, rot: 0, belt: true, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -10, r: 1 },
+  ];
+  const ride = async (from: number, throttle: number, fz: number) => {
+    const sim = await createSim(testLevel({ id: "belt", name: "belt", pieces }), { x: 0, y: 0, z: from });
+    for (let i = 0; i < 120 * 8; i++) sim.step(throttle, 0, fz);
+    const p = sim.ball.translation();
+    sim.free();
+    return p;
+  };
+  const rods = beltRods(testLevel({ id: "belt", name: "belt", pieces }).pieces[2] as Slab).z.length;
+  const left = await ride(3, 0, -1), back = await ride(-3, 1, 1);
+  if (rods !== 7 || left.z > -4.2 || Math.abs(left.y - BALL_RADIUS) > 0.05 || back.z < 4.2) {
+    failed = true;
+    console.error(`FAIL treadmill: ${rods} rods (want 7); left on it the ball ended at z ${left.z.toFixed(2)} y ${left.y.toFixed(2)} (want past -4.2), driven back up it at z ${back.z.toFixed(2)} (want past 4.2)`);
+  } else console.log(`ok treadmill: 7 rods; carries a ball off its far end (z ${left.z.toFixed(2)}) and full throttle drives back up it (z ${back.z.toFixed(2)})`);
 }
 // A knock-down plank stands balanced on its hinge until the ball touches it, then falls across
 // the gap, and the ball can roll over it onto the far platform.

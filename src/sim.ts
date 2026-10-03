@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, RAILS_GAUGE, railsContact, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, SEESAW_PIVOT_H, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_H, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, beltRods, isBelt, crateRound, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, isTilted, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpRings, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCylinders, pieceRot, pieceRoll, propLift, pieceSectors, rampHeight, rotXZ, startOf, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -20,8 +20,14 @@ const SEESAW_MASS = 0.5;
 // Stool: as heavy as the ball, so it gives way to a roll but not to a tap, and damped so it stops
 // soon after the ball stops pushing.
 const STOOL_MASS = 1.5, STOOL_DAMPING = 3, STOOL_LIFT = 0.02;
-// Crates, barrels and a gate's hanging cube: one light, slippery, barely bouncy body each.
+// Crates and barrels: one light, slippery, barely bouncy body each; a gate's cube shares the feel.
 const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
+// A gate's chain link: light beside the cube it holds.
+const GATE_LINK_MASS = 0.02;
+// A gate's cube: heavier than a barrel, and dragged by a force against its speed each step (a body's
+// own damping, and impulses, do nothing on a multibody link), which slows its swing and its slide
+// along the bar alike.
+const GATE_CUBE_MASS = 0.5, GATE_CUBE_DRAG = 1;
 // Facets round a rail in the physics; a flat one faces the ball (see railSweep).
 const RAILS_SIDES = 24;
 const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
@@ -30,10 +36,11 @@ const PLANK_GROUPS = (0x0002 << 16) | 0xfffd;
 const FLOOR_GROUPS = (0x0004 << 16) | 0xffff, BARREL_GROUPS = (0x0002 << 16) | 0xfff9;
 // A sliding kicker's wedge, which reaches below the surface it stands on and so never meets the floor.
 const OFF_FLOOR_GROUPS = (0x0008 << 16) | 0xfffb;
-// A gate's arches and bar, its cube, which meets the arches but not the bar, and its chain, which
-// wraps the bar and so meets neither.
+// A gate's parts all meet the arches, the bar and everything else, except: the links never meet each
+// other or the cube (each hangs in the next), and the top link, which hangs round the bar, never
+// meets the bar.
 const ARCH_GROUPS = (0x0010 << 16) | 0xffff, BAR_GROUPS = (0x0040 << 16) | 0xffff;
-const CUBE_GROUPS = (0x0020 << 16) | 0xffbf, CHAIN_GROUPS = (0x0020 << 16) | 0xffaf;
+const CUBE_GROUPS = (0x0080 << 16) | 0xffdf, LINK_GROUPS = (0x0020 << 16) | 0xff5f, TOP_LINK_GROUPS = (0x0020 << 16) | 0xff1f;
 
 export interface SimSpinner { index: number; body: RAPIER.RigidBody; angle: number; speed: number }
 export interface SimCrate { index: number; body: RAPIER.RigidBody }
@@ -57,6 +64,8 @@ export interface Sim {
   movers: SimMover[];
   // Seconds of play stepped so far: the clock moving platforms run their schedules on.
   readonly time: number;
+  // How far every treadmill's rod tops have run along it so far.
+  readonly beltTravel: number;
   // Below this a fallen ball respawns and a fallen crate goes home (respawnY in level.ts).
   readonly respawnY: number;
   step(throttle: number, fx: number, fz: number): void;
@@ -190,10 +199,25 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     }
   };
   const bumpers: RAPIER.Collider[] = [], magnets: RAPIER.Collider[] = [];
+  const rods: { body: RAPIER.RigidBody; axis: { x: number; z: number }; r: number }[] = [];
+  // Each rod's collider and the way its treadmill carries (local -z).
+  const belts = new Map<number, { x: number; z: number }>();
+  let beltSpeed = NaN, beltTravel = 0;
   level.pieces.forEach((p, index) => {
     const rot = pieceRot(p);
     riding = rides.get(index) ?? moverOf.get(index);
     rolled = rollFrame(p);
+    if (isBelt(p) && !isTilted(p) && !isMoving(p)) {
+      // Each rod spins on its own kinematic body.
+      const b = beltRods(p), q = yQuat(rot), axis = rotXZ(1, 0, rot);
+      for (const z of b.z) {
+        const o = rotXZ(0, z, rot);
+        const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicVelocityBased().setTranslation(p.x + o.x, p.y - PLATFORM_THICKNESS / 2, p.z + o.z).setRotation(qmul(q, Z90)));
+        const c = world.createCollider(RAPIER.ColliderDesc.cylinder(b.half, b.r).setFriction(1), body);
+        rods.push({ body, axis, r: b.r });
+        belts.set(c.handle, { x: axis.z, z: -axis.x });
+      }
+    }
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
       // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
@@ -221,13 +245,14 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type === "fence") fenceColliders(p);
     if (p.type === "rails") {
       // One welded mesh per rail, with a flat facet turned to where the ball touches it.
-      const rings = railsRingsWorld(p, level);
-      for (const off of p.lines === 1 ? [0] : [-RAILS_GAUGE / 2, RAILS_GAUGE / 2]) {
+      const { lines, caps } = railsLines(p, railsRingsWorld(p, level));
+      for (const { rings, off } of lines) {
         const m = railSweep(rings, off, RAIL_R, RAILS_SIDES, railsContact(p.lines));
         fixed(
           RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(1),
         );
       }
+      for (const c of caps) fixed(RAPIER.ColliderDesc.ball(RAIL_R).setTranslation(...c).setFriction(1));
     }
     for (const c of pieceCylinders(p)) {
       const o = rotXZ(c.x ?? 0, c.z ?? 0, rot);
@@ -297,7 +322,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z).setRotation(home.q).setCcdEnabled(true).setGravityScale(TUNING.propGravity).setCanSleep(false),
     );
-    const cr = p.type === "crate" ? propRound(p.w, p.h, p.d) : propRound(2 * p.r, p.h, 2 * p.r);
+    const cr = p.type === "crate" ? crateRound(p.w, p.h, p.d) : propRound(2 * p.r, p.h, 2 * p.r);
     const desc = p.type === "crate" ? RAPIER.ColliderDesc.roundCuboid(p.w / 2 - cr, p.h / 2 - cr, p.d / 2 - cr, cr) : RAPIER.ColliderDesc.roundCylinder(p.h / 2 - cr, p.r - cr, cr);
     world.createCollider(desc.setMass(PROP_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION), body);
     crates.push({ index, body });
@@ -306,6 +331,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // A bridge is a chain of plank bodies on revolute hinges, its two ends hinged to fixed
   // anchors. Bodies are placed in the rest pose from level.ts so every joint starts satisfied.
   const bridges: SimBridge[] = [];
+  // Gates' cubes, dragged each step (see GATE_CUBE_DRAG).
+  const gateCubes: RAPIER.RigidBody[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "bridge") return;
     const rot = pieceRot(p), yaw = yQuat(rot);
@@ -391,7 +418,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // the board passes between them.
   level.pieces.forEach((p, index) => {
     if (p.type !== "seesaw") return;
-    const yaw = yQuat(p.rot), H = p.y + SEESAW_PIVOT_H;
+    const yaw = yQuat(p.rot), H = p.y + seesawPivot(p), postH = seesawPostH(p);
     const pivot = anchorBody(index, { x: p.x, y: H, z: p.z }, yaw), at = shifted(index, { x: p.x, y: H, z: p.z });
     riding = rides.get(index);
     const body = world.createRigidBody(
@@ -413,8 +440,8 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       );
       const o = rotXZ(side * (p.w / 2 + SEESAW_POST_W / 2 + 0.05), 0, p.rot), R = SEESAW_POST_R;
       fixed(
-        RAPIER.ColliderDesc.roundCuboid(SEESAW_POST_W / 2 - R, SEESAW_POST_H / 2 - R, SEESAW_POST_D / 2 - R, R)
-          .setTranslation(p.x + o.x, p.y + SEESAW_POST_H / 2, p.z + o.z).setRotation(yaw).setFriction(0.5),
+        RAPIER.ColliderDesc.roundCuboid(SEESAW_POST_W / 2 - R, postH / 2 - R, SEESAW_POST_D / 2 - R, R)
+          .setTranslation(p.x + o.x, p.y + postH / 2, p.z + o.z).setRotation(yaw).setFriction(0.5),
       );
     }
     riding = undefined;
@@ -423,27 +450,61 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     carryWhileFrozen(index, pl);
   });
 
-  // A gate's chain and cube are one rigid body, its origin on the pivot on the bar's axis, hung there
-  // on a ball joint: the ball knocks the cube swinging like a barrel, and a hard knock stops it
-  // against an arch's beam.
+  // A gate's chain is a body per link, each on an exact joint (multibody, which cannot drift apart
+  // under a push) to the next, the top one to a runner on the bar and the cube to the bottom one.
+  // A joint bends any way but never twists about the chain, so neighbouring links stay crossed as
+  // they hang in each other: every body keeps the gate's turn, the quarter turn of every other link
+  // being only in its shape. The ball knocks the cube swinging; a hard knock stops it
+  // against an arch's beam. It goes in `bridges`, links first and the cube last, each body drawn by
+  // its own group.
   level.pieces.forEach((p, index) => {
     if (p.type !== "gate") return;
-    const yaw = yQuat(p.rot), hang = gateHang(p), C = GATE_CUBE, r = propRound(C, C, C);
-    const pivot = anchorBody(index, { x: p.x, y: p.y + hang.pivot, z: p.z }, yaw), at = shifted(index, { x: p.x, y: p.y + hang.pivot, z: p.z });
-    const body = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setRotation(yaw)
-        .setGravityScale(TUNING.propGravity).setCcdEnabled(true).setCanSleep(false),
-    );
+    const yaw = yQuat(p.rot), hang = gateHang(p), C = GATE_CUBE, r = propRound(C, C, C), links = gateLinks(p);
+    const pivot = anchorBody(index, { x: p.x, y: p.y + hang.pivot, z: p.z }, yaw);
+    const make = (y: number) => {
+      const at = shifted(index, { x: p.x, y: p.y + hang.pivot + y, z: p.z });
+      return world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setRotation(yaw).setGravityScale(TUNING.propGravity).setCcdEnabled(true).setCanSleep(false),
+      );
+    };
+    const half = GATE_LINK.straight + GATE_CHAIN_R;
+    const bodies = links.map((y, k) => {
+      const b = make(y);
+      world.createCollider(RAPIER.ColliderDesc.capsule(half - GATE_CHAIN_R, GATE_CHAIN_R).setMass(GATE_LINK_MASS).setFriction(0.3).setCollisionGroups(k ? LINK_GROUPS : TOP_LINK_GROUPS), b);
+      return b;
+    });
+    const cube = make(hang.cube - hang.pivot);
+    gateCubes.push(cube);
     world.createCollider(
-      RAPIER.ColliderDesc.roundCuboid(C / 2 - r, C / 2 - r, C / 2 - r, r).setTranslation(0, hang.cube - hang.pivot, 0).setMass(PROP_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION).setCollisionGroups(CUBE_GROUPS), body,
+      RAPIER.ColliderDesc.roundCuboid(C / 2 - r, C / 2 - r, C / 2 - r, r).setMass(GATE_CUBE_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION).setCollisionGroups(CUBE_GROUPS), cube,
     );
-    // The chain as one rod as thick as a link is wide, from the top link's end down to the cube.
-    const top = gateLinks(p)[0]! + GATE_LINK.stretch * GATE_CHAIN_R, len = top + hang.chain;
-    world.createCollider(
-      RAPIER.ColliderDesc.capsule(len / 2 - GATE_CHAIN_R, GATE_CHAIN_R).setTranslation(0, top - len / 2, 0).setMass(0.01).setFriction(0.3).setCollisionGroups(CHAIN_GROUPS), body,
+    // Each joint at the point between the two it joins, as heights from the pivot: a hinge across x
+    // into a massless knuckle there and a hinge across z out of it. A multibody joint can't free just
+    // two turns (Rapier panics), so two one-turn hinges make the bend-any-way, never-twist joint.
+    const join = (a: RAPIER.RigidBody, ay: number, b: RAPIER.RigidBody, by: number, at: number) => {
+      const w = shifted(index, { x: p.x, y: p.y + hang.pivot + at, z: p.z }), O = { x: 0, y: 0, z: 0 };
+      const knuckle = world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic().setTranslation(w.x, w.y, w.z).setRotation(yaw).setCanSleep(false)
+          .setAdditionalMassProperties(1e-3, O, { x: 1e-5, y: 1e-5, z: 1e-5 }, { x: 0, y: 0, z: 0, w: 1 }),
+      );
+      world.createMultibodyJoint(RAPIER.JointData.revolute({ x: 0, y: at - ay, z: 0 }, O, { x: 1, y: 0, z: 0 }), a, knuckle, true).setContactsEnabled(false);
+      world.createMultibodyJoint(RAPIER.JointData.revolute(O, { x: 0, y: at - by, z: 0 }, { x: 0, y: 0, z: 1 }), knuckle, b, true).setContactsEnabled(false);
+    };
+    // The top link rides the bar on a runner: an exact slide along it, stopped a link's width short
+    // of each beam; only the cube's drag slows it, so a push carries the chain along by itself.
+    const at = shifted(index, { x: p.x, y: p.y + hang.pivot, z: p.z }), reach = p.d / 2 - SUPPORT_W / 2 - GATE_CHAIN_R;
+    const runner = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setRotation(yaw).setCanSleep(false)
+        .setAdditionalMassProperties(GATE_LINK_MASS, { x: 0, y: 0, z: 0 }, { x: 1e-3, y: 1e-3, z: 1e-3 }, { x: 0, y: 0, z: 0, w: 1 }),
     );
-    world.createImpulseJoint(RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }), pivot, body, true).setContactsEnabled(false);
-    planks.push({ index, body });
+    const slide = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+    slide.limitsEnabled = true;
+    slide.limits = [-reach, reach];
+    world.createMultibodyJoint(slide, pivot, runner, true);
+    join(runner, 0, bodies[0]!, links[0]!, 0);
+    for (let k = 0; k + 1 < links.length; k++) join(bodies[k]!, links[k]!, bodies[k + 1]!, links[k + 1]!, (links[k]! + links[k + 1]!) / 2);
+    join(bodies[links.length - 1]!, links[links.length - 1]!, cube, hang.cube - hang.pivot, -hang.chain);
+    bridges.push({ index, planks: [...bodies, cube] });
   });
 
   // A stool slides along its track and nothing else: an exact prismatic link (a multibody joint,
@@ -515,7 +576,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // start a little outside the skin so their flat inner faces never narrow the bore.
   // A ring of rail (a tube mouth's, or a hoop): the drawn torus as it is.
   const railRing = (m: { c: [number, number, number]; d: [number, number, number] }) => {
-    const t = ringMesh(m.c, m.d, RING_R, RAIL_R, RING_SIDES, RING_SEGMENTS);
+    const t = ringMesh(m.c, m.d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS);
     fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setFriction(1));
   };
   const tubes: SimTube[] = [];
@@ -576,6 +637,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   );
   const ballCollider = world.createCollider(RAPIER.ColliderDesc.ball(BALL_RADIUS).setMass(1).setFriction(1).setRestitution(0.05), ball);
   const down = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
+  // The way the treadmill under the ball carries, if it is touching one's rods.
+  const beltUnder = (): { x: number; z: number } | null => {
+    let dir: { x: number; z: number } | null = null;
+    if (belts.size) world.contactPairsWith(ballCollider, (other) => {
+      const d = belts.get(other.handle);
+      if (d && !dir) world.contactPair(ballCollider, other, (m) => { for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) < 0.02) dir = d; });
+    });
+    return dir;
+  };
 
   return {
     world,
@@ -588,6 +658,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     movers,
     riders: rides,
     get time() { return time; },
+    get beltTravel() { return beltTravel; },
     respawnY: fallY,
     step(throttle, fx, fz) {
       props ??= [...crates.map((c) => c.body), ...bridges.flatMap((b) => b.planks), ...planks.map((p) => p.body)];
@@ -636,8 +707,13 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         if (rode) {
           const a = moverAt(rode.piece, time), b = moverAt(rode.piece, time + STEP);
           carry = [(b.x - a.x) / STEP, (b.y - a.y) / STEP, (b.z - a.z) / STEP];
-          extra = [carry[0] * TUNING.linearDamping, carry[1] * TUNING.linearDamping, carry[2] * TUNING.linearDamping];
+        } else {
+          // On a treadmill the rods' tops are the ground, moving: the same give-back makes the ball
+          // ride at their speed without spinning, where friction alone would leave it at 2/7 of it.
+          const belt = beltUnder();
+          if (belt) carry = [belt.x * TUNING.beltSpeed, 0, belt.z * TUNING.beltSpeed];
         }
+        extra = [carry[0] * TUNING.linearDamping, carry[1] * TUNING.linearDamping, carry[2] * TUNING.linearDamping];
         if (hit && TUNING.climbAssist > 0 && throttle !== 0 && hit.normal.y > 0.2 && hit.normal.y < 0.999) {
           // Gravity's pull along the slope: g minus its part into the surface.
           const n = hit.normal, gn = -TUNING.gravity * n.y;
@@ -702,6 +778,17 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         s.angle += s.speed * STEP;
         body_rot(s.body, s.angle);
       }
+      for (const c of gateCubes) {
+        const v = c.linvel(), k = -GATE_CUBE_DRAG * c.mass();
+        c.resetForces(false);
+        c.addForce({ x: v.x * k, y: v.y * k, z: v.z * k }, true);
+      }
+      // Treadmill rods turn backward about their local x, so their tops run toward local -z.
+      if (beltSpeed !== TUNING.beltSpeed) {
+        beltSpeed = TUNING.beltSpeed;
+        for (const r of rods) { const w = -beltSpeed / r.r; r.body.setAngvel({ x: r.axis.x * w, y: 0, z: r.axis.z * w }, true); }
+      }
+      beltTravel += beltSpeed * STEP;
       const v0 = ball.linvel();
       world.step();
       time += STEP;

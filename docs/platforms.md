@@ -42,9 +42,22 @@ The ball rolls on one welded triangle mesh built from every platform top (`floor
 - An open edge (nothing next to it, including a hole's edge) has the same rounded lip as the visuals, so the ball rolls off it.
 - Where two pieces meet, the lip is only a tiny dip (`PLATFORM_SEAM_DROP`, 0.015) so the ball keeps its speed. The visuals still show the full groove.
 - Under the top there is a second mesh with the side walls and underside, so a ball below or beside a platform hits it.
+- A treadmill is in the floor as its frame only: a slab top with its opening cut out, the opening's edge dropping square with no lip. Its rods are their own spinning bodies.
 - Both meshes are zero-thickness shells that only push from their front face, so every platform is also filled with solid convex hulls from its underside to 0.03 below its surface, chamfered under the lip. The ball never touches them while rolling, but if it ever reaches the corner where a wall meets the lip, the solid pushes it back out instead of letting it in. `check.ts` fires balls at raised slab, holed slab, curve and ramp edges to prove nothing gets inside.
 
 `npm run check` checks that seams stay shallow, curves stay flat, and that the ball falls through holes and notches but rolls past them.
+
+## Shaped slabs
+
+A slab with `shape` has its sides moved: each side's two ends pushed out or pulled in, and its middle bowed out or in on a smooth curve (a quadratic through its ends). A bowed side is sampled about every 1 unit (`SHAPE_STEP`) into a polygon, and from there a shaped slab is handled exactly like a slab carved by holes: the drawn mesh, the lip, the physics floor and the fences all take the polygon. So:
+
+- a straight side (no bow) is one edge, and welds to a neighbour whose edge lands on it, so a slab can run 6 wide into 10 wide and join a 6-wide platform at one end and a 10-wide one at the other
+- a bowed side is an open edge with the full lip, however close another platform comes
+- the footprint used for overlaps, snapping and `surfaceAt` is the polygon's triangles
+- a fence on a bowed side follows it, bending at every sample
+- an inward bow is concave, so its solid is built per triangle like a holed slab's
+
+A shaped slab is otherwise a plain slab: no tilt, roll, twist, treadmill or movement, and every end must stay at least 1 across.
 
 ## Twisted slabs
 

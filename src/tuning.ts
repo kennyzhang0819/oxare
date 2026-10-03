@@ -15,16 +15,18 @@ export const TUNING = {
   camHeight: 2,
   camBallGap: 0.9,
   // Share of the ball's weight a steep wall can carry while the ball is pressed against it in the air.
-  wallGrip: 0.5,
+  wallGrip: 1,
   // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
   propGravity: 0.5,
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
   bumperBounce: 0.8,
-  bumperKick: 5,
+  bumperKick: 2,
   // Magnet: its pull, fading to nothing at its reach (compare throttleForce), but never more than
   // magnetHold of throttleForce, so full throttle away always escapes.
   magnetForce: 21,
   magnetHold: 0.8,
+  // Treadmill: how fast its rods' tops run, and so how fast a ball left on it rides along.
+  beltSpeed: 3,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -50,6 +52,7 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   bumperKick: [0, 15, 0.5],
   magnetForce: [0, 30, 0.5],
   magnetHold: [0, 0.9, 0.05],
+  beltSpeed: [0, 25, 0.5],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

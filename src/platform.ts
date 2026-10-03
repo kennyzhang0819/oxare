@@ -11,14 +11,17 @@ export interface PlatformBend { at(u: number, z: number): XZ; knots: number[] }
 
 // See docs/platforms.md. Material groups: 0 top/bottom, 1 walls, 2 lips, 3 borders; scene.ts indexes materials by them.
 // `twist`, given, rolls each cross-section about the top's centre line (x = 0, y = 0) by twist(z) radians.
-export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = [], twist?: (z: number) => number): PlatformMesh {
+// `open` leaves out the tiled top and underside inside their square corners (a treadmill's opening, BELT_FRAME in).
+// `outline`, given, replaces the L x W rectangle with that shape (a shaped slab's), centred like it.
+export function platformMesh(L: number, W: number, thick: number, bevel: { inset: number; drop: number; border: number }, tile: number, bend?: PlatformBend, warp?: (t: number) => number, cuts: XZ[][] = [], twist?: (z: number) => number, open = false, outline?: XZ[]): PlatformMesh {
   const A = L / 2, B = W / 2;
   const by = Math.max(0.01, Math.min(bevel.drop, thick / 2 - 0.01));
   const K = 4, KB = 4;
   const y1 = 0, y0 = -thick;
   const step = twist ? 0.5 : bend || warp ? 1 : 2;
-  const rect: XZ[] = [[-A, -B], [-A, B], [A, B], [A, -B]];
-  const region = cuts.length ? cutRegion(rect, cuts) : [[rect]];
+  const rect: XZ[] = outline ?? [[-A, -B], [-A, B], [A, B], [A, -B]];
+  const shaped = !!outline;
+  const region = cuts.length || shaped ? cutRegion(rect, cuts) : [[rect]];
 
   const pos: number[] = [], uvKind: number[] = [], perim: number[] = [], out: number[] = [], idx: number[] = [];
   const P = (i: number, k: number) => pos[i * 3 + k] ?? 0;
@@ -119,7 +122,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   };
 
   const parts = region.map((loops) => {
-    const gaps = cuts.length ? edgeGaps(loops) : loops.map((q) => q.map(() => Infinity));
+    const gaps = cuts.length || shaped ? edgeGaps(loops) : loops.map((q) => q.map(() => Infinity));
     return loops.map((loop, k) => {
       const sc = gaps[k]!.map((w) => Math.max(0.05, Math.min(1, (w - 0.02) / (2 * (b0 + g0)))));
       return { loop, sc, fc: fitCorners(loop, sc) };
@@ -149,11 +152,12 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   const faces = (y: number, dir: 1 | -1) => {
     for (const part of parts) {
       const o = sz.b + sz.g, loops = part.map((l) => l.loop);
-      if (!cuts.length) {
+      if (!cuts.length && !shaped) {
         const rf = sz.re - sz.g, ga = A - o - rf, gb = B - o - rf;
         const nsx = Math.max(1, Math.ceil(L / step)), nsz = Math.max(1, Math.ceil(W / (twist ? step : 2)));
         const { sc, fc } = part[0]!;
         if (rf > 0) { const a = ringAt(loops[0]!, o, sz, sc, fc), c = ringAt(loops[0]!, o + rf, sz, sc, fc, true); strip(addRing(a, y, 0), addRing(c, y, 0), a.pts.length, dir); }
+        if (open) continue;
         const gridBase = pos.length / 3;
         for (let j = 0; j <= nsz; j++) for (let i = 0; i <= nsx; i++) addPoint(-ga + ((2 * ga) * i) / nsx, y, -gb + ((2 * gb) * j) / nsz);
         for (let j = 0; j < nsz; j++) for (let i = 0; i < nsx; i++) {
