@@ -572,7 +572,7 @@ export class Editor implements Mode {
         props.append(h("label", {}, "route", loop));
       }
       this.body.append(h("h3", {}, `${p.type} #${index}`), props);
-      if (p.type === "tube" || p.type === "rails" || p.type === "bean") this.body.append(this.tubePanel(p));
+      if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") this.body.append(this.tubePanel(p));
       if (p.type === "slab" && !p.belt && !p.twist && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
       if (p.type === "slab" && !p.belt && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
