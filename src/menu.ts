@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { cloneLevel, WORLDS, worldOf, type Level, type World } from "./level.ts";
+import { cloneLevel, levelCode, WORLDS, worldOf, type Level, type World } from "./level.ts";
 import { LEVELS } from "./levels/index.ts";
 import { blankLevel } from "./editor.ts";
 import { loadProgress, playerSettings } from "./game.ts";
@@ -135,7 +135,7 @@ export class Menu implements Mode {
           const l = LEVELS[i]!;
           return h("button", { class: v === "grid" ? "level-card" : "level-row", onclick: () => opts.onPlay(i) },
             h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "", loading: "lazy" }),
-            h("span", { class: "name" }, `${n}. ${l.name}`),
+            h("span", { class: "name" }, `${levelCode(l, n)}. ${l.name}`),
             h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : "--:--.--"),
           );
         } });
@@ -242,7 +242,7 @@ export class Menu implements Mode {
         h("button", { class: "menu-btn small", title: "Re-render and save every level's menu picture", onclick: (e: Event) => void rebuildThumbs(e.currentTarget as HTMLButtonElement) }, "Rebuild thumbs"),
       ],
       levels: (w) => LEVELS.flatMap((l, i) => (worldOf(l) === w ? [i] : [])),
-      item: (i, n, v) => { const l = LEVELS[i]!; return card(l, `${n}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i), v); },
+      item: (i, n, v) => { const l = LEVELS[i]!; return card(l, `${levelCode(l, n)}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i), v); },
     });
     this.turnPage = select.turn;
     ctx.overlay.append(h("div", { class: "menu" }, select.el));

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs, saveThumb } from "./thumbs.ts";
@@ -24,7 +24,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "stool", "bean", "crate", "barrel", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -39,12 +39,13 @@ function paletteGroups(): [string, PieceType[]][] {
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
   slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15], ["curl", 15]],
-  curve: [["inner", 0.5], ["outer", 0.5], ["rot", 15], ["roll", 15]],
+  curve: [["inner", 0.5], ["outer", 0.5], ["radius", 0.5], ["rot", 15], ["roll", 15]],
   ramp: [["w", 0.5], ["d", 0.5], ["rot", 15], ["rise", 1]],
   bridge: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   rails: [["rot", 15]],
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
+  board: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 5], ["roll", 5]],
   support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
   gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
@@ -52,6 +53,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   blockade: [["rot", 15], ["tilt", 15], ["roll", 15]],
   barrier: [["rot", 15], ["tilt", 15], ["roll", 15]],
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  cube: [["rot", 15], ["tilt", 15], ["roll", 15]],
   barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
   stool: [["w", 0.5], ["h", 0.1], ["d", 0.5], ["rot", 15], ["track", 1], ["offset", 0.5]],
   bean: [["rot", 15], ["turn", 15], ["len", 0.1], ["speed", 0.5], ["wait", 0.5], ["offset", 0.5]],
@@ -168,6 +170,19 @@ function settle(level: Level, p: Piece) {
   if (pieceRoll(p) % 360 !== 0 || pieceTilt(p) % 360 !== 0 || holeTurned(p)) return;
   const y = surfaceAt(level, p.x, p.z);
   if (y !== null) p.y = y;
+}
+
+// R: turn the selection `deg` about the vertical. One piece turns about its own origin; several turn as one rigid
+// group about their middle, each moved round it and turned the same, so they keep their places to each other.
+// The middle is rounded to the coarsest grid among them, so each piece lands back on its own grid.
+function turnSelection(pieces: Piece[], deg: number) {
+  if (pieces.length > 1) {
+    const g = Math.max(SNAP.platform, pieces.some(isStructure) ? SNAP.structure : 0);
+    const mid = (vs: number[]) => Math.round((Math.min(...vs) + Math.max(...vs)) / 2 / g) * g;
+    const cx = mid(pieces.map((p) => p.x)), cz = mid(pieces.map((p) => p.z));
+    for (const p of pieces) { const o = rotXZ(p.x - cx, p.z - cz, deg); p.x = r3(cx + o.x); p.z = r3(cz + o.z); }
+  }
+  for (const p of pieces) if ("rot" in p || ROLLED_PROPS.includes(p.type)) { const q = p as { rot?: number }; q.rot = ((q.rot ?? 0) + deg + 360) % 360; }
 }
 
 // Hang a side plank on the nearest open platform edge: on the edge line at the platform's top,
@@ -307,6 +322,8 @@ export class Editor implements Mode {
   private pressed = false;
   private onPointer = (e: PointerEvent) => { this.pressed = e.buttons !== 0; };
   private raf = 0;
+  ready: Promise<void>;
+  private drawn!: () => void;
   private panel: HTMLElement;
   private info = h("div", { class: "info" });
   private body = h("div", { class: "body" });
@@ -331,6 +348,7 @@ export class Editor implements Mode {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
+    this.ready = new Promise((r) => { this.drawn = r; });
     this.env = createScene(FOG_EDITOR);
     this.scene = this.env.scene;
     this.ground.position.y = gridY;
@@ -342,7 +360,7 @@ export class Editor implements Mode {
     this.scene.add(this.ghost);
     this.scene.add(this.handles);
     this.controls = new OrbitControls(this.camera, ctx.canvas);
-    this.controls.enableDamping = true;
+    this.controls.enableDamping = false;
     // Left is ours (select, marquee, drag); middle pans; right-drag orbits and a right click deletes.
     this.controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
     const s = level.pieces.find((p) => p.type === "start") ?? { x: 0, y: 0, z: 0 };
@@ -392,6 +410,7 @@ export class Editor implements Mode {
     this.pan(dt);
     this.controls.update();
     this.env.render(this.ctx.renderer, this.camera);
+    this.drawn();
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -421,7 +440,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
@@ -434,7 +453,7 @@ export class Editor implements Mode {
 
   private refresh() {
     this.scene.remove(this.built.group);
-    this.built = buildLevel(this.level, true);
+    this.built = buildLevel(this.level, true, this.built);
     markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
     this.scene.add(this.built.group);
     fitSun(this.env.sun, this.built);
@@ -491,8 +510,16 @@ export class Editor implements Mode {
     this.info.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id)));
     this.inspector.hidden = !this.sel.size;
     if (this.sel.size > 1) {
+      const raise = (dy: number) => { const before = JSON.stringify(this.level); for (const q of this.selectedPieces()) q.y = r3(q.y + dy); this.commit(before); };
+      const by = h("input", { type: "number", step: HEIGHT_STEP, value: 0, onchange: () => { const dy = Number(by.value); if (dy) raise(dy); } }) as HTMLInputElement;
       this.body.append(
         h("h3", {}, `${this.sel.size} pieces selected`),
+        h("div", { class: "props" }, h("label", { title: "Raise every selected piece by this much together (negative lowers); E / Q step a layer" }, "raise by", by)),
+        h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
+          h("button", { class: "ghost", title: "Lower them all a layer (Q)", onclick: () => raise(-LAYER_H) }, "▼ layer"),
+          h("button", { class: "ghost", title: "Raise them all a layer (E)", onclick: () => raise(LAYER_H) }, "▲ layer"),
+          h("button", { class: "ghost", title: "Turn them 90° together, as one group about their middle (R)", onclick: () => { const before = JSON.stringify(this.level); turnSelection(this.selectedPieces(), 90); this.commit(before); } }, "⟳ 90°"),
+        ),
         h("div", { class: "row", style: "display:flex;gap:6px;margin-top:6px" },
           h("button", { class: "ghost", onclick: () => this.duplicate() }, "Duplicate"),
           h("button", { class: "ghost", onclick: () => this.remove() }, "Delete"),
@@ -506,6 +533,16 @@ export class Editor implements Mode {
       const props = h("div", { class: "props" });
       const rec = p as unknown as Record<string, number>;
       const field = (key: string, step: number) => {
+        if (key === "radius" && p.type === "curve") {
+          const w = p.outer - p.inner;
+          const input = h("input", { type: "number", step: SNAP.platform, value: (p.inner + p.outer) / 2, onchange: () => {
+            const before = JSON.stringify(this.level);
+            p.inner = Math.max(0, to(SNAP.platform)(Number(input.value) - w / 2));
+            p.outer = p.inner + w;
+            this.commit(before);
+          } });
+          return h("label", { title: "The centre line's radius: moves inner and outer together, keeping the lane as wide as it is" }, "radius", input);
+        }
         const grid = snapsToPlatform(p.type, key) ? SNAP.platform : 0;
         const input = h("input", { type: "number", step: grid || step, value: rec[key] ?? 0,
           onchange: () => {
@@ -518,6 +555,8 @@ export class Editor implements Mode {
       const step = isStructure(p) ? SNAP.structure : SNAP.platform;
       props.append(field("x", step), field("y", HEIGHT_STEP), field("z", step));
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
+      // How far a plank's hinge is raised; a side plank hangs on its wall instead.
+      if (p.type === "plank" && !p.side) props.append(field("base", 0.1));
       if (isPlatform(p) && !isTilted(p)) props.append(this.fencePanel(p));
       if (p.type === "plank") {
         const cb = h("input", { type: "checkbox", checked: !!p.side, onchange: () => {
@@ -547,13 +586,14 @@ export class Editor implements Mode {
         if (p.top !== undefined) props.append(field("top", 0.1));
       }
       if (p.type === "curve") {
-        const sel = h("select", { title: "A corner turns 90 degrees; a C turns 180, two corners in one piece with no seam, its far end coming back level with the near one", onchange: () => {
+        const sel = h("select", { title: "A corner turns 90 degrees; a C turns 180, two corners in one piece with no seam, its far end coming back level with the near one; a 3/4 turns 270, its far end heading back across the near end's line (inner at least 4)", onchange: () => {
           const before = JSON.stringify(this.level);
-          if (sel.value === "180") p.sweep = 180; else delete p.sweep;
+          if (sel.value === "90") delete p.sweep; else p.sweep = Number(sel.value);
           this.commit(before);
         } },
           h("option", { value: "90", selected: curveSweep(p) === 90 }, "corner: 90°"),
           h("option", { value: "180", selected: curveSweep(p) === 180 }, "C: 180°"),
+          h("option", { value: "270", selected: curveSweep(p) === 270 }, "3/4: 270°"),
         ) as HTMLSelectElement;
         props.append(h("label", {}, "turn", sel));
         const at = h("select", { title: "The end a rolled curve turns about: that end stays put and banks; the other end swings round", onchange: () => {
@@ -592,13 +632,25 @@ export class Editor implements Mode {
             this.commit(before);
           } }, alongZ ? "front ↕ back" : "left ↔ right"))));
       }
-      if (p.type === "plank" || p.type === "seesaw") {
+      if (p.type === "plank" || p.type === "seesaw" || p.type === "board") {
         const cb = h("input", { type: "checkbox", checked: !!p.freeze, onchange: () => {
           const before = JSON.stringify(this.level);
           if (cb.checked) p.freeze = true; else delete p.freeze;
           this.commit(before);
         } });
         props.append(h("div", { class: "checks", title: "Hold the start pose until something touches it; unticked, physics runs from the start" }, h("label", {}, cb, "freeze until touched")));
+      }
+      if (p.type === "seesaw") {
+        const sel = h("select", { title: "Which end weight can push down. One end only: the board stops at level, so weight on the other end never tips it (the marker shows the end that dips)", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (sel.value) p.dips = sel.value as "+z" | "-z"; else delete p.dips;
+          this.commit(before);
+        } },
+          h("option", { value: "", selected: !p.dips }, "either end"),
+          h("option", { value: "+z", selected: p.dips === "+z" }, "+z end only"),
+          h("option", { value: "-z", selected: p.dips === "-z" }, "-z end only"),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "dips", sel));
       }
       if (p.type === "rails") {
         const pick = <T extends string | number>(label: string, value: T, options: [T, string][], set: (v: T) => void) => {
@@ -729,7 +781,8 @@ export class Editor implements Mode {
     const nodes = tubeWorld(p);
     fn(nodes, p);
     setTubeWorld(p, nodes);
-    settle(this.level, p);
+    // A tube's nodes stay where they are put: settle would drop its first mouth and shift the whole tube with it.
+    if (p.type !== "tube") settle(this.level, p);
     fitMids(p);
     this.commit(before);
   }
@@ -794,8 +847,14 @@ export class Editor implements Mode {
       const last = k === p.path.length, end = k === 0 || last;
       const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.mid = -1; this.refresh(); } } },
         h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
-      if (k === 0) row.append(h("span", { class: "hint" }, `${p.type === "tube" ? "mouth" : "start"} at x y z`));
-      else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
+      if (k === 0) {
+        // World x y z, like the piece's own fields, but moving this end alone.
+        const first = (axis: "x" | "y" | "z", step: number) => {
+          const input = h("input", { type: "number", step, value: p[axis], onchange: () => this.editTube((ns) => { ns[0]![axis] = r3(Number(input.value)); }) }) as HTMLInputElement;
+          return h("label", { title: `Moves this ${p.type === "tube" ? "mouth" : "end"} alone; the piece's ${axis} above moves the whole ${p.type}` }, axis, input);
+        };
+        row.append(first("x", SNAP.platform), first("y", HEIGHT_STEP), first("z", SNAP.platform));
+      } else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
       if (!end && !smoothPath) {
         const smooth = n.bend > 0;
         row.append(
@@ -1124,7 +1183,7 @@ export class Editor implements Mode {
       case "ArrowDown": nudge(0, 1); break;
       case "PageUp": case "KeyE": for (const p of pieces) p.y += rise; break;
       case "PageDown": case "KeyQ": for (const p of pieces) p.y -= rise; break;
-      case "KeyR": for (const p of pieces) if ("rot" in p || ROLLED_PROPS.includes(p.type)) { const q = p as { rot?: number }; q.rot = ((q.rot ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; } break;
+      case "KeyR": turnSelection(pieces, e.shiftKey ? -90 : 90); break;
       case "KeyT": for (const p of pieces) if (p.type === "slab") p.tilt = (p.tilt + (e.shiftKey ? -90 : 90) + 360) % 360; else if (p.type === "hole") p.tilt = ((p.tilt ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump" || ROLLED_PROPS.includes(p.type)) { const q = p as { tilt?: number }; q.tilt = ((q.tilt ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
       case "KeyM": for (const p of pieces) if (MIRRORED.includes(p.type)) { if (p.mirror) delete p.mirror; else p.mirror = true; settle(this.level, p); } break;
       case "KeyY": for (const p of pieces) if (p.type === "support") p.roll = supportOver(p) ? 0 : 180; else if (p.type === "slab" || p.type === "curve" || p.type === "hole") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -90 : 90) + 360) % 360; else if ((p.type === "kicker" && !isSliding(p)) || p.type === "jump") p.roll = ((p.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; else if (ROLLED_PROPS.includes(p.type)) { const q = p as { roll?: number }; q.roll = ((q.roll ?? 0) + (e.shiftKey ? -15 : 15) + 360) % 360; } break;
@@ -1269,7 +1328,7 @@ export class Editor implements Mode {
       q.x = snapFor(q)(s0.x + dx); q.z = snapFor(q)(s0.z + dz);
       settle(this.level, q);
       const g = this.built.pieceGroups[k];
-      if (g) { g.position.set(q.x, (q.type === "crate" || q.type === "barrel") ? q.y + propLift(q) + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
+      if (g) { g.position.set(q.x, isProp(q) ? q.y + propLift(q) + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
     }
     for (const hl of this.helpers) hl.update();
     d.moved = true;
@@ -1407,6 +1466,7 @@ export class Editor implements Mode {
   }
 
   dispose() {
+    this.drawn();
     clearTimeout(this.hitboxTimer);
     this.hitboxGen++;
     this.ctx.canvas.style.cursor = "";

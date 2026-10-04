@@ -5,6 +5,8 @@ import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type B
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { slider } from "./slider.ts";
+import { Stats } from "./stats.ts";
+import { toggle } from "./toggle.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
@@ -39,7 +41,10 @@ export class Game implements Mode {
   private falls = 0;
   private done = false;
   private frames = 0;
+  ready: Promise<void>;
+  private drawn!: () => void;
   private hud: HTMLElement;
+  private stats: Stats;
   private tunePanel: HTMLElement | null = null;
   private pauseMenu: HTMLElement | null = null;
   private onResize = () => this.resize();
@@ -67,6 +72,7 @@ export class Game implements Mode {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
+    this.ready = new Promise((r) => { this.drawn = r; });
     this.env = createScene();
     ({ scene: this.scene, sun: this.sun } = this.env);
     this.built = buildLevel(level, false);
@@ -78,6 +84,7 @@ export class Game implements Mode {
       h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
     );
     ctx.overlay.append(this.hud);
+    this.stats = new Stats(ctx.renderer, ctx.overlay);
     this.input.attach(ctx.canvas, ctx.overlay);
     this.input.lock();
     addEventListener("resize", this.onResize);
@@ -112,18 +119,22 @@ export class Game implements Mode {
     const sim = this.sim!;
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
+    this.stats.begin(now);
     this.input.update();
     const lookPx = this.input.takeLookPx();
+    let simMs = 0;
     if (!this.done && !this.pauseMenu) {
       this.yaw -= this.input.steer * TUNING.yawRate * dt + lookPx * TUNING.mouseSens;
       this.acc += dt;
       this.time += dt;
+      const t0 = performance.now();
       while (this.acc >= STEP) {
         this.savePrev();
         const f = this.forward();
         sim.step(this.input.throttle, f.x, f.z);
         this.acc -= STEP;
       }
+      simMs = performance.now() - t0;
     }
     // Frames run 0-3 physics steps each, so the raw post-step pose judders; blending back toward
     // the previous pose by the unconsumed fraction of a step moves the ball by exactly the frame's dt.
@@ -146,7 +157,7 @@ export class Game implements Mode {
     // What rides a moving platform goes with it (a crate or barrel is placed by its own body below).
     for (const [i, m] of sim.riders) {
       const g = this.built.pieceGroups[i], p = this.level.pieces[i];
-      if (!g || !p || p.type === "crate" || p.type === "barrel") continue;
+      if (!g || !p || p.type === "crate" || p.type === "barrel" || p.type === "cube") continue;
       const d = moverShift(m.piece, sim.time - STEP * (1 - alpha));
       g.position.set(p.x + d.x, p.y + d.y, p.z + d.z);
     }
@@ -180,6 +191,8 @@ export class Game implements Mode {
     // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
     if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
     this.env.render(this.ctx.renderer, this.camera);
+    this.drawn();
+    this.stats.end(simMs);
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -300,10 +313,12 @@ export class Game implements Mode {
   }
 
   dispose() {
+    this.drawn();
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = -1;
     this.sim?.free();
     this.ball.dispose();
+    this.stats.dispose();
     this.releaseMouse();
     document.removeEventListener("pointerlockchange", this.onLock);
     this.input.detach();
@@ -324,15 +339,18 @@ export function playerSettings(): HTMLElement {
       onInput: (v) => { TUNING[key] = v; val.textContent = show(v); saveTuning(); } });
     return h("div", { class: "field" }, h("span", {}, label), val, range);
   };
-  const lock = h("input", { type: "checkbox", checked: Input.mouseLockEnabled(), onchange: () => Input.setMouseLock(lock.checked) }) as HTMLInputElement;
-  const touch = h("input", { type: "checkbox", checked: Input.touchSliderEnabled(), onchange: () => Input.setTouchSlider(touch.checked) }) as HTMLInputElement;
+  const on = (label: string, title: string, checked: boolean, set: (on: boolean) => void) =>
+    h("label", { class: "toggle", title }, h("span", {}, label), toggle({ checked, label, onChange: set }));
   return h("div", { class: "settings" },
     row("Turn speed (keys)", "yawRate"),
     row("Mouse sensitivity", "mouseSens"),
-    h("label", { class: "toggle", title: "On: click the game to capture the mouse, which then turns the camera as far as you like; Esc lets it go. Off: drag to turn" },
-      h("span", {}, "Lock mouse to camera"), lock),
+    on("Lock mouse to camera", "On: click the game to capture the mouse, which then turns the camera as far as you like; Esc lets it go. Off: drag to turn",
+      Input.mouseLockEnabled(), (v) => Input.setMouseLock(v)),
     row("Camera distance", "camDist", true),
     row("Camera height", "camHeight", true),
-    h("label", { class: "toggle", title: "On a touch screen: a slider on the left throttles (up forward, down back) and a drag anywhere else turns. Off: a drag is a joystick" }, h("span", {}, "Touch slider"), touch),
+    on("Touch slider", "On a touch screen: a slider on the left throttles (up forward, down back) and a drag anywhere else turns. Off: a drag is a joystick",
+      Input.touchSliderEnabled(), (v) => Input.setTouchSlider(v)),
+    on("Performance stats", "While playing, in the top right: frame rate, frame, script and physics time, draw calls and triangles, resolution and memory",
+      Stats.enabled(), (v) => Stats.setEnabled(v)),
   );
 }

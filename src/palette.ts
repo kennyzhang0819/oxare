@@ -29,7 +29,8 @@ export const MAGNET = { glow: RED, lower: DARK_RED, groove: BLACK, upper: BLACK 
 export const KICKER = { light: ORANGE, glow: ORANGE, slideTread: DARK_GREY };
 export const TUBE = { glass: TUBE_GLASS };
 export const RAILS = { rail: WHITE, stripe: CYAN };
-export const GATE = { cube: DARK_GREY };
+// The cube, on its own and hanging from a gate.
+export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: GREEN };
 export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: ORANGE, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
 

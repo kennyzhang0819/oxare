@@ -1,9 +1,9 @@
 export const TUNING = {
   gravity: 5,
-  throttleForce: 8.5,
+  throttleForce: 10,
   // Share of a slope's pull against the push cancelled while the ball is pushed up it; the sideways pull stays.
   climbAssist: 0.4,
-  maxSpeed: 8,
+  maxSpeed: 6.9,
   linearDamping: 0.8,
   angularDamping: 0.8,
   yawRate: 1.8,
@@ -13,8 +13,6 @@ export const TUNING = {
   camBallGap: 0.9,
   // Share of the ball's weight a steep wall can carry while the ball is pressed against it in the air.
   wallGrip: 1,
-  // Gravity on movable props (crates, bridge planks, knock-down planks) as a fraction of the ball's.
-  propGravity: 0.5,
   // Stools and sliding kickers: their mass (the ball's is 1), then, once the ball has let go, a drag against
   // their speed (per second) plus a steady friction (units/s²) that stops them dead.
   slideMass: 0.75,
@@ -25,10 +23,13 @@ export const TUNING = {
   // Bumper: the ball leaves at this share of the speed it hit with, and never slower than bumperKick.
   bumperBounce: 0.8,
   bumperKick: 2,
-  // Magnet: its pull, fading to nothing at its reach (compare throttleForce), but never more than
-  // magnetHold of throttleForce, so full throttle away always escapes.
+  // Magnet: its pull with the ball against it, fading to nothing at its reach (compare throttleForce), but never
+  // more than magnetHold of throttleForce, so full throttle away always escapes. magnetFalloff shapes the fade:
+  // the pull is magnetForce times (share of the way in from the reach) to this power, so 1 fades evenly and 2
+  // keeps it strong only near the core.
   magnetForce: 21,
   magnetHold: 0.8,
+  magnetFalloff: 2,
   // Treadmill: how fast its rods' tops run, and so how fast a ball left on it rides along.
   beltSpeed: 3,
 };
@@ -39,7 +40,7 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   gravity: [1, 25, 0.5],
   throttleForce: [1, 40, 0.5],
   climbAssist: [0, 1, 0.05],
-  maxSpeed: [1, 20, 0.25],
+  maxSpeed: [1, 20, 0.05],
   linearDamping: [0, 4, 0.05],
   angularDamping: [0, 4, 0.05],
   yawRate: [0.5, 6, 0.1],
@@ -48,7 +49,6 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   camHeight: [1, 4, 0.25],
   camBallGap: [0, 3, 0.1],
   wallGrip: [0, 1, 0.05],
-  propGravity: [0.1, 2, 0.05],
   slideMass: [0.1, 3, 0.05],
   slideDrag: [0, 10, 0.25],
   slideFriction: [0, 15, 0.25],
@@ -57,6 +57,7 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   bumperKick: [0, 15, 0.5],
   magnetForce: [0, 30, 0.5],
   magnetHold: [0, 0.9, 0.05],
+  magnetFalloff: [1, 4, 0.25],
   beltSpeed: [0, 25, 0.5],
 };
 
@@ -64,7 +65,7 @@ export const DEFAULT_TUNING: Tuning = { ...TUNING };
 // The player's own settings (Options and the pause menu), kept out of the tune panel and its Reset.
 export const PLAYER_KEYS: TuningKey[] = ["yawRate", "mouseSens", "camDist", "camHeight"];
 // Settled values: not in the tune panel and never read back from the browser, so they are what the code says.
-export const FIXED_KEYS: TuningKey[] = ["bumperBounce", "bumperKick", "magnetForce", "magnetHold"];
+export const FIXED_KEYS: TuningKey[] = ["bumperBounce", "bumperKick", "magnetForce", "magnetHold", "magnetFalloff"];
 const KEY = "balling.tuning";
 
 export function loadTuning(): void {

@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, SEESAW_HUB, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BEAN_LIFT, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
-import { BUMPER, EFFECTS, GATE, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { BUMPER, EFFECTS, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
@@ -52,7 +52,7 @@ function platformGeometry(...args: Parameters<typeof platformMesh>): THREE.Buffe
   geo.computeVertexNormals();
   return geo;
 }
-let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel", THREE.MeshStandardMaterial> | null = null;
+let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel" | "cubeFace" | "cubeTop", THREE.MeshStandardMaterial> | null = null;
 
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
   if (MAT) return;
@@ -85,6 +85,8 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, roughness: 0.55 }),
     barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, roughness: 0.55 }),
     bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, roughness: 0.55 }),
+    cubeFace: new THREE.MeshStandardMaterial({ map: st.cubeFace, emissiveMap: st.cubeFaceGlow, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.55 }),
+    cubeTop: new THREE.MeshStandardMaterial({ map: st.cubeTop, emissiveMap: st.cubeTopGlow, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.55 }),
     hinge: new THREE.MeshStandardMaterial({ color: PROPS.hinge, roughness: 0.5, metalness: 0.3 }),
     // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
     tread: new THREE.MeshStandardMaterial({ color: PROPS.tread, roughness: 0.6, metalness: 0.15 }),
@@ -323,7 +325,6 @@ function supportBody(top: number, reach: number, ri: number): THREE.BufferGeomet
 // supportHulls and the ears as supportEarHulls.
 // Supports, columns and gates take the pillar's colours: its slate for the dark parts, its pale grey
 // for the light ones, beside the props' white and cyan.
-const CUBE_MAT = new THREE.MeshStandardMaterial({ color: GATE.cube, roughness: 0.5, metalness: 0.05 });
 const SLATE = new THREE.MeshStandardMaterial({ color: PILLAR.slate, roughness: 0.5, metalness: 0.05 });
 const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5, metalness: 0.05 });
 // Column: a drum in the props' white with eight slate strips down it, a pale foot and head with a
@@ -489,33 +490,37 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
     g.add(lg);
     out.push(lg);
   });
-  const C = GATE_CUBE, cube = new THREE.Group();
+  const cube = new THREE.Group();
   cube.position.y = hang.cube;
-  cube.add(new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 3, propRound(C, C, C)), CUBE_MAT));
-  const rim = rimFrame(C - 0.18, C - 0.18, 0.08, PAINT), ring = new THREE.RingGeometry(C / 2 - 0.32, C / 2 - 0.25, 40), outer = new THREE.RingGeometry(C / 2 - 0.22, C / 2 - 0.19, 40);
-  // A pale rim on every face; a lit ring in a grey one on every face but the top, which takes the eye.
+  buildCube(cube, GATE_CUBE);
+  g.add(cube);
+  out.push(cube);
+  return out;
+}
+
+// The cube, the gate's and the pushable prop's alike, `C` a side and centred on its body: a slate
+// rounded box wearing the ribbed octagon face on every side (the top face its white, solid-bordered
+// one on a plate over it), and on every face a pale rim with a green lit line just inside it.
+function buildCube(g: THREE.Group, C: number): void {
+  const st = STRUCT!;
+  const body = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 3, propRound(C, C, C)), st.cubeFace);
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  const rim = rimFrame(C * 0.9, C * 0.9, C * 0.05, PAINT), lit = rimFrame(C * 0.8, C * 0.8, C * 0.02, PAINT);
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(C * 0.8, C * 0.8), st.cubeTop);
+  top.position.z = C / 2 + PAINT;
   const faces: [x: number, y: number][] = [[0, 0], [0, Math.PI / 2], [0, Math.PI], [0, -Math.PI / 2], [Math.PI / 2, 0], [-Math.PI / 2, 0]];
   for (const [rx, ry] of faces) {
     const f = new THREE.Group();
     f.rotation.set(rx, ry, 0, "YXZ");
-    const r = new THREE.Mesh(rim, st.body);
-    r.position.z = C / 2;
-    f.add(r);
-    if (rx >= 0) {
-      for (const [geo, mat] of [[ring, st.glow], [outer, PALE]] as const) {
-        const m = new THREE.Mesh(geo, mat);
-        m.position.z = C / 2 + PAINT;
-        f.add(m);
-      }
+    for (const [geo, mat] of [[rim, PALE], [lit, st.plankGlow]] as const) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.z = C / 2;
+      f.add(m);
     }
-    cube.add(f);
+    if (rx < 0) f.add(top);
+    g.add(f);
   }
-  const eye = new THREE.Mesh(new RoundedBoxGeometry(0.36, 0.1, 0.24, 2, 0.03), SLATE);
-  eye.position.y = C / 2 + 0.05;
-  cube.add(eye);
-  g.add(cube);
-  out.push(cube);
-  return out;
 }
 
 const SLIDE_TREAD = new THREE.MeshStandardMaterial({ color: KICKER.slideTread, roughness: 0.6, metalness: 0.15 });
@@ -654,7 +659,7 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
     block.position.set(m.x, m.y, m.z);
     block.castShadow = block.receiveShadow = true;
     g.add(block);
-    for (const dy of p.side ? [m.h / 2 - 0.08, -(m.h / 2 - 0.08)] : [m.h / 2 - 0.06]) {
+    for (const dy of p.side || p.base ? [m.h / 2 - 0.08, -(m.h / 2 - 0.08)] : [m.h / 2 - 0.06]) {
       const band = new THREE.Mesh(new THREE.BoxGeometry(m.w + 0.008, 0.04, m.d + 0.008), st.plankGlow);
       band.position.set(m.x, m.y + dy, m.z);
       g.add(band);
@@ -663,10 +668,31 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   return panel;
 }
 
-// Seesaw: a tiled board with a green rim on both faces and a dark hub under its middle, on an
+// Board: the seesaw's tiled board with its green rim on both faces, loose, PLANK_T thick. The group is
+// centred on the physics body and returned for the physics to pose.
+function buildBoard(g: THREE.Group, p: Piece & { type: "board" }): THREE.Group {
+  const st = STRUCT!, board = new THREE.Group();
+  board.position.y = boardLift(p);
+  board.rotation.order = "YXZ"; // roll about its own z, then tilt about its own x
+  board.rotation.set((p.tilt * Math.PI) / 180, 0, ((p.roll ?? 0) * Math.PI) / 180);
+  const body = new THREE.Mesh(roundedBox(p.w, PLANK_T, p.d, PLANK_T / 2 - 0.01), st.plank);
+  body.castShadow = body.receiveShadow = true;
+  board.add(body);
+  const rim = rimFrame(p.w - 0.2, p.d - 0.2, 0.1, PAINT);
+  for (const side of [1, -1]) {
+    const m = new THREE.Mesh(rim, st.plankGlow);
+    m.rotation.x = -side * Math.PI / 2;
+    m.position.y = side * PLANK_T / 2;
+    board.add(m);
+  }
+  g.add(board);
+  return board;
+}
+
+// Seesaw: a tiled board with a green rim on both faces, on an
 // axle between two rounded white posts that carry a dark slotted face and a lit cap. The board
 // group is centred on the physics body and returned for the physics to pose; the posts stay.
-function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group {
+function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: boolean): THREE.Group {
   const st = STRUCT!, W = p.w, D = p.d, T = SEESAW_T, H = seesawPivot(p);
   const board = new THREE.Group();
   board.position.y = H;
@@ -681,9 +707,6 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
     m.position.y = side * T / 2;
     board.add(m);
   }
-  const hb = SEESAW_HUB, hub = new THREE.Mesh(new RoundedBoxGeometry(W - 2 * hb.inset, hb.h, hb.d, 2, hb.r), st.hinge);
-  hub.position.y = -T / 2 - hb.drop;
-  board.add(hub);
   g.add(board);
   // The axle shows only as a stub from each post into the board's edge: the board is thinner than
   // the axle, so one rod straight across would stick out through its top.
@@ -711,6 +734,12 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }): THREE.Group
     const cap = new THREE.Mesh(new THREE.BoxGeometry(SEESAW_POST_W - 2 * SEESAW_POST_R, 0.03, SEESAW_POST_D - 2 * SEESAW_POST_R), st.glow);
     cap.position.set(x, postH - 0.015 + PAINT, 0);
     g.add(post, slot, cap);
+  }
+  // Editor only: a one-way seesaw's dipping end, marked by an arrow pointing down over it.
+  if (editor && p.dips) {
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 12).rotateX(Math.PI), START_MAT);
+    arrow.position.set(0, H + 1.2, ((p.dips === "+z" ? 1 : -1) * D) / 2 - 0.6);
+    g.add(arrow);
   }
   return board;
 }
@@ -1475,7 +1504,9 @@ export function fitSun(sun: THREE.DirectionalLight, built: Built) {
   cam.updateProjectionMatrix();
 }
 
-export function buildLevel(level: Level, editor: boolean): Built {
+// `reuse` is the last build of the same level (the editor's): a piece that has not changed keeps its group
+// from it, so an edit rebuilds only what it touched. The groups left over are disposed.
+export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built {
   if (!MAT) throw new Error("initMaterials first");
   const mat = MAT;
   const group = new THREE.Group();
@@ -1487,9 +1518,29 @@ export function buildLevel(level: Level, editor: boolean): Built {
   const movers = new Map<number, THREE.Group>();
   const beltRodMeshes: Built["beltRods"] = [];
   let goal: Built["goal"] = null;
+  const pool = new Map<string, number[]>(), kept = new Set<THREE.Group>();
+  reuse?.pieceGroups.forEach((g, i) => { const k = g.userData.buildKey as string | undefined; if (k) pool.set(k, [...(pool.get(k) ?? []), i]); });
 
   level.pieces.forEach((p, index) => {
+    // A piece is rebuilt when it or anything else it is drawn from changes: a platform's holes; rails
+    // follow the platforms round them, so they are always rebuilt.
+    const key = p.type === "rails" ? "" : JSON.stringify(p) + (p.type === "slab" || p.type === "curve" ? JSON.stringify(isTilted(p) ? holeCuts(level, p) : holesOn(level, p)) : "");
+    const was = key ? pool.get(key)?.shift() : undefined;
+    if (reuse && was !== undefined) {
+      const g = reuse.pieceGroups[was]!;
+      g.userData.pieceIndex = index;
+      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
+        if (from.has(was)) to.set(index, from.get(was));
+      }
+      for (const r of reuse.beltRods) { let o: THREE.Object3D | null = r.mesh; while (o && o !== g) o = o.parent; if (o) beltRodMeshes.push(r); }
+      if (reuse.goal?.index === was) goal = { index, mesh: reuse.goal.mesh };
+      kept.add(g);
+      group.add(g);
+      pieceGroups.push(g);
+      return;
+    }
     const g = new THREE.Group();
+    g.userData.buildKey = key;
     g.position.set(p.x, p.y, p.z);
     g.rotation.order = "YXZ"; // roll about the piece's own z axis, tilt about its x axis, then yaw
     g.rotation.y = (pieceRot(p) * Math.PI) / 180;
@@ -1505,9 +1556,11 @@ export function buildLevel(level: Level, editor: boolean): Built {
     if (p.type === "column") buildColumn(g, p.h);
     if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
     if (p.type === "barrel") { buildBarrel(g, p.r, p.h); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
+    if (p.type === "cube") { buildCube(g, CUBE_S); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
     if (p.type === "bridge") bridges.set(index, buildBridge(g, p));
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
-    if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p));
+    if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p, editor));
+    if (p.type === "board") planks.set(index, buildBoard(g, p));
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
     if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
@@ -1590,6 +1643,9 @@ export function buildLevel(level: Level, editor: boolean): Built {
     o.receiveShadow = true;
     o.castShadow = !mats.every((m) => !m.map && m.emissiveIntensity > 0 && m.emissive.getHex() === m.color.getHex());
   });
+  for (const g of reuse?.pieceGroups ?? []) {
+    if (!kept.has(g)) g.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+  }
   return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, beltRods: beltRodMeshes, goal };
 }
 

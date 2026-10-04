@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
+import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
 import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
@@ -112,6 +112,7 @@ export interface StructMaps {
   panel: THREE.Texture; panelGlow: THREE.Texture; pillar: THREE.Texture; crate: THREE.Texture; crateGlow: THREE.Texture; goalDisc: THREE.Texture;
   padTop: THREE.Texture; padGlow: THREE.Texture; padCentre: THREE.Texture; padSkirt: THREE.Texture;
   barrierPanel: THREE.Texture; grille: THREE.Texture; stoolTop: THREE.Texture; bumperTop: THREE.Texture; barrelPanel: THREE.Texture;
+  cubeFace: THREE.Texture; cubeFaceGlow: THREE.Texture; cubeTop: THREE.Texture; cubeTopGlow: THREE.Texture;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -393,6 +394,33 @@ function crateFaces(): [THREE.Texture, THREE.Texture] {
   return [mk(c), mk(e)];
 }
 
+// Cube faces, one square each: slate, with an octagon in the middle, a plate inside a green glowing
+// border of three dashes a side (a pale plate, on every face) or one solid line (a white plate, on
+// the top). Each with its glow map.
+function cubeFaces(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Texture] {
+  const S = 256, R = 76, PLATE = 62, LINE = 7, side = 2 * R * Math.sin(Math.PI / 8), gap = side / 9, dash = (side - 3 * gap) / 3;
+  const mk = (cv: HTMLCanvasElement) => { const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; return tx; };
+  const oct = (t: CanvasRenderingContext2D, r: number) => {
+    t.beginPath();
+    for (let k = 0; k < 8; k++) { const a = ((k + 0.5) * Math.PI) / 4; t.lineTo(S / 2 + r * Math.cos(a), S / 2 + r * Math.sin(a)); }
+    t.closePath();
+  };
+  const face = (plate: number, dashed: boolean): [THREE.Texture, THREE.Texture] => {
+    const [c, ctx] = canvas2x(S, S), [e, ectx] = canvas2x(S, S);
+    ctx.fillStyle = css(CUBE.body); ctx.fillRect(0, 0, S, S);
+    ectx.fillStyle = "#000"; ectx.fillRect(0, 0, S, S);
+    ctx.fillStyle = css(plate); oct(ctx, PLATE); ctx.fill();
+    for (const t of [ctx, ectx]) {
+      t.strokeStyle = css(CUBE.glow); t.lineWidth = LINE;
+      // The pattern starts half a gap in, so every corner falls in a gap.
+      t.setLineDash(dashed ? [dash, gap] : []); t.lineDashOffset = dash + gap / 2;
+      oct(t, R); t.stroke();
+    }
+    return [mk(c), mk(e)];
+  };
+  return [...face(CUBE.plate, true), ...face(CUBE.top, false)];
+}
+
 // Goal base: dark disc with light spokes and a hub.
 function goalDisc(): THREE.Texture {
   const S = 256;
@@ -525,7 +553,8 @@ export function structTextures(): StructMaps {
   const [padTop, padGlow, padCentre, padSkirt] = padTextures();
   const [barrierPanel, grille] = barrierTextures();
   const stoolTop = stoolTopTexture(), bumperTop = bumperTopTexture(), barrelPanel = barrelPanelTexture();
-  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, goalDisc: goalDisc(), padTop, padGlow, padCentre, padSkirt, barrierPanel, grille, stoolTop, bumperTop, barrelPanel };
+  const [cubeFace, cubeFaceGlow, cubeTop, cubeTopGlow] = cubeFaces();
+  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, goalDisc: goalDisc(), padTop, padGlow, padCentre, padSkirt, barrierPanel, grille, stoolTop, bumperTop, barrelPanel, cubeFace, cubeFaceGlow, cubeTop, cubeTopGlow };
 }
 
 export interface BallMaps { map: THREE.Texture; emissive: THREE.Texture; roughness: THREE.Texture }

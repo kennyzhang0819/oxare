@@ -7,7 +7,7 @@ import { h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Lets the status paint; a hidden tab never gets a frame, so a timer keeps loading moving.
-const nextFrame = () => new Promise<void>((r) => { requestAnimationFrame(() => r()); setTimeout(r, 120); });
+export const nextFrame = () => new Promise<void>((r) => { requestAnimationFrame(() => r()); setTimeout(r, 120); });
 
 // Boot screen: does the slow one-off work (physics WASM, textures, shader compiles,
 // a first level build) up front so the menu and the first level start without a hitch.

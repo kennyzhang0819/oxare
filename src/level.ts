@@ -23,6 +23,8 @@ export const BARRIER_LEG = 0.16, BARRIER_R = 0.2, BARRIER_LEG_R = 0.12, BARRIER_
 // Corner rounding of a block and a blockade, drawn and solid alike.
 export const BLOCK_R = 0.3, BLOCKADE_R = 0.18;
 export const CRATE_W = 2, CRATE_H = 1.2, CRATE_D = 2;
+// Cube: the gate's cube as a pushable prop of its own, the ball's size on a side, rounded by propRound.
+export const CUBE_S = 2 * BALL_RADIUS;
 // Barrel: a crate that is an upright cylinder, radius r and h tall, its rims rounded by propRound.
 export const BARREL_R = 0.4, BARREL_H = 1.4;
 // The barrel's outline as [radius, y] about its centre, bottom centre round to top centre: the same
@@ -163,18 +165,19 @@ export const SIDE_PLANK_HINGE_Z = -(PLANK_T / 2 + 0.04);
 // knock-down plank so the ball rolls onto its low end without a big step.
 export const SEESAW_T = 0.1, SEESAW_PIVOT_H = 1.2, SEESAW_POST_W = 0.36, SEESAW_POST_D = 0.8;
 // The axle's height above the surface is the piece's `h` (SEESAW_PIVOT_H for a new one). Its posts
-// are rounded boxes of SEESAW_POST_R, SEESAW_POST_ABOVE taller than that; a hub hangs under the
-// board's middle and an axle stub runs from each post into the board's edge, all solid.
+// are rounded boxes of SEESAW_POST_R, SEESAW_POST_ABOVE taller than that, and an axle stub runs from
+// each post into the board's edge, all solid. Nothing hangs under the board, so the ball can roll under it.
 export const seesawPivot = (p: Piece & { type: "seesaw" }): number => p.h;
 export const SEESAW_POST_R = 0.16, SEESAW_POST_ABOVE = 0.3;
 export const seesawPostH = (p: Piece & { type: "seesaw" }): number => seesawPivot(p) + SEESAW_POST_ABOVE;
-export const SEESAW_HUB = { inset: 0.3, h: 0.22, d: 0.6, r: 0.06, drop: 0.09 }, SEESAW_STUB = { r: 0.09, l: SEESAW_POST_W + 0.2, into: 0.03 };
+export const SEESAW_STUB = { r: 0.09, l: SEESAW_POST_W + 0.2, into: 0.03 };
 // A rim lies this far proud of the face it is painted on: a line, not a ledge.
 export const PAINT = 0.005;
 
-// A knock-down plank's hinge relative to the piece origin before yaw.
+// A knock-down plank's hinge relative to the piece origin before yaw. `base` raises it that much more,
+// the yokes standing taller to hold it; a side plank has none.
 export const plankHinge = (p: Piece & { type: "plank" }): { y: number; z: number } =>
-  p.side ? { y: -(PLATFORM_EDGE_DROP + PLANK_T / 2), z: SIDE_PLANK_HINGE_Z } : { y: PLANK_HINGE_H, z: 0 };
+  p.side ? { y: -(PLATFORM_EDGE_DROP + PLANK_T / 2), z: SIDE_PLANK_HINGE_Z } : { y: PLANK_HINGE_H + (p.base ?? 0), z: 0 };
 // The fixed mounts a knock-down plank's hinge barrel turns in, local to the piece before yaw: a
 // yoke standing at each end of a top plank, a bracket on the wall at each end of a side plank.
 // Rounded boxes of PLANK_MOUNT_R, drawn and solid alike. The barrel runs PLANK_BARREL past each
@@ -186,7 +189,7 @@ export function plankMounts(p: Piece & { type: "plank" }): { x: number; y: numbe
     const hinge = plankHinge(p), w = 0.6, d = 0.34, back = 0.08;
     return [1, -1].map((s) => ({ x: s * (p.w / 2 + 0.05 + w / 2), y: hinge.y - 0.06, z: back - d / 2, w, h: 0.42, d }));
   }
-  const h = PLANK_HINGE_H + 0.12, w = 0.5;
+  const h = plankHinge(p).y + 0.12, w = 0.5;
   return [1, -1].map((s) => ({ x: s * (p.w / 2 + 0.05 + w / 2), y: h / 2, z: 0, w, h, d: 0.34 }));
 }
 // Pose of a knock-down plank's centre relative to the piece origin before yaw, for its start
@@ -206,8 +209,23 @@ export function seesawMaxTilt(p: Piece & { type: "seesaw" }): number {
   for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (clear(m) > 0) lo = m; else hi = m; }
   return (lo * 180) / Math.PI;
 }
-// A seesaw's start angle: positive raises its local -z end; clamped to resting on an end.
-export const seesawTilt = (p: Piece & { type: "seesaw" }): number => Math.max(-seesawMaxTilt(p), Math.min(seesawMaxTilt(p), p.tilt));
+// The angles a seesaw can turn through, in degrees (positive raises its local -z end): down to resting on
+// an end, or with `dips` only toward that end going down, never past level the other way.
+export function seesawRange(p: Piece & { type: "seesaw" }): [number, number] {
+  const m = seesawMaxTilt(p);
+  return p.dips === "+z" ? [0, m] : p.dips === "-z" ? [-m, 0] : [-m, m];
+}
+// Board: a loose plank (the knock-down plank's panel, PLANK_T thick) lying `w` across and `d` along, rolled
+// `roll` about its own z, then turned `tilt` about its own x like a seesaw (positive raises its -z end), as a
+// slab turns. Its centre is this far above its y, so its lowest corner rests on y.
+export function boardLift(p: Piece & { type: "board" }): number {
+  const r = ((p.roll ?? 0) * Math.PI) / 180, t = (p.tilt * Math.PI) / 180;
+  // The world up's components along the board's own x, y and z.
+  const ux = Math.abs(Math.cos(t) * Math.sin(r)), uy = Math.abs(Math.cos(t) * Math.cos(r)), uz = Math.abs(Math.sin(t));
+  return (p.w / 2) * ux + (PLANK_T / 2) * uy + (p.d / 2) * uz;
+}
+// A seesaw's start angle, held inside its range.
+export const seesawTilt = (p: Piece & { type: "seesaw" }): number => { const [lo, hi] = seesawRange(p); return Math.max(lo, Math.min(hi, p.tilt)); };
 // Support: three pillars standing against a platform's side wall, carrying a platform `h` layers
 // above. The piece origin is on the lower platform's edge at its top surface; the pillars stand
 // just outside that edge on local +z, from the lower platform's side wall up to the upper one's
@@ -360,7 +378,7 @@ export function supportEarHulls(p: Piece & { type: "support" }): V3[][] {
 export const GATE_H = 5, GATE_D = 6, GATE_CORNER = 0.6, GATE_ROUND = 0.07;
 // A gate's legs stand off its platform's walls and bend into them on these, a support's older measures.
 export const GATE_GAP = 0.5, GATE_BEND_R = 0.3;
-export const GATE_CUBE = 1, GATE_CUBE_LIFT = 0.25;
+export const GATE_CUBE = CUBE_S, GATE_CUBE_LIFT = 0.25;
 // A link: a "0" of round wire t thick, its middle line two half-rounds of radius r joined by
 // straight sides `straight` long each way from its centre.
 export const GATE_LINK = { r: 0.19, t: 0.06, straight: 0.16 };
@@ -706,7 +724,7 @@ export function moverAt(p: Mover, t: number): { x: number; y: number; z: number 
 // What a moving platform carries: every piece standing on its top where the level places it
 // (structures, planks, seesaws and crates; not other platforms, paths, the start or the goal),
 // by index, to the index of the platform. A tilted moving platform carries nothing.
-const RIDES: PieceType[] = ["fence", "block", "blockade", "pillar", "bumper", "magnet", "barrier", "crate", "barrel", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
+const RIDES: PieceType[] = ["fence", "block", "blockade", "pillar", "bumper", "magnet", "barrier", "crate", "barrel", "cube", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
 export function riders(level: Level): Map<number, number> {
   const out = new Map<number, number>();
   level.pieces.forEach((s, si) => {
@@ -883,8 +901,9 @@ export type Piece =
   | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
-  | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean })
-  | (At & { type: "seesaw"; w: number; d: number; h: number; rot: number; tilt: number; freeze?: boolean })
+  | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean; base?: number })
+  | (At & { type: "seesaw"; w: number; d: number; h: number; rot: number; tilt: number; freeze?: boolean; dips?: "+z" | "-z" })
+  | (At & { type: "board"; w: number; d: number; rot: number; tilt: number; roll?: number; freeze?: boolean })
   | (At & { type: "support"; w: number; h: number; rot: number; roll?: number; reach?: number })
   | (At & { type: "gate"; w: number; d: number; h: number; rot: number })
   | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number; roll?: number; tilt?: number; track?: number; offset?: number; top?: number })
@@ -893,6 +912,7 @@ export type Piece =
   | (At & { type: "pillar"; rot?: number; roll?: number; tilt?: number })
   | (At & { type: "barrier"; rot: number; roll?: number; tilt?: number })
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number; tilt?: number })
+  | (At & { type: "cube"; rot: number; roll?: number; tilt?: number })
   | (At & { type: "barrel"; r: number; h: number; rot: number; roll?: number; tilt?: number })
   | (At & { type: "stool"; w: number; h: number; d: number; rot: number; track: number; offset: number; slide?: "z" })
   | (At & { type: "bean"; rot: number; r: number; len: number; speed: number; wait: number; offset: number; loop: MoverLoop; turn?: number; face?: "follow"; path: TubeNode[]; smooth?: true })
@@ -909,7 +929,7 @@ export type Piece =
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "stool", "bean", "block", "spinner", "tube", "hoop", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "goal", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
@@ -919,10 +939,11 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
   { name: "glass", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, glass: true }) },
   { name: "curl", base: "slab", make: (x, y, z) => ({ type: "slab", x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0, curl: CURL_DEFAULT }) },
   { name: "C curve", base: "curve", make: (x, y, z) => ({ type: "curve", x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, sweep: 180 }) },
+  { name: "3/4 curve", base: "curve", make: (x, y, z) => ({ type: "curve", x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0, sweep: 270 }) },
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
-  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "hoop" || p.type === "column" || p.type === "bumper" || p.type === "magnet";
+  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "cube" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "hoop" || p.type === "column" || p.type === "bumper" || p.type === "magnet";
 export type Platform = Piece & { type: "slab" | "curve" | "ramp" };
 export const isPlatform = (p: Piece): p is Platform => p.type === "slab" || p.type === "curve" || p.type === "ramp";
 export type Ramp = Piece & { type: "ramp" };
@@ -1268,9 +1289,12 @@ export function respawnY(level: Level): number {
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
 }
 // The worlds levels are grouped into, a tab each in the level select; a level without `world` is in the first.
-export const WORLDS = [{ id: "classic", name: "Classic" }, { id: "neo", name: "Neo" }] as const;
+// `tag` prefixes a level's number in the menus: C1, C2 in Classic, N1, N2 in Neo.
+export const WORLDS = [{ id: "classic", name: "Classic", tag: "C" }, { id: "neo", name: "Neo", tag: "N" }] as const;
 export type World = (typeof WORLDS)[number]["id"];
-export const worldOf = (level: Level): World => level.world ?? "classic";// `hidden` keeps a level out of the player's list (a playground); without it a level is public.
+export const worldOf = (level: Level): World => level.world ?? "classic";
+// A level's label in its world's list: the world's tag and its number there, C3 or N1.
+export const levelCode = (level: Level, n: number): string => `${WORLDS.find((w) => w.id === worldOf(level))!.tag}${n}`;// `hidden` keeps a level out of the player's list (a playground); without it a level is public.
 export interface Level { id: string; name: string; hidden?: true; world?: World; thumb?: { x: number; y: number; z: number; r: number; yaw?: number }; pieces: Piece[] }
 
 export type PartKind = "platform" | "block";
@@ -1408,8 +1432,11 @@ export function curveRollPoint(p: Curve, v: V3): V3 {
 }
 // Each end of a curve runs this far dead straight before the arc begins, so its ends are square.
 export const CURVE_STRAIGHT = 2;
-// A curve's arc turns `sweep` degrees: 90 (a corner, the default) or 180 (a C, two corners in one piece).
-export const CURVE_SWEEPS = [90, 180];
+// A curve's arc turns `sweep` degrees: 90 (a corner, the default), 180 (a C, two corners in one
+// piece) or 270 (a 3/4 ring, its far end heading back across the near end's line).
+export const CURVE_SWEEPS = [90, 180, 270];
+// A 3/4 curve's inner must be at least this, or its two straight ends cross.
+export const CURVE_34_MIN_INNER = 2 * CURVE_STRAIGHT;
 export const curveSweep = (p: Curve): number => p.sweep ?? 90;
 // Segments round a curve's arc, in its footprint and its floor: CURVE_SEGMENTS per quarter turn.
 export const curveSegments = (p: Curve): number => Math.round((CURVE_SEGMENTS * curveSweep(p)) / 90);
@@ -1417,24 +1444,35 @@ export const curveSegments = (p: Curve): number => Math.round((CURVE_SEGMENTS * 
 // A curve laid along its centre line, `len` long from end a (local +x) to end b: `at(u, r)` is the
 // local point u along it and r out from the corner it turns round (r from inner to outer), and
 // `param` maps a local point back to u. The ends run straight for `s`; the arc between them turns
-// `sweep` about (s, -s), so a corner's ends sit where a plain quarter ring's would, and a C's end b
-// comes back level with end a, heading local +z.
+// `sweep` about (s, -s), so a corner's ends sit where a plain quarter ring's would, a C's end b
+// comes back level with end a, heading local +z, and a 3/4 curve's end b heads local +x, 2s on
+// the far side of end a's line.
 export function curveStrip(p: Curve): { s: number; len: number; sweep: number; at(u: number, r: number): XZ; param(x: number, z: number): number } {
   const s = Math.min(CURVE_STRAIGHT, Math.max(0, p.inner)), R = (p.inner + p.outer) / 2 - s, sweep = (curveSweep(p) * Math.PI) / 180, arc = R * sweep;
-  const half = sweep > Math.PI / 2 + 1e-9, cs = Math.cos(sweep), sn = Math.sin(sweep);
+  const cs = Math.cos(sweep), sn = Math.sin(sweep);
+  const at = (u: number, r: number): XZ => {
+    if (u <= s) return [r, -u];
+    if (u >= s + arc) { const e = u - s - arc; return [s + (r - s) * cs - e * sn, -s - (r - s) * sn - e * cs]; }
+    const a = (u - s) / R;
+    return [s + (r - s) * Math.cos(a), -s - (r - s) * Math.sin(a)];
+  };
   return {
-    s, len: 2 * s + arc, sweep,
-    at: (u, r) => {
-      if (u <= s) return [r, -u];
-      if (u >= s + arc) { const e = u - s - arc; return [s + (r - s) * cs - e * sn, -s - (r - s) * sn - e * cs]; }
-      const a = (u - s) / R;
-      return [s + (r - s) * Math.cos(a), -s - (r - s) * Math.sin(a)];
-    },
+    s, len: 2 * s + arc, sweep, at,
     param: (x, z) => {
-      if (z > -s) return half && x < s ? 2 * s + arc + Math.min(0, z) : Math.max(0, -z);
-      if (!half && x < s) return 2 * s + arc - Math.max(0, x);
-      // + 0: right on the arc's end line -(z + s) is -0, and atan2(-0, x < 0) is -PI, the wrong end.
-      return s + R * Math.max(0, Math.min(sweep, Math.atan2(-(z + s) + 0, x - s)));
+      // The nearest of the three runs (end a's straight, the arc, end b's straight), each clamped to
+      // its own length and the strip's width: on the strip one of them lands exactly; past a half
+      // turn the straights share the arc's open quarter, so neither can be told by its half-plane
+      // alone, and unclamped, end a's line would run on through end b.
+      const dx = x - s, dz = z + s, rc = (r: number) => Math.max(p.inner, Math.min(p.outer, r));
+      let a = Math.atan2(-dz, dx); if (a < 0) a += 2 * Math.PI;
+      const runs: [number, number][] = [
+        [Math.max(0, Math.min(s, -z)), rc(x)],
+        [s + R * Math.min(sweep, a), rc(s + Math.hypot(dx, dz))],
+        [s + arc + Math.max(0, Math.min(s, -dx * sn - dz * cs)), rc(s + dx * cs - dz * sn)],
+      ];
+      let best = 0, near = Infinity;
+      for (const [u, r] of runs) { const [px, pz] = at(u, r), d = Math.hypot(px - x, pz - z); if (d < near - 1e-9) { near = d; best = u; } }
+      return best;
     },
   };
 }
@@ -1534,16 +1572,19 @@ export function pieceRot(p: Piece): number {
 // (a crate's or barrel's centre), so one can stand out of a wall or lean. Kickers and jump pads turn their
 // own way, the same order; a slab's are part of its own frame.
 export const MIRRORED: PieceType[] = ["kicker"];
-export const ROLLED_PROPS: PieceType[] = ["blockade", "barrier", "pillar", "column", "bumper", "magnet", "hoop", "crate", "barrel"];
+export const ROLLED_PROPS: PieceType[] = ["blockade", "barrier", "pillar", "column", "bumper", "magnet", "hoop", "crate", "barrel", "cube"];
 export const pieceRoll = (p: Piece): number => (ROLLED_PROPS.includes(p.type) && "roll" in p && typeof p.roll === "number" ? p.roll : 0);
 export const pieceTilt = (p: Piece): number => (ROLLED_PROPS.includes(p.type) && "tilt" in p && typeof p.tilt === "number" ? p.tilt : 0);
 // How high above its y a crate's or barrel's centre rests when rolled and tilted: how far down its turned
 // body reaches below its centre.
-export function propLift(p: Piece & { type: "crate" | "barrel" }): number {
+export type Prop = Piece & { type: "crate" | "barrel" | "cube" };
+export const isProp = (p: Piece): p is Prop => p.type === "crate" || p.type === "barrel" || p.type === "cube";
+export function propLift(p: Prop): number {
   const r = (pieceRoll(p) * Math.PI) / 180, t = (pieceTilt(p) * Math.PI) / 180;
   // The world up's components along the prop's own x, y and z.
   const ux = Math.abs(Math.cos(t) * Math.sin(r)), uy = Math.abs(Math.cos(t) * Math.cos(r)), uz = Math.abs(Math.sin(t));
   if (p.type === "crate") return (p.w / 2) * ux + (p.h / 2) * uy + (p.d / 2) * uz;
+  if (p.type === "cube") return (CUBE_S / 2) * (ux + uy + uz);
   return (p.h / 2) * uy + p.r * Math.sqrt(Math.max(0, 1 - uy * uy));
 }
 
@@ -1558,6 +1599,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], smooth: true, lines: 2, a: "top", b: "top" };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
     case "seesaw": return { type, x, y, z, w: 4, d: 8, h: SEESAW_PIVOT_H, rot: 0, tilt: 10 };
+    case "board": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 0 };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
     case "gate": return { type, x, y, z, w: LANE_WIDTH, d: GATE_D, h: GATE_H, rot: 0 };
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
@@ -1570,6 +1612,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "column": return { type, x, y, z, h: COLUMN_H };
     case "barrier": return { type, x, y, z, rot: 0 };
     case "crate": return { type, x, y, z, w: CRATE_W, h: CRATE_H, d: CRATE_D, rot: 0 };
+    case "cube": return { type, x, y, z, rot: 0 };
     case "barrel": return { type, x, y, z, r: BARREL_R, h: BARREL_H, rot: 0 };
     case "jump": return { type, x, y, z, w: JUMP_W, d: JUMP_D, rot: 0, rise: JUMP_RISE };
     case "stool": return { type, x, y, z, w: STOOL_W, h: STOOL_H, d: STOOL_D, rot: 0, track: STOOL_TRACK, offset: 0 };
@@ -1728,9 +1771,10 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "support" && supportReach(p) < SUPPORT_MIN_REACH - 1e-9) out.push(`piece ${i}: a support's reach must be at least ${SUPPORT_MIN_REACH}`);
     if (p.type === "support" && supportPillars(p)[0]!.y0 > supportPillars(p)[0]!.y1 - 0.3) out.push(`piece ${i}: a support's reach is too big for its height: its bend would reach past the top`);
     if (p.mirror && !MIRRORED.includes(p.type)) out.push(`piece ${i}: a ${p.type} can't be mirrored`);
-    if (p.type === "curve" && !CURVE_SWEEPS.includes(curveSweep(p))) out.push(`piece ${i}: curve sweep must be ${CURVE_SWEEPS.join(" or ")}`);
+    if (p.type === "curve" && !CURVE_SWEEPS.includes(curveSweep(p))) out.push(`piece ${i}: curve sweep must be ${CURVE_SWEEPS.join(", ")}`);
+    if (p.type === "curve" && curveSweep(p) === 270 && p.inner < CURVE_34_MIN_INNER) out.push(`piece ${i}: a 3/4 curve's inner must be at least ${CURVE_34_MIN_INNER}, or its two ends cross`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
-    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "support" || p.type === "gate") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
+    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "support" || p.type === "gate") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
@@ -1753,6 +1797,7 @@ export function levelProblems(level: Level): string[] {
       for (const [name, size] of ends) if (size < 1) out.push(`piece ${i}: the slab's ${name} must stay at least 1 across`);
       if (g(sh.n?.bow) + g(sh.s?.bow) <= -(p.d - 1) || g(sh.e?.bow) + g(sh.w?.bow) <= -(p.w - 1)) out.push(`piece ${i}: the slab's sides bow in so far they meet`);
     }
+    if (p.type === "plank" && (p.base ?? 0) < 0) out.push(`piece ${i}: plank base can't be negative`);
     if (p.type === "seesaw" && seesawPivot(p) < SEESAW_T) out.push(`piece ${i}: seesaw h must be at least ${SEESAW_T}`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
   });
@@ -1852,8 +1897,9 @@ export function validateLevel(raw: unknown): Level {
       case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
         lines: p.lines === 1 ? 1 : 2, a: railEnd(p.a), b: railEnd(p.b),
         ...(typeof p.aYaw === "number" ? { aYaw: p.aYaw } : {}), ...(typeof p.bYaw === "number" ? { bYaw: p.bYaw } : {}) };
-      case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
-      case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), h: num(p.h ?? SEESAW_PIVOT_H, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}) };
+      case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}), ...(p.base ? { base: num(p.base, "base") } : {}) };
+      case "board": return { type: "board", ...at, w: num(p.w ?? 4, "w"), d: num(p.d ?? 8, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
+      case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), h: num(p.h ?? SEESAW_PIVOT_H, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}), ...(p.dips === "+z" || p.dips === "-z" ? { dips: p.dips } : {}) };
       // Older levels have moving platforms as their own "mover" piece: a slab with its schedule inline.
       case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0, move: parseMove(p, i) };
       case "kicker": return { type: "kicker", ...at, w: num(p.w ?? KICKER_W, "w"), d: num(p.d ?? KICKER_D, "d"), h: num(p.h ?? KICKER_H, "h"), rot: num(p.rot ?? 0, "rot"),
@@ -1874,6 +1920,7 @@ export function validateLevel(raw: unknown): Level {
         const s = p.s === undefined ? undefined : num(p.s, "s");
         return { type: "crate", ...at, w: num(p.w ?? s ?? CRATE_W, "w"), h: num(p.h ?? s ?? CRATE_H, "h"), d: num(p.d ?? s ?? CRATE_D, "d"), rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       }
+      case "cube": return { type: "cube", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "barrel": return { type: "barrel", ...at, r: num(p.r ?? BARREL_R, "r"), h: num(p.h ?? BARREL_H, "h"), rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "jump": return { type: "jump", ...at, w: num(p.w ?? JUMP_W, "w"), d: num(p.d ?? JUMP_D, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise ?? JUMP_RISE, "rise"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "stool": return { type: "stool", ...at, w: num(p.w ?? STOOL_W, "w"), h: num(p.h ?? STOOL_H, "h"), d: num(p.d ?? STOOL_D, "d"), rot: num(p.rot ?? 0, "rot"),
