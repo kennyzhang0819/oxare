@@ -34,10 +34,11 @@ export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: ORAN
 export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: CYAN, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
 // The soft look's animals (docs/animals.md): the blockade a bunny, the barrier a fish, the pillar a
-// giraffe, fences, rails and rings snakes, the kicker a turtle, the jump pad a frog, the bumper a
-// ladybug, the magnet an octopus, the stool a pig, the bean a caterpillar, the crate a cow, the barrel
-// an owl, the cube a chick, the plank a butterfly, the board a flounder, the seesaw a crocodile, the
-// column a penguin and the support a whale with a spout, each in its own colours, their eyes in ink.
+// giraffe, fences, rails and hoops snakes, the tube an eel, the kicker a turtle, the jump pad a frog,
+// the bumper a ladybug, the magnet an octopus, the stool a pig, the bean a caterpillar, the crate a
+// cow, the barrel an owl, the cube a chick, the plank a butterfly, the board a flounder, the seesaw a
+// crocodile, the column a penguin and the support a whale with a spout, each in its own colours, their
+// eyes in ink.
 export const ANIMALS = {
   eye: 0x1b2f52,
   // The green dome hovering over every animal the ball can push.
@@ -46,6 +47,7 @@ export const ANIMALS = {
   fish: { body: 0xff9b7a, fin: 0xffe566, lip: 0xfff3d1 },
   giraffe: { hide: 0xffdd6b, spot: 0xff9f4a, muzzle: 0xfff3d1, horn: 0xff9f4a },
   snake: { skin: 0x9be3b8, band: 0x4caf7d },
+  eel: { skin: 0xbfeedf, spot: 0x5fb3a3, lip: 0xf8aebd, fin: 0x7cc4e0 },
   turtle: { shell: 0x7ccfc4, skin: 0xcde9b8, plate: 0xffe566 },
   frog: { skin: 0xa9db5e, spot: 0x6fae45 },
   ladybug: { shell: 0xff6b6b, head: 0xfff3d1 },

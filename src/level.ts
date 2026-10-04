@@ -579,10 +579,40 @@ export const RING_T = 0.08, RING_R = TUBE_R + RING_T, RING_SIDES = 16, RING_SEGM
 // line by just enough that its inner edge is the ring's, so it never narrows the opening, looking
 // along the ring.
 export function ringHead(m: { c: V3; d: V3 }): { c: V3; d: V3 } {
-  const l = Math.hypot(...m.d) || 1, d: V3 = [m.d[0] / l, m.d[1] / l, m.d[2] / l];
-  const want: V3 = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], k = dot(want, d);
-  const u0 = sub(want, [d[0] * k, d[1] * k, d[2] * k]), ul = Math.hypot(...u0) || 1, u: V3 = [u0[0] / ul, u0[1] / ul, u0[2] / ul];
+  const d = unit(m.d), u = ringUp(d);
   return { c: add(m.c, u, RING_R - RING_T + SNAKE_HEAD.r), d: [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]] };
+}
+// The way round a ring of axis d (unit) nearest straight up, or +x for a ring lying flat.
+export function ringUp(d: V3): V3 {
+  const want: V3 = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], k = dot(want, d);
+  return unit(sub(want, [d[0] * k, d[1] * k, d[2] * k]));
+}
+// A soft tube is a glass eel (docs/animals.md): its first mouth the head, its last the tail, which
+// wears two fins splayed EEL.fin.splay either side of straight up, a V seen from behind. Each is half a
+// squashed ball EEL.fin.len long and EEL.fin.h tall, its flat base EEL.fin.base out from the axis so it
+// never reaches into the bore, centred EEL.fin.back in from the mouth so it stands over the ring and the
+// body, never over the way out. Solid as drawn.
+export const EEL = { fin: { base: TUBE_R + 0.05, back: 0.36, len: 0.44, h: 0.5, t: 0.05, splay: 0.5 }, eye: { r: 0.1, back: 0.45, a: 0.55 }, spot: { r: 0.11, every: 0.8 } };
+// Each fin's base centre and axes (x along the tube out of the mouth, y up off it, z across), from the
+// tail's mouth ring.
+export function eelFins(m: { c: V3; d: V3 }): { c: V3; x: V3; y: V3; z: V3 }[] {
+  const x = unit(m.d), up = ringUp(x), side = cross(x, up), F = EEL.fin;
+  return [-1, 1].map((s) => {
+    const y = add(up.map((v) => v * Math.cos(F.splay)) as V3, side, s * Math.sin(F.splay));
+    return { c: add(add(m.c, y, F.base), x, -F.back), x, y, z: cross(x, y) };
+  });
+}
+// Each fin's outline points for its solid: the half ball sampled as the drawing's.
+export function eelFinPoints(m: { c: V3; d: V3 }): V3[][] {
+  const F = EEL.fin;
+  return eelFins(m).map((f) => {
+    const out: V3[] = [];
+    for (let i = 0; i <= 6; i++) for (let j = 0; j < 16; j++) {
+      const lat = (i / 6) * (Math.PI / 2), az = (j / 16) * Math.PI * 2, r = Math.cos(lat);
+      out.push(add(add(add(f.c, f.x, F.len * r * Math.cos(az)), f.z, F.t * r * Math.sin(az)), f.y, F.h * Math.sin(lat)));
+    }
+    return out;
+  });
 }
 // Each mouth ring's centre and axis (the tube's direction there), from the tube's end rings.
 export function mouthRings(rings: TubeRing[]): { c: V3; d: V3 }[] {
@@ -613,6 +643,7 @@ export interface TubeRing { c: V3; d: V3; m: V3 }
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a: V3, b: V3, k = 1): V3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a: V3): V3 => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const angle = (a: V3, b: V3) => (Math.acos(Math.max(-1, Math.min(1, dot(a, b)))) * 180) / Math.PI;
 

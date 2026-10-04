@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_T, pangolinEnds, pangolinRest, pangolinLine, pangolinRing, pangolinSize, pangolinSlope, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, BUNNY, GIRAFFE, FROG, LADYBUG, OCTOPUS, ringHead, pieceBalls, whaleParts, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_T, pangolinEnds, pangolinRest, pangolinLine, pangolinRing, pangolinSize, pangolinSlope, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, BUNNY, GIRAFFE, FROG, LADYBUG, OCTOPUS, ringHead, ringUp, EEL, eelFins, pieceBalls, whaleParts, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece, snakeBody, snakeHeadMesh } from "./rails.ts";
 import { ANIMALS, BUMPER, EFFECTS, ENV, GOAL, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
@@ -1010,42 +1010,65 @@ function buildTube(g: THREE.Group, p: Tube) {
   skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
   skinGeo.setIndex(skin.indices);
   skinGeo.computeVertexNormals();
-  const glass = new THREE.Mesh(skinGeo, ENV.props === "soft" ? tubeMilk() : TUBE_GLASS);
+  const glass = new THREE.Mesh(skinGeo, ENV.props === "soft" ? eelSkin() : TUBE_GLASS);
   glass.renderOrder = 1;
   g.add(glass);
-  if (ENV.props === "soft") {
-    // A bendy straw: a band round the tube every unit along it, placed along each segment.
-    const band = (c: [number, number, number], d: [number, number, number]) => {
-      const t = ringMesh(c, d, TUBE_R + 0.02, 0.07, 8, 32), geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
-      geo.setIndex(t.indices);
-      geo.computeVertexNormals();
-      g.add(new THREE.Mesh(geo, tubeBand()));
-    };
-    let since = 0.5;
-    for (let i = 1; i < rings.length; i++) {
-      const a = rings[i - 1]!, b = rings[i]!;
-      const len = Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], b.c[2] - a.c[2]);
-      let at = 1 - since;
-      while (at < len - 0.3) {
-        const f = at / len;
-        band([a.c[0] + (b.c[0] - a.c[0]) * f, a.c[1] + (b.c[1] - a.c[1]) * f, a.c[2] + (b.c[2] - a.c[2]) * f], b.d);
-        at += 1;
-      }
-      since = len - (at - 1);
-    }
-  }
+  if (ENV.props === "soft") { softTube(g, rings); return; }
   for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d));
 }
-// The soft tube's skin: a milky pastel, more opaque than the lab glass.
-let TUBE_MILK: THREE.MeshPhysicalMaterial | null = null, TUBE_BAND: THREE.MeshStandardMaterial | null = null;
-function tubeBand(): THREE.MeshStandardMaterial {
-  TUBE_BAND ??= new THREE.MeshStandardMaterial({ color: PLATFORM.recess, roughness: 0.6 });
-  return TUBE_BAND;
+// The soft tube is a glass eel: see-through so the ball shows, a row of spots down its back, two
+// eyes on top behind its first mouth, whose ring is its lips, and its last mouth's ring the tail,
+// wearing two fins in a V (EEL, solid).
+function softTube(g: THREE.Group, rings: TubeRing[]) {
+  const A = ANIMALS.eel, E = EEL;
+  const v = (a: readonly number[]) => new THREE.Vector3(a[0], a[1], a[2]);
+  // A flattened part at `at` facing out along n, its x along the tube.
+  const lay = (m: THREE.Mesh, at: THREE.Vector3, n: THREE.Vector3, d: THREE.Vector3) => {
+    const x = d.clone().addScaledVector(n, -d.dot(n)).normalize();
+    m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, n.clone().cross(x), n));
+    m.position.copy(at);
+    return m;
+  };
+  // Spots: every E.spot.every along the back, clear of both ends, skipped where the tube runs upright.
+  let total = 0;
+  const at = rings.map((q, i) => (total += i ? v(q.c).distanceTo(v(rings[i - 1]!.c)) : 0));
+  for (let s = 1.1; s < total - 1; s += E.spot.every) {
+    const i = at.findIndex((t) => t >= s), a = rings[i - 1]!, b = rings[i]!, f = (s - at[i - 1]!) / (at[i]! - at[i - 1]! || 1);
+    const d = v(b.c).sub(v(a.c)).normalize();
+    if (Math.abs(d.y) > 0.9) continue;
+    const n = v(ringUp([d.x, d.y, d.z]));
+    g.add(lay(flat(E.spot.r, 0, 0, 0, fur(A.spot), 1.3, 1), v(a.c).lerp(v(b.c), f).addScaledVector(n, TUBE_R - 0.02), n, d));
+  }
+  const mouths = mouthRings(rings), head = mouths[0]!, tail = mouths[1]!;
+  // Eyes on top behind the lips, a little to each side, poking 0.03 out of the skin.
+  const hd = v(head.d).normalize(), up = v(ringUp([hd.x, hd.y, hd.z])), side = hd.clone().cross(up);
+  for (const s of [-1, 1]) {
+    const n = up.clone().multiplyScalar(Math.cos(E.eye.a)).addScaledVector(side, s * Math.sin(E.eye.a));
+    g.add(lay(eye(E.eye.r, 0, 0, 0, 1, 1.2, 0.35), v(head.c).addScaledVector(hd, E.eye.back).addScaledVector(n, TUBE_R + 0.03 - E.eye.r * 0.35), n, hd));
+  }
+  for (const [m, c] of [[head, A.lip], [tail, A.fin]] as const) {
+    const t = ringMesh(m.c, m.d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS), geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
+    geo.setIndex(t.indices);
+    geo.computeVertexNormals();
+    const ring = new THREE.Mesh(geo, fur(c));
+    ring.castShadow = ring.receiveShadow = true;
+    g.add(ring);
+  }
+  const F = E.fin, finGeo = new THREE.SphereGeometry(1, 32, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(F.len, F.h, F.t);
+  for (const f of eelFins(tail)) {
+    const fin = new THREE.Mesh(finGeo, fur(A.fin));
+    fin.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(v(f.x), v(f.y), v(f.z)));
+    fin.position.copy(v(f.c));
+    fin.castShadow = fin.receiveShadow = true;
+    g.add(fin);
+  }
 }
-function tubeMilk(): THREE.MeshPhysicalMaterial {
-  TUBE_MILK ??= new THREE.MeshPhysicalMaterial({ color: TUBE.glass, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
-  return TUBE_MILK;
+// The soft tube's skin: the eel's, milky and more opaque than the lab glass.
+let EEL_SKIN: THREE.MeshPhysicalMaterial | null = null;
+function eelSkin(): THREE.MeshPhysicalMaterial {
+  EEL_SKIN ??= new THREE.MeshPhysicalMaterial({ color: ANIMALS.eel.skin, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+  return EEL_SKIN;
 }
 
 // A ring of the fences' and rails' own rail round centre c, axis d (a tube mouth's, or a hoop), with

@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, beltRods, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, snakeHead, SNAKE_HEAD, softProps, ringHead, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceBalls, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, pangolinCuts, pangolinLine, pangolinRest, pangolinRing, pangolinUnrolled, type Pangolin, giraffeStretch, GIRAFFE, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, beltRods, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, tubeRings, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, snakeHead, SNAKE_HEAD, softProps, ringHead, eelFinPoints, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceBalls, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, pangolinCuts, pangolinLine, pangolinRest, pangolinRing, pangolinUnrolled, type Pangolin, giraffeStretch, GIRAFFE, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -744,11 +744,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // convex blocks: a zero-thickness surface only pushes from its front face, so a ball could slip
   // in from outside where a block never lets it. A ring of rail sits round each mouth. The blocks
   // start a little outside the skin so their flat inner faces never narrow the bore.
-  // A ring of rail (a tube mouth's, or a hoop): the drawn torus as it is, and a soft ring's snake head.
-  const railRing = (m: { c: [number, number, number]; d: [number, number, number] }) => {
+  // A ring of rail (a tube mouth's, or a hoop): the drawn torus as it is, and a soft hoop's snake head.
+  const railRing = (m: { c: [number, number, number]; d: [number, number, number] }, snake = true) => {
     const t = ringMesh(m.c, m.d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS);
     fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setFriction(1));
-    if (softProps()) fixed(RAPIER.ColliderDesc.ball(SNAKE_HEAD.r).setTranslation(...ringHead(m).c).setFriction(1));
+    if (snake && softProps()) fixed(RAPIER.ColliderDesc.ball(SNAKE_HEAD.r).setTranslation(...ringHead(m).c).setFriction(1));
   };
   const tubes: SimTube[] = [];
   level.pieces.forEach((p, index) => {
@@ -764,7 +764,15 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       const desc = RAPIER.ColliderDesc.convexHull(pts);
       if (desc) world.createCollider(desc.setFriction(0.6));
     }
-    for (const m of mouthRings(rings)) railRing(m);
+    const mouths = mouthRings(rings);
+    for (const m of mouths) railRing(m, false);
+    // A soft tube is an eel: its tail's fins, laid out in the piece's frame as drawn, are solid.
+    if (softProps()) {
+      for (const fin of eelFinPoints(mouthRings(tubeRings(p))[1]!)) {
+        const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(fin.flatMap(([x, y, z]) => { const o = rotXZ(x, z, p.rot); return [p.x + o.x, p.y + y, p.z + o.z]; })));
+        if (desc) fixed(desc.setFriction(1));
+      }
+    }
     const a = rings[0]!.c, e = rings[rings.length - 1]!.c, cl = Math.hypot(e[0] - a[0], e[2] - a[2]);
     tubes.push({ index, centre: rings.map((q) => q.c), chord: cl > 1e-6 ? [(e[0] - a[0]) / cl, (e[2] - a[2]) / cl] : [0, 0] });
   });
