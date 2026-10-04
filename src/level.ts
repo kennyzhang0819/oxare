@@ -1289,8 +1289,8 @@ export function respawnY(level: Level): number {
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
 }
 // The worlds levels are grouped into, a tab each in the level select; a level without `world` is in the first.
-// `tag` prefixes a level's number in the menus: C1, C2 in Classic, N1, N2 in Neo.
-export const WORLDS = [{ id: "classic", name: "Classic", tag: "C" }, { id: "neo", name: "Neo", tag: "N" }] as const;
+// `tag` prefixes a level's number in the menus: C1, C2 in Classic, N1, N2 in Neo, W1, W2 in Workshop (community levels).
+export const WORLDS = [{ id: "classic", name: "Classic", tag: "C" }, { id: "neo", name: "Neo", tag: "N" }, { id: "workshop", name: "Workshop", tag: "W" }] as const;
 export type World = (typeof WORLDS)[number]["id"];
 export const worldOf = (level: Level): World => level.world ?? "classic";
 // A level's label in its world's list: the world's tag and its number there, C3 or N1.

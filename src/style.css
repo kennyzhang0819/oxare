@@ -80,7 +80,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 @media (max-width: 640px) {
   .level-top { display: flex; flex-wrap: wrap; justify-content: space-between; }
   .level-top .end:empty { display: none; }
-  .world-tab { padding: 10px 16px; }
+  .world-tab { padding: 10px 12px; letter-spacing: 0.1em; }
 }
 .level-grid { --card: 220px; --gap: 16px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--gap); max-width: calc(4 * var(--card) + 3 * var(--gap)); }
 .level-card { box-sizing: border-box; width: min(var(--card), calc(50vw - 24px)); display: flex; flex-direction: column; gap: 4px; padding: 8px 8px 10px; border-radius: 14px; text-align: left;
