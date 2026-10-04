@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ENV, RAILS } from "./palette.ts";
+import { ENV, PILLAR, RAILS } from "./palette.ts";
 import { railSweep } from "./geometry.ts";
 import { PAINT, FENCE_RAIL_Y, RAIL_R, fenceRings, railsLines, railsRings, tubeRings, type FencePiece, type Level, type Rails, type TubeRing } from "./level.ts";
 
@@ -9,6 +9,26 @@ export const RAIL_MAT = new THREE.MeshStandardMaterial({ color: RAILS.rail, roug
 // A light strip's outer face sits this far in from the rail's centre: PAINT proud of the tube.
 const STRIPE_IN = RAIL_R + PAINT;
 export const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: RAILS.stripe, emissive: RAILS.stripe, emissiveIntensity: 0.8 * ENV.glow, roughness: ENV.lightRoughness, metalness: ENV.lightMetal });
+// Soft rails: the rail in the pastel tint, no stripe, round beads in the light colour at the ends
+// and at every turn.
+const SOFT_RAIL = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: ENV.bodyRoughness, metalness: 0.05 });
+const BEAD_R = RAIL_R * 1.7;
+function beads(rings: TubeRing[], off: number, into: THREE.Group, ends: boolean): void {
+  const bead = new THREE.SphereGeometry(BEAD_R, 16, 12);
+  const at = (i: number) => {
+    const r = rings[i]!, m = new THREE.Mesh(bead, STRIPE_MAT);
+    // Offset sideways the way railSweep does, along the ring's right-hand vector.
+    const d = new THREE.Vector3(...r.d).normalize(), side = new THREE.Vector3(0, 1, 0).cross(d).normalize();
+    m.position.set(r.c[0], r.c[1], r.c[2]).addScaledVector(side, off);
+    m.castShadow = true;
+    into.add(m);
+  };
+  if (ends) { at(0); at(rings.length - 1); }
+  for (let i = 1; i + 1 < rings.length; i++) {
+    const a = rings[i - 1]!.d, b = rings[i]!.d;
+    if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] < 0.6) at(i);
+  }
+}
 
 const mesh = (m: { positions: number[]; indices: number[] }, mat: THREE.Material) => {
   const geo = new THREE.BufferGeometry();
@@ -37,9 +57,11 @@ function trim(rings: TubeRing[], cut: number): TubeRing[] {
 export function buildFence(p: FencePiece, into: THREE.Group): void {
   const rings = fenceRings(p);
   if (rings.length < 2) return;
-  const rail = mesh(railSweep(rings, 0, RAIL_R, 16, 0), RAIL_MAT);
+  const soft = ENV.props === "soft";
+  const rail = mesh(railSweep(rings, 0, RAIL_R, 16, 0), soft ? SOFT_RAIL : RAIL_MAT);
   rail.castShadow = true;
   into.add(rail);
+  if (soft) { beads(tubeRings(p, FENCE_RAIL_Y), 0, into, true); return; }
   const top = trim(tubeRings(p, FENCE_RAIL_Y), 0.25);
   if (top.length > 1) into.add(mesh(railSweep(top, STRIPE_IN - 0.025, 0.025, 6, 0), STRIPE_MAT));
 }
@@ -48,15 +70,17 @@ export function buildFence(p: FencePiece, into: THREE.Group): void {
 // single rail's closed end rounded off.
 export function buildRailsPiece(p: Rails, into: THREE.Group, level: Level): void {
   const { lines, caps } = railsLines(p, railsRings(p, level));
+  const soft = ENV.props === "soft";
   for (const { rings, off } of lines) {
-    const rail = mesh(railSweep(rings, off, RAIL_R, 16, 0), RAIL_MAT);
+    const rail = mesh(railSweep(rings, off, RAIL_R, 16, 0), soft ? SOFT_RAIL : RAIL_MAT);
     rail.castShadow = true;
     into.add(rail);
+    if (soft) { beads(rings, off, into, false); continue; }
     // A joined line's outside is on its right-hand side (railsLoop).
     for (const side of p.lines === 1 ? [-1, 1] : off === 0 ? [-1] : [Math.sign(off)]) into.add(mesh(railSweep(rings, off + side * RAIL_R * 0.85, 0.022, 6, 0), STRIPE_MAT));
   }
   for (const c of caps) {
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(RAIL_R, 16, 8), RAIL_MAT);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(soft ? BEAD_R : RAIL_R, 16, 8), soft ? STRIPE_MAT : RAIL_MAT);
     cap.position.set(...c);
     cap.castShadow = true;
     into.add(cap);

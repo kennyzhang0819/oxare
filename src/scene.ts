@@ -382,6 +382,7 @@ function buildSupport(parent: THREE.Group, p: Piece & { type: "support" }) {
 // back, a slate panel ribbed in pale grey inside a pale border between two cyan lines, and an ear
 // out each side (pillarEar), narrowing toward its tip, with a slate pad on its front and back.
 function supportTrim(col: THREE.Group, top: number, bend: number) {
+  if (ENV.props === "soft") return softSupportTrim(col, top, bend);
   const st = STRUCT!, W = SUPPORT_W, D = SUPPORT_D, T = PLATFORM_THICKNESS, b = 0.07, yb = -T / 2 + D / 2 + bend;
   // Paint on the faces at ±z, drawn in each face's own x / y with +z out of it.
   const faces = (z: number, add: (f: THREE.Group) => void) => {
@@ -431,6 +432,39 @@ function supportTrim(col: THREE.Group, top: number, bend: number) {
   }
 }
 
+// Soft support trim: the stem stays plain; each stretch gets two light rings round it and keeps
+// its ears (they are solid), in the soft tint, with a round dot on each.
+function softSupportTrim(col: THREE.Group, top: number, bend: number) {
+  const st = STRUCT!, sm = softMats(), W = SUPPORT_W, D = SUPPORT_D, T = PLATFORM_THICKNESS, yb = -T / 2 + D / 2 + bend;
+  const ball = new THREE.SphereGeometry(PILLAR_EAR.r, 10, 6).getAttribute("position");
+  const ringGeo = new THREE.TorusGeometry(1, 0.05, 10, 48);
+  for (const stretch of pillarStretches(yb, top)) {
+    const { ym, ph } = stretch;
+    for (const dy of [-ph * 0.32, ph * 0.32]) {
+      const ring = new THREE.Mesh(ringGeo, st.glow);
+      ring.rotation.x = Math.PI / 2;
+      ring.scale.set(W / 2 + 0.02, D / 2 + 0.02, 1);
+      ring.position.y = ym + dy;
+      col.add(ring);
+    }
+    // The ears as beads: a squashed sphere inside the ear's solid, in the tint, with a light dot.
+    for (const side of [-1, 1]) {
+      const box = new THREE.Box3();
+      for (const [x, y, z] of pillarEar(stretch, side)) box.expandByPoint(new THREE.Vector3(x, y, z));
+      const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16), sm.tint);
+      ear.scale.set(size.x + 2 * PILLAR_EAR.r, size.y + 2 * PILLAR_EAR.r, size.z + 2 * PILLAR_EAR.r);
+      ear.position.copy(c);
+      ear.castShadow = ear.receiveShadow = true;
+      col.add(ear);
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), st.glow);
+      dot.position.set(c.x + side * (size.x / 2 + PILLAR_EAR.r - 0.03), c.y, 0);
+      col.add(dot);
+    }
+    void ball;
+  }
+}
+
 // Gate: each arch is one white extrusion of gateStrip, bevelled like a support's pillar. Each leg
 // wears a support's trim, its slot facing the platform, and each beam a row of circuit-board
 // panels front and back. A fence rail's rod
@@ -474,7 +508,16 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
       supportTrim(col, gateLegTop(p), GATE_BEND_R);
       arch.add(col);
     }
-    for (const s of [1, -1]) for (let k = 0; k < n; k++) {
+    if (ENV.props === "soft") {
+      // A row of round dots along each beam, front and back, alternating the light and tint colours.
+      const nd = Math.max(2, Math.round(2 * cx / 0.6)), dot = new THREE.CircleGeometry(0.11, 20);
+      for (const s of [1, -1]) for (let k = 0; k < nd; k++) {
+        const m = new THREE.Mesh(dot, k % 2 ? softMats().tint : st.glow);
+        m.position.set(-cx + (k + 0.5) * (2 * cx / nd), p.h - D / 2, s * (W / 2 + PAINT * 0.6));
+        if (s < 0) m.rotation.y = Math.PI;
+        arch.add(m);
+      }
+    } else for (const s of [1, -1]) for (let k = 0; k < n; k++) {
       const m = new THREE.Mesh(panel, [SLATE, SLATE, SLATE, SLATE, st.barrierPanel, st.barrierPanel]);
       m.position.set(-cx + gap + pw / 2 + k * (pw + gap), p.h - D / 2, s * (W / 2 - 0.04 + PAINT));
       arch.add(m);
@@ -779,16 +822,66 @@ function buildTube(g: THREE.Group, p: Tube) {
   skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
   skinGeo.setIndex(skin.indices);
   skinGeo.computeVertexNormals();
-  const glass = new THREE.Mesh(skinGeo, TUBE_GLASS);
+  const glass = new THREE.Mesh(skinGeo, ENV.props === "soft" ? tubeMilk() : TUBE_GLASS);
   glass.renderOrder = 1;
   g.add(glass);
+  if (ENV.props === "soft") {
+    // A bendy straw: a band round the tube every unit along it, placed along each segment.
+    const band = (c: [number, number, number], d: [number, number, number]) => {
+      const t = ringMesh(c, d, TUBE_R + 0.02, 0.07, 8, 32), geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
+      geo.setIndex(t.indices);
+      geo.computeVertexNormals();
+      g.add(new THREE.Mesh(geo, tubeBand()));
+    };
+    let since = 0.5;
+    for (let i = 1; i < rings.length; i++) {
+      const a = rings[i - 1]!, b = rings[i]!;
+      const len = Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], b.c[2] - a.c[2]);
+      let at = 1 - since;
+      while (at < len - 0.3) {
+        const f = at / len;
+        band([a.c[0] + (b.c[0] - a.c[0]) * f, a.c[1] + (b.c[1] - a.c[1]) * f, a.c[2] + (b.c[2] - a.c[2]) * f], b.d);
+        at += 1;
+      }
+      since = len - (at - 1);
+    }
+  }
   for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d));
+}
+// The soft tube's skin: a milky pastel, more opaque than the lab glass.
+let TUBE_MILK: THREE.MeshPhysicalMaterial | null = null, TUBE_BAND: THREE.MeshStandardMaterial | null = null;
+function tubeBand(): THREE.MeshStandardMaterial {
+  TUBE_BAND ??= new THREE.MeshStandardMaterial({ color: PLATFORM.recess, roughness: 0.6 });
+  return TUBE_BAND;
+}
+function tubeMilk(): THREE.MeshPhysicalMaterial {
+  TUBE_MILK ??= new THREE.MeshPhysicalMaterial({ color: TUBE.glass, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+  return TUBE_MILK;
 }
 
 // A ring of the fences' and rails' own rail round centre c, axis d (a tube mouth's, or a hoop), with
 // the rails' light strip round its outside.
 function railRing(c: [number, number, number], d: [number, number, number]): THREE.Group {
   const ring = new THREE.Group();
+  if (ENV.props === "soft") {
+    // A plain ring with six round beads in the light colour round it.
+    const t = ringMesh(c, d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS), geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
+    geo.setIndex(t.indices);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, RAIL_MAT);
+    m.castShadow = true;
+    ring.add(m);
+    const axis = new THREE.Vector3(...d).normalize(), u = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0).cross(axis).normalize() : new THREE.Vector3(1, 0, 0).cross(axis).normalize(), v = axis.clone().cross(u);
+    const bead = new THREE.SphereGeometry(RING_T * 1.35, 14, 10);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2, b = new THREE.Mesh(bead, STRUCT!.glow);
+      b.position.set(c[0], c[1], c[2]).addScaledVector(u, Math.cos(a) * (RING_R + RING_T * 0.4)).addScaledVector(v, Math.sin(a) * (RING_R + RING_T * 0.4));
+      ring.add(b);
+    }
+    return ring;
+  }
   for (const [R, r, sides, mat] of [[RING_R, RING_T, RING_SIDES, RAIL_MAT], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]] as const) {
     const t = ringMesh(c, d, R, r, sides, RING_SEGMENTS), geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
