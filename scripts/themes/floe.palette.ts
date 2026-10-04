@@ -47,6 +47,7 @@ export const EFFECTS = {
 export const ENV = {
   style: "ice" as "lab" | "ice" | "cute",
   props: "lab",
+  faces: false,
   floes: false,
   tileTints: null as number | null,
   rain: 0,

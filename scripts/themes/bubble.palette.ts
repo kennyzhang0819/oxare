@@ -47,10 +47,11 @@ export const EFFECTS = {
 export const ENV = {
   style: "cute" as "lab" | "ice" | "cute",
   props: "soft",
+  faces: false,
   floes: false,
   tileTints: [0xe8f3ff, 0xeefaff, 0xf3f0ff, 0xe9fff5],
   rain: 0,
-  bubbles: 420,
+  bubbles: 0,
   cloudCover: 0.14,
   fog: 1,
   floorRoughness: 0.8,

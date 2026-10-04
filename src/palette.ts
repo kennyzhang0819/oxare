@@ -71,6 +71,8 @@ export const ENV = {
   // Which bodies the props are built as: the lab's cylinders, pucks and crates, or soft shapes
   // (beads, puddings, donuts, mochi, pillows, clouds, pills) inside the same colliders.
   props: "lab" as "lab" | "soft",
+  // Kawaii faces on the cute style's panels and soft props.
+  faces: false,
 };
 
 // As a CSS colour, for canvas textures.

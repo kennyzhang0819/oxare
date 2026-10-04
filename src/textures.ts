@@ -320,7 +320,8 @@ function drawKawaii(ctx: Ctx, px: number, py: number, pw: number, ph: number, se
   const s = cpu * 1.1;
   // A soft lighter disc behind the face.
   ctx.fillStyle = C.shine; ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(ox, oy, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-  kawaii(ctx, ox, oy, s, C.eye, C.blush, C.shine);
+  if (ENV.faces) kawaii(ctx, ox, oy, s, C.eye, C.blush, C.shine);
+  else { star(ctx, ox, oy, s * 0.7, C.shine); star(ctx, ox, oy, s * 0.42, C.blush); }
   if (pw / ph > 2.2) for (const f of [0.14, 0.86]) heart(ctx, px + pw * f, oy, s * 0.5, C.blush);
   for (let i = 0, tries = 0; i < 7 && tries < 60; tries++) {
     const x = px + 8 + rnd() * (pw - 16), y = py + 8 + rnd() * (ph - 16), r = 2.5 + rnd() * 3;
@@ -692,7 +693,8 @@ function cuteCrateFaces(): [THREE.Texture, THREE.Texture] {
   ctx.globalAlpha = 1;
   ctx.fillStyle = css(CRATE.cross); ctx.beginPath(); ctx.roundRect(44, 44, 168, 168, 54); ctx.fill();
   ctx.fillStyle = css(CRATE.shine); ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.roundRect(56, 54, 144, 60, 30); ctx.fill(); ctx.globalAlpha = 1;
-  kawaii(ctx, S / 2, S / 2 + 6, 62, css(CRATE.screen), css(CRATE.light), css(CRATE.shine));
+  if (ENV.faces) kawaii(ctx, S / 2, S / 2 + 6, 62, css(CRATE.screen), css(CRATE.light), css(CRATE.shine));
+  else star(ctx, S / 2, S / 2, 46, css(CRATE.shine));
   ectx.fillStyle = "#000"; ectx.fillRect(0, 0, S, S);
   const arm = 56, t = 18;
   for (const target of [ctx, ectx]) {

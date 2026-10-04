@@ -1209,7 +1209,7 @@ function softMats() {
 }
 // A face decal `size` across on a plane facing +z, PAINT off the surface it is put on.
 // Faces belong to the cute style only; elsewhere the soft props stay plain.
-const faced = (): boolean => ENV.style === "cute";
+const faced = (): boolean => ENV.style === "cute" && ENV.faces;
 function faceDecal(size: number): THREE.Mesh {
   FACE_MAT ??= new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, roughness: 0.6 });
   const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), FACE_MAT);
