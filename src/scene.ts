@@ -1680,44 +1680,46 @@ const NOISE_GLSL = `
   float cloudCover(vec2 xz, float time) { return smoothstep(0.42 - cover, 0.68 - cover, fbm(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }
   float cloudCoverLow(vec2 xz, float time) { return smoothstep(0.42 - cover, 0.68 - cover, fbmLow(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }
   float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  // Cartoon clouds: in some cells of a large jittered grid, one cloud made of a big disc with three
-  // smaller discs riding on it. x is the coverage with a short soft rim, y the lit core inside each
-  // disc; cover fills more cells and grows the discs.
-  vec2 puffs(vec2 p, float cover) {
-    float cov = 0.0, core = 0.0, cell = 46.0;
-    vec2 g = floor(p / cell), f = p / cell - g;
-    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-      vec2 n = vec2(float(i), float(j));
-      float h = hash21(g + n);
-      if (h > 0.25 + cover * 1.5) continue;
-      vec2 c = n + 0.35 + 0.3 * vec2(hash21(g + n + 5.2), hash21(g + n + 1.3));
-      float r = (0.14 + 0.1 * hash21(g + n + 9.1)) * (1.0 + cover);
-      // The big disc and its satellites: two beside it, a little higher, one on top.
-      vec2 d4[4];
-      d4[0] = c; d4[1] = c + vec2(-0.75 * r, 0.25 * r); d4[2] = c + vec2(0.8 * r, 0.2 * r); d4[3] = c + vec2(0.1 * r, 0.6 * r);
-      for (int k = 0; k < 4; k++) {
-        float rk = k == 0 ? r : r * (k == 3 ? 0.6 : 0.68), dd = length(f - d4[k]);
-        cov = max(cov, 1.0 - smoothstep(rk - 0.02, rk, dd));
-        core = max(core, 1.0 - smoothstep(rk * 0.72 - 0.02, rk * 0.72, dd));
-      }
-    }
-    return vec2(cov, core);
+  // Cartoon cumulus: one cloud in some cells of a large grid, each a cluster of seven balls (a
+  // big one, a ring of five round it turned by a random angle, one on top) merged smoothly and
+  // lumped by low noise, standing on the deck's base. A cloud never leaves its own cell, so the
+  // march only ever asks the cell it is in. The sea reads the same balls from above.
+  const float CLOUD_CELL = 68.0;
+  bool cloudIn(vec2 g, float cover) { return hash21(g) < 0.4 + cover * 1.5; }
+  // Ball k of the cloud in cell g: xyz its centre (xz inside the cell, y above cloudY), w its radius.
+  vec4 cloudBall(vec2 g, int k, float cover) {
+    float R = (5.5 + 3.0 * hash21(g + 9.1)) * (1.0 + cover * 0.4);
+    vec2 c = (g + 0.5 + 0.4 * (vec2(hash21(g + 5.2), hash21(g + 1.3)) - 0.5)) * CLOUD_CELL;
+    float a = hash21(g + 3.7) * 6.2832;
+    float ang = a + float(k) * 1.2566, sr = 0.0, h = 0.0, r = 0.0;
+    if (k == 0) { r = R; h = 0.0; sr = 0.0; }
+    else if (k == 6) { r = 0.6 * R; h = 0.72 * R; sr = 0.22 * R; }
+    else { r = (0.5 + 0.12 * hash21(g + float(k) * 2.1)) * R; h = (0.02 + 0.16 * hash21(g + float(k) * 4.3)) * R; sr = 1.02 * R; }
+    return vec4(c.x + cos(ang) * sr, r * 0.92 + h, c.y + sin(ang) * sr, r);
   }
-  // Round spots for the cel sea: one soft-edged disc in some cells of a jittered grid, drifting.
-  float spots(vec2 p, float time) {
-    p += vec2(time * 0.25, -time * 0.15);
-    float cell = 11.0, best = 0.0;
-    vec2 g = floor(p / cell), f = p / cell - g;
-    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-      vec2 n = vec2(float(i), float(j));
-      float h = hash21(g + n);
-      if (h > 0.4) continue;
-      vec2 c = n + 0.3 + 0.4 * vec2(hash21(g + n + 3.1), hash21(g + n + 7.7));
-      float r = 0.14 + 0.16 * h, d = length(f - c);
-      best = max(best, 1.0 - smoothstep(r - 0.03, r, d));
+  float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
+  // Signed distance to the cloud in cell g (a huge distance for an empty cell).
+  float cloudSdf(vec3 p, vec2 g, float cloudY, float cover, float time) {
+    if (!cloudIn(g, cover)) return 1e4;
+    float d = 1e4, R = cloudBall(g, 0, cover).w;
+    for (int k = 0; k < 7; k++) {
+      vec4 b = cloudBall(g, k, cover);
+      d = smin(d, length(p - vec3(b.x, cloudY + b.y, b.z)) - b.w, 0.3 * R);
+    }
+    return d + (noise3(p * 0.11 + vec3(time * 0.03, 0.0, 0.0)) - 0.5) * R * 0.3;
+  }
+  // The cloud deck seen from straight above: 1 under a cloud's balls, with a short soft rim.
+  float deckAbove(vec2 p, float cover) {
+    vec2 g = floor(p / CLOUD_CELL);
+    if (!cloudIn(g, cover)) return 0.0;
+    float best = 0.0;
+    for (int k = 0; k < 7; k++) {
+      vec4 b = cloudBall(g, k, cover);
+      best = max(best, 1.0 - smoothstep(b.w * 0.95 - 0.4, b.w * 0.95, length(p - b.xz)));
     }
     return best;
-  }`;
+  }
+`;
 
 // Gradient dome under a volumetric cloud deck between CLOUD_Y and CLOUD_TOP. Each sky pixel
 // marches its view ray through the deck: coverage decides where clouds stand, coverage also
@@ -1750,13 +1752,47 @@ function makeSky(): THREE.Mesh {
         vec3 d = normalize(vP);
         vec3 sky = mix(bottom, top, smoothstep(0.04, 0.7, d.y));
         vec3 col = sky;
-        if (toon > 0.5 && d.y > 0.01) {
-          // Cartoon clouds: one flat layer of round puffs at the deck's height, a lit core inside a shaded rim.
+        if (toon > 0.5 && d.y > 0.01 && detail < 0.5) {
+          // Reflection passes: the deck flat, seen from below.
           float t = (cloudY - cameraPosition.y) / d.y;
           vec2 p = cameraPosition.xz + d.xz * t + vec2(time * 0.6, time * 0.25);
-          vec2 pf = puffs(p, cover);
-          float fade = exp(-t * 0.007) * smoothstep(0.05, 0.14, d.y);
-          col = mix(sky, mix(cloudShade, cloud, pf.y), pf.x * fade);
+          col = mix(sky, cloudShade, deckAbove(p, cover) * exp(-t * 0.007));
+        } else if (toon > 0.5 && d.y > 0.01) {
+          // Cartoon cumulus: the ray walks the deck cell by cell (each step no further than the
+          // cell's wall, so no cloud is skipped), sphere-traces the cell's cloud, and a hit is
+          // cel-lit in three bands from its surface normal, with a dark rim at its silhouette.
+          vec3 drift = vec3(time * 0.6, 0.0, time * 0.25);
+          float t = (cloudY - cameraPosition.y) / d.y, fade = exp(-t * 0.0045) * smoothstep(0.03, 0.1, d.y);
+          bool hit = false;
+          vec3 p = vec3(0.0);
+          if (fade > 0.02) for (int i = 0; i < 48; i++) {
+            p = cameraPosition + d * t + drift;
+            if (p.y > cloudTop || t > 520.0) break;
+            vec2 g = floor(p.xz / CLOUD_CELL);
+            float sd = cloudSdf(p, g, cloudY, cover, time);
+            if (sd < 0.12) { hit = true; break; }
+            vec2 f = p.xz - g * CLOUD_CELL;
+            float tx = d.x > 0.0 ? (CLOUD_CELL - f.x) / d.x : d.x < 0.0 ? -f.x / d.x : 1e4;
+            float tz = d.z > 0.0 ? (CLOUD_CELL - f.y) / d.z : d.z < 0.0 ? -f.y / d.z : 1e4;
+            t += min(sd * 0.7, min(tx, tz) + 0.15);
+          }
+          if (hit) {
+            vec2 g = floor(p.xz / CLOUD_CELL);
+            float e = 0.35;
+            vec3 n = normalize(vec3(
+              cloudSdf(p + vec3(e, 0, 0), g, cloudY, cover, time) - cloudSdf(p - vec3(e, 0, 0), g, cloudY, cover, time),
+              cloudSdf(p + vec3(0, e, 0), g, cloudY, cover, time) - cloudSdf(p - vec3(0, e, 0), g, cloudY, cover, time),
+              cloudSdf(p + vec3(0, 0, e), g, cloudY, cover, time) - cloudSdf(p - vec3(0, 0, e), g, cloudY, cover, time)));
+            float lit = dot(n, sunDir);
+            float band = lit > 0.3 ? 1.0 : lit > -0.2 ? 0.55 : 0.1;
+            // The underside sits in its own shade.
+            band *= 0.75 + 0.25 * clamp((p.y - cloudY) / 6.0, 0.0, 1.0);
+            vec3 c = mix(cloudShade, cloud, band);
+            float rim = 1.0 - abs(dot(n, d));
+            c = mix(c, cloudShade * 0.7, step(0.86, rim) * 0.7);
+            fade = exp(-t * 0.0045) * smoothstep(0.03, 0.1, d.y);
+            col = mix(sky, c, fade);
+          }
         } else if (d.y > 0.01 && detail < 0.5) {
           // Flat deck for reflection passes.
           float t = max((cloudY - cameraPosition.y) / d.y, 0.0);
@@ -1929,13 +1965,11 @@ function makeOcean(): THREE.Mesh {
         float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
         vec3 col;
         float spec = pow(max(dot(n, normalize(sunDir + V)), 0.0), 140.0);
-        float shadow = toon > 0.5 ? puffs(p + vec2(time * 0.6, time * 0.25), cover).x : detail > 0.5 ? cloudCover(p, time) : cloudCoverLow(p, time);
+        float shadow = toon > 0.5 ? deckAbove(p + vec2(time * 0.6, time * 0.25), cover) : detail > 0.5 ? cloudCover(p, time) : cloudCoverLow(p, time);
         if (toon > 0.5) {
           // Cel sea: two flat bands of water, a flat band of sky at the grazing angle, hard white glints
           // and hard-edged cloud shadows.
-          // Two flat bands of water with round lighter spots drifting across.
-          float band = step(0.5, tone), spot = spots(p, time) * exp(-length(cameraPosition - vWorld) * 0.006);
-          col = mix(mix(deep, shallow, band), mix(shallow, sky, 0.45), spot * 0.55);
+          col = mix(deep, shallow, step(0.5, tone));
           col = mix(col, sky, step(0.55, fres) * 0.6);
           col += vec3(1.0) * step(0.25, spec) * 0.35;
           col *= 1.0 - 0.14 * step(0.5, shadow);
