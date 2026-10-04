@@ -50,7 +50,7 @@ The ball rolls on one welded triangle mesh built from every platform top (`floor
 - An open edge (nothing next to it, including a hole's edge) has the same rounded lip as the visuals, so the ball rolls off it.
 - Where two pieces meet, the floor is flat: no lip and no dip, as drawn. Each piece still adds a point on the seam where the inset corner of its open side lands (0.45 along at a square corner, further at a slanted one), and both pieces take each other's, so the strips there weld. Along a straight run the inset points are kept in order between the run's corners, or a slanted corner would fold the strip over itself.
 - Under the top there is a second mesh with the side walls and underside, so a ball below or beside a platform hits it.
-- A treadmill is in the floor as its frame only: a slab top with its opening cut out, the opening's edge dropping square with no lip. Its rods are their own spinning bodies.
+- A treadmill is in the floor as its frame only: a slab top with its opening cut out, the opening's edge dropping square with no lip. Its belt is its own body, run in place (docs/levels.md "Treadmills").
 - Both meshes are zero-thickness shells that only push from their front face, so every platform is also filled with solid convex hulls from its underside to 0.03 below its surface, chamfered under the lip. The ball never touches them while rolling, but if it ever reaches the corner where a wall meets the lip, the solid pushes it back out instead of letting it in. `check.ts` fires balls at raised slab, holed slab, curve and ramp edges to prove nothing gets inside.
 
 `npm run check` checks that the ball neither sinks nor hops crossing a join, curves stay flat, and that the ball falls through holes and notches but rolls past them.

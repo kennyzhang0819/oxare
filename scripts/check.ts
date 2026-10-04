@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { BARRIER_W, beanAt, beanDist, beanTrack, rotXZ, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -443,8 +443,8 @@ for (const [name, x, hits] of [["gate-hit", 0, true], ["gate-past", 2.5, false]]
   else console.log(`ok kick-gap: a 1-high kicker at full speed carries the ball over the 8 gap (centre down ${land!.toFixed(2)} past its edge)`);
 }
 // Rolled props turn about their own front-to-back axis through their base, behaviour included: a
-// magnet rolled 90 onto a wall pulls a ball near the wall's foot up toward its axis, and a bumper
-// rolled onto a wall still throws back a ball rolling into its round side.
+// magnet rolled 90 onto a wall pulls a ball near the wall's foot up toward its axis, and a puffer
+// rolled onto a wall blows a ball resting along the wall away from it.
 {
   const L = (pieces: unknown[], start: [number, number]) => testLevel({ id: "rolled", name: "rolled", pieces: [
     { type: "start", x: start[0], y: 0, z: start[1] }, { type: "slab", x: 0, y: 0, z: 0, w: 16, d: 16, rot: 0 },
@@ -454,12 +454,12 @@ for (const [name, x, hits] of [["gate-hit", 0, true], ["gate-past", 2.5, false]]
   let top = 0;
   for (let i = 0; i < 120 * 3; i++) { sim.step(0, 0, -1); top = Math.max(top, sim.ball.translation().y); }
   sim.free();
-  sim = await createSim(L([{ type: "bumper", x: 2.5, y: 1, z: -3, roll: 90 }], [1.6, 4]));
+  sim = await createSim(L([{ type: "puffer", x: 2.5, y: 1, z: -3, roll: 90, every: 3, offset: 0.5 }], [1.6, 0]));
   let back = 0;
-  for (let i = 0; i < 120 * 3; i++) { sim.step(back > 0 ? 0 : 1, 0, -1); back = Math.max(back, sim.ball.linvel().z); }
+  for (let i = 0; i < 120 * 2; i++) { sim.step(0, 0, -1); back = Math.max(back, sim.ball.linvel().z); }
   sim.free();
-  if (top < 1.5 || back < TUNING.bumperKick - 1) { failed = true; console.error(`FAIL rolled: a wall magnet lifted the ball to y ${top.toFixed(2)} (want 1.5+), a wall bumper threw it back at ${back.toFixed(2)}`); }
-  else console.log(`ok rolled: a wall magnet lifts the ball to y ${top.toFixed(2)}, a wall bumper throws it back at ${back.toFixed(2)} m/s`);
+  if (top < 1.5 || back < 2) { failed = true; console.error(`FAIL rolled: a wall magnet lifted the ball to y ${top.toFixed(2)} (want 1.5+), a wall puffer blew it away at ${back.toFixed(2)} (want 2+)`); }
+  else console.log(`ok rolled: a wall magnet lifts the ball to y ${top.toFixed(2)}, a wall puffer blows it away at ${back.toFixed(2)} m/s`);
 }
 // A fence stops a ball rolling into it: at full speed, head-on and at 30 degrees, it never gets over.
 for (const deg of [0, 30]) {
@@ -476,25 +476,31 @@ for (const deg of [0, 30]) {
   if (over) { failed = true; console.error(`FAIL fence-hold: a full-speed ball ${deg}° off straight-on got over the fence`); }
   else console.log(`ok fence-hold: a full-speed ball ${deg}° off straight-on is held`);
 }
-// A bumper must throw back a ball that runs into it, at least as fast as the kick.
+// A puffer's ring must blow a resting ball inside its reach away from it, once per ring and level,
+// and leave one outside its reach alone.
 {
-  const level = testLevel({ id: "bumper", name: "bumper", pieces: [
-    { type: "start", x: 0, y: 0, z: 0 },
-    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
-    { type: "bumper", x: 0, y: 0, z: -8 },
-    { type: "goal", x: 0, y: 0, z: -18, r: 2 },
-  ] });
-  const sim = await createSim(level);
-  let minZ = 0, back = 0, maxY = 0;
-  for (let i = 0; i < 120 * 3; i++) {
-    const p = sim.ball.translation();
-    sim.step(back > 0 ? 0 : 1, 0, -1);
-    minZ = Math.min(minZ, p.z); maxY = Math.max(maxY, p.y);
-    back = Math.max(back, sim.ball.linvel().z);
-  }
-  sim.free();
-  if (minZ < -7 || back < TUNING.bumperKick - 0.5 || maxY > 1.2) { failed = true; console.error(`FAIL bumper: z ${minZ.toFixed(2)}, thrown back at ${back.toFixed(2)}, y ${maxY.toFixed(2)}`); }
-  else console.log(`ok bumper: thrown back at ${back.toFixed(2)} m/s`);
+  const blow = async (gap: number) => {
+    const level = testLevel({ id: "puffer", name: "puffer", pieces: [
+      { type: "start", x: 0, y: 0, z: 0 },
+      { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 30, rot: 0, fences: {} },
+      { type: "puffer", x: 0, y: 0, z: -gap, every: 3, offset: 0.5 },
+      { type: "goal", x: 0, y: 0, z: -18, r: 2 },
+    ] });
+    const sim = await createSim(level);
+    const y0 = sim.ball.translation().y;
+    let away = 0, maxY = 0, kicks = 0, was = 0;
+    for (let i = 0; i < 120 * 2; i++) {
+      sim.step(0, 0, -1);
+      const v = sim.ball.linvel().z;
+      if (v - was > 1) kicks++;
+      was = v; away = Math.max(away, v); maxY = Math.max(maxY, sim.ball.translation().y - y0);
+    }
+    sim.free();
+    return { away, maxY, kicks };
+  };
+  const near = await blow(3), far = await blow(7);
+  if (near.away < 2.5 || near.kicks !== 1 || near.maxY > 0.1 || far.away > 0.1) { failed = true; console.error(`FAIL puffer: 3 away blown off at ${near.away.toFixed(2)} (want 2.5+) in ${near.kicks} kicks, lifted ${near.maxY.toFixed(2)}; 7 away moved at ${far.away.toFixed(2)} (want 0)`); }
+  else console.log(`ok puffer: a ball 3 away is blown off at ${near.away.toFixed(2)} m/s, one 7 away is left alone`);
 }
 // A magnet must draw in a resting ball from inside its reach, leave one outside it alone, and let
 // full throttle pull the ball back off it, even at the strongest pull and hold the tuning allows.
@@ -627,6 +633,41 @@ for (const prop of [{ type: "barrel", x: 0, y: 0, z: -6, r: 0.4, h: 1.4, rot: 0 
   sim.free();
   if (c.z > -8 || c.y < 0.3) { failed = true; console.error(`FAIL push-${prop.type}: ${prop.type} ended at z ${c.z.toFixed(2)} y ${c.y.toFixed(2)}`); }
   else console.log(`ok push-${prop.type}: ${prop.type} shoved to z ${c.z.toFixed(2)}`);
+}
+// A prop set on a jump pad's launch square is thrown about its rise (4) up like the ball, and the pad
+// records the launch; a prop on a treadmill rides it toward its far end at about the belt's speed.
+{
+  const level = testLevel({ id: "prop-jump", name: "prop-jump", pieces: [
+    { type: "start", x: 10, y: 0, z: 0 },
+    { type: "slab", x: 10, y: 0, z: 0, w: 4, d: 4, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -10, w: 12, d: 12, rot: 0, fences: {} },
+    { type: "jump", x: 0, y: 0, z: -10, w: 4, d: 4, rot: 0, rise: 4 },
+    { type: "crate", x: 0, y: 0, z: -14, w: 1, h: 1, d: 1, rot: 0 },
+  ] });
+  const sim = await createSim(level);
+  const c = sim.crates[0]!.body;
+  c.setTranslation({ x: 0, y: JUMP_H + 0.55, z: -10 }, true);
+  let peak = -Infinity;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(0, 0, -1); peak = Math.max(peak, c.translation().y); }
+  const sprung = sim.springs[0]!.at !== null;
+  sim.free();
+  if (peak - JUMP_H < 3 || !sprung) { failed = true; console.error(`FAIL prop-jump: crate peaked ${(peak - JUMP_H).toFixed(2)} above the pad, spring ${sprung ? "went" : "never went"}`); }
+  else console.log(`ok prop-jump: crate thrown to ${(peak - JUMP_H).toFixed(2)} above the pad`);
+}
+{
+  const level = testLevel({ id: "prop-belt", name: "prop-belt", pieces: [
+    { type: "start", x: 10, y: 0, z: 0 },
+    { type: "slab", x: 10, y: 0, z: 0, w: 4, d: 4, rot: 0, fences: {} },
+    { type: "slab", x: 0, y: 0, z: -10, w: 4, d: 16, rot: 0, tilt: 0, belt: true },
+    { type: "crate", x: 0, y: 0, z: -4, w: 1, h: 1, d: 1, rot: 0 },
+  ] });
+  const sim = await createSim(level);
+  const z0 = sim.crates[0]!.body.translation().z;
+  for (let i = 0; i < 120 * 1.5; i++) sim.step(0, 0, -1);
+  const c = sim.crates[0]!.body.translation();
+  sim.free();
+  if (z0 - c.z < 3 || c.y < 0) { failed = true; console.error(`FAIL prop-belt: crate rode ${(z0 - c.z).toFixed(2)} in 1.5 s (y ${c.y.toFixed(2)})`); }
+  else console.log(`ok prop-belt: crate rode the treadmill ${(z0 - c.z).toFixed(2)} in 1.5 s`);
 }
 // A slab tilted 90 degrees is a wall: solid from the side. So is one rolled 90 degrees (about its
 // own z axis), here turned so its face is across the ball's way.
@@ -896,7 +937,7 @@ for (const [name, lines, end, mid] of [
     console.error(`FAIL rails closed end: ball at x ${p.x.toFixed(2)} y ${p.y.toFixed(2)} z ${p.z.toFixed(2)} (furthest z ${far.toFixed(2)}), want it resting at the end near z -12`);
   } else console.log(`ok rails closed end: the bend holds the ball (rests at z ${p.z.toFixed(2)}, furthest ${far.toFixed(2)})`);
 }
-// A treadmill between two platforms: an 8 deep one holds 7 rods; a ball left on it is carried off
+// A treadmill between two platforms: a ball left on it is carried off
 // onto the platform past its far end (local -z), and full throttle drives a ball back up it.
 {
   const pieces = [
@@ -913,12 +954,11 @@ for (const [name, lines, end, mid] of [
     sim.free();
     return p;
   };
-  const rods = beltRods(testLevel({ id: "belt", name: "belt", pieces }).pieces[2] as Slab).z.length;
   const left = await ride(3, 0, -1), back = await ride(-3, 1, 1);
-  if (rods !== 7 || left.z > -4.2 || Math.abs(left.y - BALL_RADIUS) > 0.05 || back.z < 4.2) {
+  if (left.z > -4.2 || Math.abs(left.y - BALL_RADIUS) > 0.05 || back.z < 4.2) {
     failed = true;
-    console.error(`FAIL treadmill: ${rods} rods (want 7); left on it the ball ended at z ${left.z.toFixed(2)} y ${left.y.toFixed(2)} (want past -4.2), driven back up it at z ${back.z.toFixed(2)} (want past 4.2)`);
-  } else console.log(`ok treadmill: 7 rods; carries a ball off its far end (z ${left.z.toFixed(2)}) and full throttle drives back up it (z ${back.z.toFixed(2)})`);
+    console.error(`FAIL treadmill: left on it the ball ended at z ${left.z.toFixed(2)} y ${left.y.toFixed(2)} (want past -4.2), driven back up it at z ${back.z.toFixed(2)} (want past 4.2)`);
+  } else console.log(`ok treadmill: carries a ball off its far end (z ${left.z.toFixed(2)}) and full throttle drives back up it (z ${back.z.toFixed(2)})`);
 }
 // A knock-down plank stands balanced on its hinge until the ball touches it, then falls across
 // the gap, and the ball can roll over it onto the far platform.
@@ -1455,6 +1495,25 @@ for (const [name, bend, y0, y1] of [["up-smooth", 1.5, 0, 4], ["up-sharp", 0, 0,
   sim.free();
   if (p.z > -24 || Math.abs(p.y - (y1 + BALL_RADIUS)) > 0.1 || minY < Math.min(y0, y1)) { failed = true; console.error(`FAIL tube-${name}: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, lowest y ${minY.toFixed(2)}`); }
   else console.log(`ok tube-${name}: ball came out at y ${p.y.toFixed(2)} z ${p.z.toFixed(2)}`);
+}
+// A one-way tube lets the ball through from its open end and out of its red one, but holds it out of
+// the red one from either side: driven at it head on, or at the far end of one laid the other way.
+{
+  const run = async (out: "a" | "b", start: number, fz: number) => {
+    const sim = await createSim(testLevel({ id: "one-way", name: "one-way", pieces: [
+      { type: "start", x: 0, y: 0, z: start },
+      { type: "slab", x: 0, y: 0, z: -15, w: 8, d: 40, rot: 0, fences: {} },
+      { type: "tube", x: 0, y: 0, z: -7, rot: 0, out, path: [{ x: 0, y: 0, z: -10, bend: 0 }] },
+      { type: "goal", x: 3, y: 0, z: -30, r: 1 },
+    ] }));
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < 120 * 6; i++) { sim.step(1, 0, fz); const z = sim.ball.translation().z; lo = Math.min(lo, z); hi = Math.max(hi, z); }
+    sim.free();
+    return { lo, hi };
+  };
+  const through = await run("b", -2, -1), heldA = await run("a", -2, -1), heldB = await run("b", -27, 1);
+  if (through.lo > -20 || heldA.lo < -7 || heldB.hi > -17) { failed = true; console.error(`FAIL one-way tube: through reached z ${through.lo.toFixed(2)} (want past -20); at the red mouth a got to ${heldA.lo.toFixed(2)} (want short of -7), at red mouth b ${heldB.hi.toFixed(2)} (want short of -17)`); }
+  else console.log(`ok one-way tube: rolls through and out the red end (z ${through.lo.toFixed(2)}); held at a red mouth from outside (z ${heldA.lo.toFixed(2)}, ${heldB.hi.toFixed(2)})`);
 }
 // Two-way and manual: let go halfway up the climb and the ball slides back out the bottom; a
 // tube laid exit-first (the climb entered at its exit mouth) climbs just the same.

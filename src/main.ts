@@ -78,10 +78,11 @@ function playLevel(i: number) {
   }));
 }
 
-function edit(level: Level) {
+function edit(level: Level, file: string | null) {
   showSlow(() => new Editor(ctx, level, {
+    file,
     onExit: menu,
-    onPlay: (l, from) => showSlow(() => new Game(ctx, l, { onExit: () => edit(l), onRetry: () => edit(l), from, admin: true })),
+    onPlay: (l, from, f) => showSlow(() => new Game(ctx, l, { onExit: () => edit(l, f), onRetry: () => edit(l, f), from, admin: true })),
   }));
 }
 

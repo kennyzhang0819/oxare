@@ -25,13 +25,15 @@ export const CRATE = { body: WHITE, cross: DARK_GREY, screen: LIGHT_GREY, shine:
 export const STOOL = { screen: DARK_GREY };
 export const GOAL = { disc: BLACK, spokes: LIGHT_GREY, hub: LIGHT_GREY };
 export const BUMPER = { rubber: RED };
+// The puffer's ring of air.
+export const PUFFER = { air: 0xf2f8ff };
 export const MAGNET = { glow: RED, lower: DARK_RED, groove: BLACK, upper: BLACK };
 export const KICKER = { light: ORANGE, glow: ORANGE, slideTread: DARK_GREY };
 export const TUBE = { glass: TUBE_GLASS };
 export const RAILS = { rail: WHITE, stripe: CYAN };
 // The cube, on its own and hanging from a gate.
 export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: GREEN };
-export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: ORANGE, bed: DARK_GREY };
+export const TREADMILL = { belt: 0x56625f, cleat: DARK_GREY, arrow: ORANGE, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
 // The grassy floor (ENV.grass): the turf, the blades over it in two shades, and the odd daisy.
 export const GRASS = { turf: 0x93d07f, dark: 0x6ab45f, light: 0xa3da8c, petal: 0xffffff, pollen: 0xffe566 };

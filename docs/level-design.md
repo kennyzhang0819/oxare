@@ -9,6 +9,7 @@ New levels (Basics onward) are not the classics' long lanes. A level is a small 
 - **Small footprint.** The whole level fits in about 40×40 of grid (B2 is about 40 by 48). There is no long run from start to finish.
 - **Stacked, not spread.** Height is the main axis. Decks sit 4 or 5 up on supports and columns over the ground floor, reached by kickers, jump pads, ramps, rails and tubes, and left by a drop, a hole or a tube. One footprint holds two to four floors, and the same spot seen from above and from below is two different places.
 - **Apples hidden in the space.** Each apple is where finding it is the puzzle: on a deck above the start, under an overhang, past a hole on an upper floor, behind a wall. Getting there is half of it; every apple needs a way back down to the origin.
+- **A golden apple for the bold.** Optional, so it can ask more than the level does: a hard jump, a narrow ledge, the long way round. It still needs a way home, since it only counts once it comes back.
 - **Short loops from the origin.** The origin sits near the middle where the routes cross, and each apple is a short excursion out and back rather than a stop on one long route.
 - **The classics' numbers still hold.** Kicker and jump pad ranges, gaps, run-ups and placement below are what a stack is built from; the classics' lane lengths and rhythm are not.
 
@@ -68,13 +69,13 @@ Each classic is named for one headline prop and adds three to five supporting on
 | 06 Jumps | jump pad | 6 | support, plank, stool, long kicker, crate |
 | 07 Flipped | rolled slabs | 7 | plank, rails, ramp, jump, twist, barrier |
 | 08 Rings | hoop | 8 | ramp, long kicker, stool, jump, column, hole, rails |
-| 09 Bumpers | bumper | 10 | ramp, barrel, side plank, blockade, jump, pillar, kicker, mover, sliding kicker |
+| 09 Puffers | puffer | 10 | ramp, barrel, side plank, blockade, jump, pillar, kicker, mover, sliding kicker |
 | 10 Basics combined | mix | 8 | twist, roll, jump, kicker, mover, bridge, rails, plank |
-| 11 Wrecking cube | gate | 9 | side plank, bumper, jump, rails, hole, roll, kicker, crate |
-| 12 Tubes 2 | tube | 7 | mover, hole, ramp, rolled bumper, treadmill, kicker |
-| 13 Wall jumps | wall and side kicker | 10 | jump, roll, barrier, crate, seesaw, rails, bumper, support |
+| 11 Wrecking cube | gate | 9 | side plank, puffer, jump, rails, hole, roll, kicker, crate |
+| 12 Tubes 2 | tube | 7 | mover, hole, ramp, rolled puffer, treadmill, kicker |
+| 13 Wall jumps | wall and side kicker | 10 | jump, roll, barrier, crate, seesaw, rails, puffer, support |
 | 14 Magnets | magnet | 12 | mover, fence, kicker, plank, side kicker, shaped slab, support, crate, rails, jump, wall |
-| 15 Beans | bean | 10 | ramp, jump, barrier, kicker, rolled crate, plank, roll, bumper, column |
+| 15 Beans | bean | 10 | ramp, jump, barrier, kicker, rolled crate, plank, roll, puffer, column |
 | 16 Jumps 2 | jump pad | 11 | ramp, stool, column, mover, sliding kicker, barrier, rails, kicker, twist, roll |
 | 17 Big C | rolled C curve | 10 | wall, side kicker, twist, support, roll, jump, kicker, glass, hole |
 | n01 Advanced tubes | tube | 11 | ramp, jump, wall, hole, support, twist, rolled C, roll, mover, kicker |
@@ -91,7 +92,7 @@ Structures snap to a 2 grid, so most of these are "one grid step from the edge".
 - **Blockades (2×2):** in an 8 lane, staggered pairs at ±2 from the centre leave a 2 gap between them, a single one at the centre leaves 3 each side; 12 apart along the lane (01).
 - **Pillars (r 0.6):** pairs 2 off centre leave a 2.8 gap in the middle, a single one at the centre leaves 3.4 each side; 8 apart (01).
 - **Barriers (2.5 wide):** rows across a lane at a 3 pitch, with a crate in one slot as the pushable door (01, 13); pairs at ±1.5 to wall off a jump (15).
-- **Bumpers (r 1):** a slalom pair in an 8 lane, one 1 off centre each way, 6 apart (13); a triangle on a 12×12 arena (09).
+- **Puffers (r 0.95, rings out to 5):** a slalom pair in an 8 lane, one 1 off centre each way, 6 apart (13); a triangle on a 12×12 arena (09). These were bumpers: they now blow the ball away every 3 seconds instead of bouncing it, so a pair across a lane blows a passing ball toward the edges.
 - **Holes:** 3×3 staggered ±2 on an 8×8 (03), 2.5 in a triangle (08), 4×4 zig-zag on 8×18 (12).
 - **Beans:** a straight bean sweeping across an 8 lane (path 5 long across it), two of them 8 apart running opposite ways (15); loops round columns.
 - **Side kicker and wall:** the wall is a slab rolled 90 standing 1 outside the lane edge (its face 0.5 off), the side kicker's wall side on the lane edge (13, 17).

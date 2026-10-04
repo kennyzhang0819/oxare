@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
-// Dev-only: the editor's Save button POSTs a level here and it replaces src/levels/<id>.json;
+// Dev-only: the editor's Save button POSTs a level here and it writes src/levels/<id>.json. An existing
+// file is only replaced when the request names it with ?overwrite=<id> (the file the level was opened
+// from), so a new level or a changed id can never write over another level;
 // the admin panel's Delete POSTs {id} to /__level/delete, which removes that file; GET
 // /__level/all returns every level as it is on disk right now, in play order; /__level/order POSTs
 // {ids} and rewrites src/levels/order.txt with them. /__thumb/save writes a
@@ -27,6 +29,13 @@ function levelSaver(): Plugin {
             if (typeof level.id !== "string" || !/^[a-z0-9-]+$/.test(level.id)) throw new Error("level id must be lowercase letters, digits and dashes");
             if (typeof level.name !== "string" || !Array.isArray(level.pieces)) throw new Error("level needs a name and pieces");
             const file = `src/levels/${level.id}.json`;
+            const overwrite = new URL(req.url ?? "", "http://x").searchParams.get("overwrite");
+            if (existsSync(file) && overwrite !== level.id) {
+              const was = (JSON.parse(readFileSync(file, "utf8")) as { name?: string }).name;
+              res.statusCode = 409;
+              res.end(`${file} already exists${was ? ` ("${was}")` : ""}; give this level a different id to save it`);
+              return;
+            }
             // One piece per line, spaced like the checked-in files, so a save is a readable diff.
             const lines = level.pieces.map((p, i) => `    ${JSON.stringify(p).replace(/,/g, ", ").replace(/:/g, ": ")}${i < level.pieces.length - 1 ? "," : ""}`);
             const thumb = level.thumb ? `  "thumb": ${JSON.stringify(level.thumb).replace(/,/g, ", ").replace(/:/g, ": ")},\n` : "";

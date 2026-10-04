@@ -16,7 +16,7 @@ export const PROPS = { white: WHITE, grey: DARK_GREY, tread: DARK_GREY, hinge: D
 // Supports, columns and gates take the pillar's colours.
 export const PILLAR = { white: WHITE, slate: DARK_GREY, pale: LIGHT_GREY };
 export const PLATFORM = { tile: WHITE, lip: WHITE, lipLine: LIGHT_GREY, recess: BLACK, rim: WHITE, border: LIGHT_GREY, block: DARK_GREY, plank: LIGHT_GREY, glass: TUBE_GLASS };
-// The circuit board every obstacle carries (barrier, kicker back, stool, bumper, magnet, barrel, gate).
+// The circuit board every obstacle carries (barrier, kicker back, stool, puffer, magnet, barrel, gate).
 export const BOARD = { edge: DARK_GREY, board: DARK_GREY, trace: LIGHT_GREY, pad: WHITE, hole: DARK_GREY, chip: LIGHT_GREY, chipTop: LIGHT_GREY };
 export const BLOCKADE = { plate: LIGHT_GREY };
 export const BARRIER = { grille: LIGHT_GREY, louvre: DARK_GREY };
@@ -25,13 +25,15 @@ export const CRATE = { body: WHITE, cross: DARK_GREY, screen: LIGHT_GREY, shine:
 export const STOOL = { screen: DARK_GREY };
 export const GOAL = { disc: 0x3f74c4, spokes: LIGHT_GREY, hub: LIGHT_GREY };
 export const BUMPER = { rubber: RED };
+// The puffer's ring of air.
+export const PUFFER = { air: 0xf2f8ff };
 export const MAGNET = { glow: RED, lower: DARK_RED, groove: BLACK, upper: BLACK };
 export const KICKER = { light: CYAN, glow: CYAN, slideTread: DARK_GREY };
 export const TUBE = { glass: TUBE_GLASS };
 export const RAILS = { rail: WHITE, stripe: CYAN };
 // The cube, on its own and hanging from a gate.
 export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: ORANGE };
-export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: CYAN, bed: DARK_GREY };
+export const TREADMILL = { belt: 0x56625f, cleat: DARK_GREY, arrow: CYAN, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
 // The grassy floor (ENV.grass): the turf, the blades over it in two shades, and the odd daisy.
 export const GRASS = { turf: 0x93d07f, dark: 0x6ab45f, light: 0xa3da8c, petal: 0xffffff, pollen: 0xffe566 };
@@ -45,8 +47,12 @@ export const FLOOR = {
 // The old structure (column, support): steel painted `paint`, with `seam` lines and `rivet` heads, its
 // paint flaking to `rust` and `rustDark`; a lamp post's lamp and a signal mast's beacon, lit.
 export const RUIN = { paint: 0x86a8a0, seam: 0x6a8a84, rivet: 0xb2cbc3, rust: 0xc07a4c, rustDark: 0x96573a, lamp: 0xffe3a3, beacon: 0xff5a47 };
+// The caution paint on everything the ball can push or move: yellow striped across with dark.
+export const CAUTION = { yellow: 0xffcf2e, dark: 0x2e3a37 };
 // The apples a level is played for: a red body on a brown stem with a green leaf.
 export const APPLE = { body: 0xe8423a, stem: 0x7a5232, leaf: 0x5cbf4f };
+// The optional golden apple: a gold body glowing a little, a darker stem and a yellow-green leaf.
+export const GOLDEN = { body: 0xffcc33, glow: 0x8a5c00, stem: 0x8a5a1c, leaf: 0x9fd04f };
 // Odd things left lying about among the plants, rarely (decor.ts CURIOS): a rubber duck, a soda can, a mug, a
 // traffic cone, a beach ball, a garden gnome. Each list is picked from.
 export const CURIO = {

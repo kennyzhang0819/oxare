@@ -19,7 +19,7 @@
     {"type": "hole", "x": 20, "y": 4, "z": -18, "w": 4, "d": 4, "rot": 0},
     {"type": "curve", "x": 6, "y": 4, "z": -2, "inner": 8, "outer": 16, "rot": 270},
     {"type": "ramp", "x": -6, "y": 4, "z": 10, "w": 8, "d": 24, "rot": 90, "rise": 4},
-    {"type": "bumper", "x": -6, "y": 6, "z": 10, "roll": -30},
+    {"type": "puffer", "x": -6, "y": 6, "z": 10, "every": 3, "roll": -30},
     {"type": "curve", "x": -18, "y": 8, "z": -2, "inner": 8, "outer": 16, "rot": 180},
     {"type": "slab", "x": -30, "y": 8, "z": -10, "w": 8, "d": 16, "rot": 0, "tilt": 0},
     {"type": "slab", "x": -16, "y": 4, "z": -24, "w": 8, "d": 8, "rot": 0, "tilt": 0, "belt": true},

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
-import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, stylize, type Built, type SceneEnv } from "./scene.ts";
+import { BALL_RADIUS, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { onTop, slantedTop, snapOnTop } from "./slanted.ts";
+import { buildLevel, createScene, FOG_EDITOR, fitSun, stylize, type Built, type SceneEnv } from "./scene.ts";
 import { decorStems } from "./decor.ts";
 import { buildDecor, disposeDecor } from "./decor.ts";
 import { createSim } from "./sim.ts";
@@ -13,9 +14,12 @@ import type { PlayFrom } from "./game.ts";
 const HITBOX_KEY = "balling.hitboxes";
 const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.8, depthTest: false });
 
-// A new level starts hidden: the admin makes it public from the level's ⋯ menu.
-export function blankLevel(): Level {
-  return { id: "new-level", name: "New Level", hidden: true, pieces: [
+// A new level starts hidden: the admin makes it public from the level's ⋯ menu. Its id is the first of
+// new-level, new-level-2, ... that no level in `taken` has.
+export function blankLevel(taken: string[] = []): Level {
+  let id = "new-level";
+  for (let k = 2; taken.includes(id); k++) id = `new-level-${k}`;
+  return { id, name: "New Level", hidden: true, pieces: [
     newPiece("start", 0, 0, 0),
     { ...newPiece("slab", 0, 0, 0), w: 24, d: 24 } as Piece,
   ] };
@@ -24,7 +28,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Structures", ["gate", "arch", "support", "column", "lamp", "mast"]],
   ["Nature", ["tree", "clearing"]],
@@ -58,7 +62,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   clearing: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
-  blockade: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  blockade: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   barrier: [["rot", 15], ["tilt", 15], ["roll", 15]],
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
   cube: [["rot", 15], ["tilt", 15], ["roll", 15]],
@@ -68,8 +72,8 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   jump: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["rise", 0.5]],
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   pillar: [["rot", 15], ["tilt", 15], ["roll", 15]],
-  column: [["h", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
-  bumper: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  column: [["h", 0.5], ["r", 0.05], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  puffer: [["every", 0.5], ["offset", 0.25], ["rot", 15], ["tilt", 15], ["roll", 15]],
   magnet: [["rot", 15], ["tilt", 15], ["roll", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
   apple: [],
@@ -81,7 +85,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)", curl: "curl (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
-  track: "track length", offset: "start offset", reach: "reach (stem out)", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)", size: "size",
+  track: "track length", offset: "start offset", reach: "reach (stem out)", speed: "speed", wait: "wait (s)", every: "every (s)", bend: "bend radius", top: "top width", turn: "turn (°)", size: "size",
 };
 const label = (key: string) => LABELS[key] ?? key;
 // What the editor calls each piece type; the level files keep the type ids.
@@ -148,6 +152,28 @@ const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : 
 // The bend a newly rounded corner gets: a pangolin's widest-safe one, else a tube's.
 const pathBend = (p: PathPiece): number => (p.type === "pangolin" ? pangolinBend(p.w) : TUBE_BEND);
 
+// What can stand square on a slanted surface: the props that take roll and tilt, jump pads and plain kickers.
+const turnable = (p: Piece): p is Piece & { roll?: number; tilt?: number; rot?: number } =>
+  ROLLED_PROPS.includes(p.type) || p.type === "jump" || (p.type === "kicker" && !isSliding(p) && p.top === undefined);
+const isTurned = (p: Piece): boolean => turnable(p) && !!(((p.roll ?? 0) % 360) || ((p.tilt ?? 0) % 360));
+const r2 = (v: number) => Math.round(v * 100) / 100;
+// Stands `p` on a surface at `point` facing `n` (world, unit): keeps its yaw and finds the roll and tilt that
+// turn its up onto n (roll about its own z, then tilt about its own x, then rot), its base on the point.
+function standOn(p: Piece & { roll?: number; tilt?: number }, point: THREE.Vector3, n: THREE.Vector3) {
+  const a = (pieceRot(p) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  const mx = n.x * c - n.z * s, my = n.y, mz = n.x * s + n.z * c;
+  const roll = r2((Math.atan2(-mx, Math.hypot(my, mz)) * 180) / Math.PI), tilt = r2((Math.atan2(mz, my) * 180) / Math.PI);
+  if (roll) p.roll = roll; else delete p.roll;
+  if (tilt) p.tilt = tilt; else delete p.tilt;
+  if (isProp(p)) {
+    // A crate's, barrel's or cube's y is under its centre by propLift; its centre stands half its own height off the surface.
+    const half = p.type === "crate" || p.type === "barrel" ? p.h / 2 : CUBE_S / 2, cx = point.x + n.x * half, cy = point.y + n.y * half, cz = point.z + n.z * half;
+    p.x = r3(cx); p.z = r3(cz); p.y = r3(cy - propLift(p));
+    return;
+  }
+  p.x = r3(point.x); p.y = r3(point.y); p.z = r3(point.z);
+}
+
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
 function settle(level: Level, p: Piece) {
@@ -176,6 +202,8 @@ function settle(level: Level, p: Piece) {
     return;
   }
   if (!isStructure(p)) return;
+  // A turned piece (stood on a slanted surface, or out of a wall) is placed by hand, off the grid if need be.
+  if (isTurned(p)) return;
   if (p.type === "kicker" && p.top !== undefined) {
     // A side kicker snaps by its wall side, which stands against a wall on a platform's edge.
     const o = rotXZ(p.mirror ? -p.w / 2 : p.w / 2, 0, p.rot);
@@ -300,7 +328,8 @@ function placementGrid(level: Level): THREE.LineSegments {
   return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2ee8ff, transparent: true, opacity: 0.55 }));
 }
 
-export interface EditorOpts { onPlay(level: Level, from?: PlayFrom): void; onExit(): void }
+// `file`: the id of the level file this level was opened from, the only file Save may replace; null for a new level.
+export interface EditorOpts { file: string | null; onPlay(level: Level, from: PlayFrom | undefined, file: string | null): void; onExit(): void }
 
 export class Editor implements Mode {
   private scene: THREE.Scene;
@@ -361,7 +390,7 @@ export class Editor implements Mode {
   private notice = h("div", { class: "notice" });
   private noticeTimer = 0;
   private ray = new THREE.Raycaster();
-  private drag: { plane: THREE.Plane; off: THREE.Vector3; anchor: number; starts: Map<number, { x: number; z: number }>; moved: boolean; before: string } | null = null;
+  private drag: { plane: THREE.Plane; off: THREE.Vector3; anchor: number; starts: Map<number, { x: number; z: number }>; moved: boolean; before: string; stood?: boolean } | null = null;
   private onResize = () => this.resize();
   private onKey = (e: KeyboardEvent) => this.key(e);
   private onKeyUp = (e: KeyboardEvent) => this.held.delete(e.code);
@@ -372,11 +401,13 @@ export class Editor implements Mode {
   private ctx: Ctx;
   private level: Level;
   private opts: EditorOpts;
+  private file: string | null;
 
   constructor(ctx: Ctx, level: Level, opts: EditorOpts) {
     this.ctx = ctx;
     this.level = level;
     this.opts = opts;
+    this.file = opts.file;
     this.ready = new Promise((r) => { this.drawn = r; });
     this.env = createScene(FOG_EDITOR);
     this.scene = this.env.scene;
@@ -485,7 +516,6 @@ export class Editor implements Mode {
     if (this.plants && JSON.stringify(this.level) !== this.plantsFor) this.togglePlants(false);
     this.scene.remove(this.built.group);
     this.built = buildLevel(this.level, true, this.built, false);
-    markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
     this.scene.add(this.built.group);
     fitSun(this.env.sun, this.built);
     for (const hl of this.helpers) hl.removeFromParent();
@@ -610,6 +640,14 @@ export class Editor implements Mode {
         } });
         props.append(h("div", { class: "checks", title: "Hang it on the side wall of the nearest platform edge, so it falls out across the gap" }, h("label", {}, cb, "side")));
       }
+      if (p.type === "apple") {
+        const cb = h("input", { type: "checkbox", checked: !!p.golden, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (cb.checked) p.golden = true; else delete p.golden;
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "The level's optional apple: not needed to open the origin, put somewhere hard; players see it once they have cleared B5" }, h("label", {}, cb, "golden")));
+      }
       if (MIRRORED.includes(p.type)) {
         const cb = h("input", { type: "checkbox", checked: !!p.mirror, onchange: () => {
           const before = JSON.stringify(this.level);
@@ -656,7 +694,7 @@ export class Editor implements Mode {
           if (cb.checked) p.belt = true; else delete p.belt;
           this.commit(before);
         } });
-        props.append(h("div", { class: "checks", title: "Rods instead of a tiled top, carrying the ball toward the far end (local -z); turn it with rot" }, h("label", {}, cb, "treadmill")));
+        props.append(h("div", { class: "checks", title: "A running belt instead of a tiled top, carrying the ball toward the far end (local -z); turn it with rot" }, h("label", {}, cb, "treadmill")));
         if (!p.belt) {
           const gl = h("input", { type: "checkbox", checked: !!p.glass, onchange: () => {
             const before = JSON.stringify(this.level);
@@ -894,6 +932,18 @@ export class Editor implements Mode {
         this.mid = -1;
         this.commit(before);
       } }, smoothPath ? "smooth curve" : "corners & arcs"))));
+    if (p.type === "tube") {
+      const way = h("select", { title: "One way: the ball can leave by the red mouth but never go in by it", onchange: () => {
+        const before = JSON.stringify(this.level);
+        if (way.value === "a" || way.value === "b") p.out = way.value; else delete p.out;
+        this.commit(before);
+      } },
+        h("option", { value: "", selected: !p.out }, "both ways"),
+        h("option", { value: "b", selected: p.out === "b" }, "out at the last end"),
+        h("option", { value: "a", selected: p.out === "a" }, "out at the first end"),
+      ) as HTMLSelectElement;
+      wrap.append(h("label", {}, "one way", way));
+    }
     if (p.type === "pangolin") wrap.append(h("div", { class: "hint" }, `Unrolls ${pangolinTrack(p).L.toFixed(2)} long from its snout (the first node) to its tail tip (the last), round bends of at least ${pangolinBend(p.w)} and up or down slopes. The snout and tail tip land on the platform under them.`));
     const num = (n: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
@@ -1430,6 +1480,34 @@ export class Editor implements Mode {
     const a = this.level.pieces[d.anchor];
     const a0 = d.starts.get(d.anchor);
     if (!a || !a0) return;
+    // One turnable piece dragged over a slanted platform stands square on it where the cursor is, off the grid;
+    // dragged back onto a level top it stands upright again and snaps as before.
+    if (d.starts.size === 1 && turnable(a)) {
+      const hit = this.surfaceUnder(e.clientX, e.clientY, d.anchor);
+      if (hit && !hit.level) {
+        // On a slanted top it snaps to that top's own grid, laid on it from its corner; on a wall it goes where it is put.
+        const top = slantedTop(this.level.pieces[hit.index]!), at = top && onTop(top, hit.point);
+        const spot = top && at ? snapOnTop(top, at, SNAP.structure, hit.normal) : hit;
+        standOn(a, spot.point, spot.normal);
+        const g = this.built.pieceGroups[d.anchor];
+        if (g) {
+          g.position.set(a.x, isProp(a) ? a.y + propLift(a) + 0.02 : a.y, a.z);
+          g.rotation.set(((a.tilt ?? 0) * Math.PI) / 180, (pieceRot(a) * Math.PI) / 180, ((a.roll ?? 0) * Math.PI) / 180, "YXZ");
+        }
+        for (const hl of this.helpers) hl.update();
+        if (!d.moved) this.togglePlants(false);
+        d.moved = d.stood = true;
+        return;
+      }
+      if (hit && d.stood) {
+        delete a.roll; delete a.tilt;
+        d.stood = false;
+        const g = this.built.pieceGroups[d.anchor];
+        if (g) g.rotation.set(0, (pieceRot(a) * Math.PI) / 180, 0, "YXZ");
+        d.plane.constant = -hit.point.y;
+        d.off.set(0, 0, 0);
+      }
+    }
     this.castFrom(e.clientX, e.clientY);
     const pt = new THREE.Vector3();
     if (!this.ray.ray.intersectPlane(d.plane, pt)) return;
@@ -1448,7 +1526,6 @@ export class Editor implements Mode {
     for (const hl of this.helpers) hl.update();
     if (!d.moved) this.togglePlants(false);
     d.moved = true;
-    markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
   };
 
   private up = (e: PointerEvent) => {
@@ -1492,10 +1569,10 @@ export class Editor implements Mode {
   private play(at?: THREE.Vector3) {
     const probs = levelProblems(this.level);
     if (probs.length) { alert(probs.join("\n")); return; }
-    if (!at) { this.opts.onPlay(cloneLevel(this.level)); return; }
+    if (!at) { this.opts.onPlay(cloneLevel(this.level), undefined, this.file); return; }
     // Face the way the editor camera looks, so the run starts heading where you were looking.
     const d = this.camera.getWorldDirection(new THREE.Vector3());
-    this.opts.onPlay(cloneLevel(this.level), { x: at.x, y: at.y, z: at.z, yaw: Math.atan2(-d.x, -d.z) });
+    this.opts.onPlay(cloneLevel(this.level), { x: at.x, y: at.y, z: at.z, yaw: Math.atan2(-d.x, -d.z) }, this.file);
   }
 
   private armDrop(on: boolean) {
@@ -1504,6 +1581,26 @@ export class Editor implements Mode {
     this.ctx.canvas.style.cursor = on ? "crosshair" : "";
     if (on && this.cursor) this.aimDrop(this.cursor.x, this.cursor.y);
     else { this.dropAt = null; this.ghost.visible = false; }
+  }
+
+  // The platform surface under the cursor, skipping piece `skip` (the one being dragged): the point, its normal
+  // turned toward the camera, and whether it is a level top. Null when the cursor is over anything else first.
+  private surfaceUnder(clientX: number, clientY: number, skip: number): { point: THREE.Vector3; normal: THREE.Vector3; level: boolean; index: number } | null {
+    this.castFrom(clientX, clientY);
+    for (const hit of this.ray.intersectObjects(this.built.group.children, true)) {
+      const obj = hit.object as THREE.Mesh, m = obj.material;
+      if (obj.userData.outline || obj.userData.air || !hit.face || m instanceof THREE.ShaderMaterial || (m instanceof THREE.MeshBasicMaterial && (m.wireframe || m.transparent))) continue;
+      let o: THREE.Object3D | null = obj;
+      while (o && o.userData.pieceIndex === undefined) o = o.parent;
+      const i = o ? (o.userData.pieceIndex as number) : -1;
+      if (i === skip) continue;
+      const q = this.level.pieces[i];
+      if (!q || !isPlatform(q)) return null;
+      const normal = hit.face.normal.clone().transformDirection(obj.matrixWorld);
+      if (normal.dot(this.ray.ray.direction) > 0) normal.negate();
+      return { point: hit.point.clone(), normal, level: normal.y > 0.999, index: i };
+    }
+    return null;
   }
 
   // The first upward-facing solid surface under the cursor (glows and the goal's portal face are see-through).
@@ -1531,7 +1628,8 @@ export class Editor implements Mode {
     this.noticeTimer = window.setTimeout(() => { this.notice.textContent = ""; }, 2500);
   }
 
-  // Writes src/levels/<id>.json through the dev server, replacing that level outright.
+  // Writes src/levels/<id>.json through the dev server. It replaces only the file this level was opened from
+  // (or last saved to); the server refuses any other existing file.
   private async save() {
     // Level files are only written by `npm run dev`; a deployed build never sends a save.
     if (!import.meta.env.DEV) { this.flash("Saving levels only works in local dev (npm run dev). Nothing is kept until it is saved.", true); return; }
@@ -1539,9 +1637,11 @@ export class Editor implements Mode {
     if (probs.length) { alert(`Fix these before saving:\n${probs.join("\n")}`); return; }
     if (!this.level.id) { alert("Give the level an id first."); return; }
     try {
-      const res = await fetch("/__level/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(this.level) });
+      const to = this.file ? `?overwrite=${encodeURIComponent(this.file)}` : "";
+      const res = await fetch(`/__level/save${to}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(this.level) });
       if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
       const { file } = (await res.json()) as { file: string };
+      this.file = this.level.id;
       this.flash(`Saved ${file}`);
       // Its menu picture too, from the level as the menu will load it.
       await saveThumb(this.ctx.renderer, validateLevel(cloneLevel(this.level))).catch((err: unknown) => this.flash(`Saved ${file}, but not its thumbnail: ${err instanceof Error ? err.message : String(err)}`, true));

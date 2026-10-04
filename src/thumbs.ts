@@ -23,6 +23,18 @@ function backdrop(sky: number): THREE.Color | THREE.Texture {
 
 const W = 112, H = 84;
 let cache: Map<string, string> | null = null;
+// A piece picture looks down at it from this side, from just far enough that its box fills the frame.
+const VIEW = new THREE.Vector3(1, 0.75, 1.15).normalize();
+function fitDistance(box: THREE.Box3, center: THREE.Vector3, camera: THREE.PerspectiveCamera, pad = 1.0): number {
+  const f = VIEW.clone().negate(), r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)).normalize(), u = new THREE.Vector3().crossVectors(r, f);
+  const tv = Math.tan((camera.fov * Math.PI) / 360), th = tv * camera.aspect, c = new THREE.Vector3();
+  let d = 0.5;
+  for (let k = 0; k < 8; k++) {
+    c.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).sub(center);
+    d = Math.max(d, Math.abs(c.dot(r)) / th - c.dot(f), Math.abs(c.dot(u)) / tv - c.dot(f));
+  }
+  return d * pad;
+}
 
 // One picture per piece type and variant (by name) for the editor's add buttons, rendered once
 // from the real piece builders so the buttons always show what the piece currently looks like.
@@ -44,13 +56,12 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
   const entries: [string, Piece][] = [...PIECE_TYPES.map((t): [string, Piece] => [t, newPiece(t, 0, 0, 0)]), ...PIECE_VARIANTS.map((v): [string, Piece] => [v.name, v.make(0, 0, 0)])];
   for (const [type, piece] of entries) {
     // Movers' track guides would be most of the picture; those thumbs show the object alone.
-    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, !["bean", "stool", "sliding kicker"].includes(type));
+    const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, !["bean", "stool", "sliding kicker"].includes(type), undefined, false);
     scene.add(built.group);
     const box = new THREE.Box3().setFromObject(built.group);
     if (type === "magnet") { const r = Math.max(...magnetProfile().flat().map((v) => v[0])); box.min.x = box.min.z = -r; box.max.x = box.max.z = r; } // frame the body, not its aura
     const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(0.8, box.getSize(new THREE.Vector3()).length() / 2);
-    camera.position.copy(center).add(new THREE.Vector3(1, 0.75, 1.15).normalize().multiplyScalar(radius * 2.9));
+    camera.position.copy(center).add(VIEW.clone().multiplyScalar(fitDistance(box, center, camera)));
     camera.lookAt(center);
     fitSun(sun, built);
     // The play view may have paused shadow updates; this picture needs its own.
@@ -115,6 +126,8 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   scene.background = backdrop(0x9cc8f2);
   const sun = addLights(scene);
   const built = buildLevel(level, false);
+  // Golden apples stay a secret on the card.
+  for (const a of built.golden.values()) a.visible = false;
   scene.add(built.group);
   fitSun(sun, built);
   let center: THREE.Vector3, radius: number;

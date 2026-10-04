@@ -27,7 +27,7 @@
     {"type": "slab", "x": -68, "y": 0, "z": -78, "w": 4, "d": 16, "rot": 90, "tilt": 0, "roll": 30},
     {"type": "curve", "x": -76, "y": 0, "z": -66, "inner": 8, "outer": 16, "rot": 90},
     {"type": "slab", "x": -88, "y": 0, "z": -58, "w": 8, "d": 16, "rot": 0, "tilt": 0},
-    {"type": "bumper", "x": -88, "y": 0, "z": -58},
+    {"type": "puffer", "x": -88, "y": 0, "z": -58, "every": 3},
     {"type": "slab", "x": -88, "y": 0, "z": -42, "w": 8, "d": 16, "rot": 0, "tilt": 0},
     {"type": "column", "x": -86, "y": 0, "z": -42, "h": 4},
     {"type": "column", "x": -90, "y": 0, "z": -46, "h": 4},

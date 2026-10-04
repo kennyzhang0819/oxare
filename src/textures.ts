@@ -231,41 +231,51 @@ function iceTileTexture(anisotropy: number): THREE.Texture {
   return t;
 }
 
-// Treadmill rod: u runs once round the rod, the way its top runs, v along BELT_TILE of its length.
-// Two staggered yellow chevrons point toward -u (the way the surface runs under them) between dark
-// grooves along the rod; `glow` is the chevrons alone.
+// Treadmill belt: u runs along the belt the way it runs, v across it, the tile BELT_TILE square. Dark
+// rubber with raised cleats across it and a painted chevron pointing the way it runs; `glow` is the
+// chevron alone.
 export const BELT_TILE = 1.5;
 export function beltTextures(): { map: THREE.Texture; glow: THREE.Texture } {
-  const U = 512, V = 256;
+  const N = 256;
   const draw = (glow: boolean) => {
-    const [c, ctx] = canvas(U, V);
-    ctx.fillStyle = glow ? "#000" : css(TREADMILL.rod);
-    ctx.fillRect(0, 0, U, V);
-    const cute = ENV.style === "cute";
-    if (!glow && !cute) {
-      ctx.fillStyle = css(TREADMILL.groove);
-      for (let k = 0; k < 8; k++) ctx.fillRect((k * U) / 8, 0, 3, V);
+    const [c, ctx] = canvas(N, N);
+    ctx.fillStyle = glow ? "#000" : css(TREADMILL.belt);
+    ctx.fillRect(0, 0, N, N);
+    if (!glow) {
+      ctx.fillStyle = css(TREADMILL.cleat);
+      for (let k = 0; k < 4; k++) ctx.fillRect((k * N) / 4, 0, 10, N);
     }
-    ctx.strokeStyle = css(TREADMILL.arrow);
     ctx.fillStyle = css(TREADMILL.arrow);
-    ctx.lineWidth = 10;
-    ctx.lineJoin = "miter";
-    for (const [cx, cy] of [[U * 0.25, V * 0.25], [U * 0.75, V * 0.75]] as const) {
-      if (cute) { ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill(); continue; }
-      const dx = 44, dy = 70, t = 34;
-      ctx.beginPath();
-      ctx.moveTo(cx + dx, cy - dy); ctx.lineTo(cx - dx, cy); ctx.lineTo(cx + dx, cy + dy);
-      ctx.lineTo(cx + dx + t, cy + dy); ctx.lineTo(cx - dx + t, cy); ctx.lineTo(cx + dx + t, cy - dy);
-      ctx.closePath();
-      ctx.stroke();
-    }
-    const t = new THREE.CanvasTexture(c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
-    return t;
+    const cx = N * 0.62, cy = N / 2, dx = 34, dy = 62, t = 30;
+    ctx.beginPath();
+    ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy); ctx.lineTo(cx - dx, cy + dy);
+    ctx.lineTo(cx - dx - t, cy + dy); ctx.lineTo(cx + dx - t, cy); ctx.lineTo(cx - dx - t, cy - dy);
+    ctx.closePath();
+    ctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return tex;
   };
   return { map: draw(false), glow: draw(true) };
+}
+
+// A puffer's air ring, as an alpha map: v up the band, soft at both edges, with a few streaks along it.
+let AIR: THREE.Texture | null = null;
+export function airTexture(): THREE.Texture {
+  if (AIR) return AIR;
+  const W = 256, H = 64, [c, ctx] = canvas(W, H), img = ctx.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = 1 - y / (H - 1), band = Math.sin(Math.PI * v) ** 1.5;
+    const streak = 0.65 + 0.35 * Math.max(0, Math.sin(v * Math.PI * 5 + Math.sin((x / W) * Math.PI * 6) * 0.8));
+    const g = Math.round(255 * band * streak), i = 4 * (y * W + x);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = g; img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  AIR = new THREE.CanvasTexture(c);
+  AIR.wrapS = THREE.RepeatWrapping;
+  return AIR;
 }
 
 export interface EdgeMaps { map: THREE.Texture; glow: THREE.Texture }

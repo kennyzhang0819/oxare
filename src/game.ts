@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
 import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, startOf, takesApple, moverShift, pangolinUnrolled, type Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, hideHullsAround, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
+import { buildLevel, createScene, fitSun, hideHullsAround, makeBall, posePlank, puffRings, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { disposeDecor } from "./decor.ts";
 import { NEAR_ON } from "./fade.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
@@ -12,13 +12,15 @@ import { UI_SCALE, setUiScale, uiScale } from "./uiscale.ts";
 import { Stats } from "./stats.ts";
 import { toggle } from "./toggle.ts";
 import { clear, h } from "./ui.ts";
+import { APPLE_EMPTY, APPLE_ICON, GOLDEN_ICON, appleMarks } from "./icons.ts";
+import { goldenOpen, recordClear } from "./progress.ts";
+import { openDialog } from "./dialog.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Seconds the wormhole takes to swallow the ball before the level-complete card.
 const SINK_TIME = 0.9;
 // Seconds a taken apple takes to pop and vanish, and the wormhole to open once the last is taken.
 const POP_TIME = 0.3, OPEN_TIME = 1.2;
-const APPLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-2-1.6-6.5-1.4-7.6 2.6C3.3 13.7 6 21 9.3 21c1.2 0 1.7-.6 2.7-.6s1.5.6 2.7.6c3.3 0 6-7.3 4.9-11.4C18.5 5.6 14 5.4 12 7z" fill="#e8423a" stroke="#3a2a22" stroke-width="1.3"/><path d="M12 7.2c0-1.6.4-3 1.3-4" stroke="#3a2a22" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M13.2 4.6c1.5-1.4 3.6-1.5 4.8-.9-.9 1.5-3 2.3-4.8.9z" fill="#5cbf4f" stroke="#3a2a22" stroke-width="1.1"/></svg>`;
 
 export interface PlayFrom { x: number; y: number; z: number; yaw: number }
 // `admin` (played from the admin panel or the editor) adds the feel-tuning panel: a Tune button and T.
@@ -49,6 +51,9 @@ export class Game implements Mode {
   // started there; and the HUD's apple count.
   private taken = new Map<number, number>();
   private total = 0;
+  // The golden apples in play (none until they have appeared, goldenOpen) and the HUD's golden mark.
+  private golds = new Map<number, THREE.Group>();
+  private goldMark: HTMLElement | null = null;
   private openAt: number | null = null;
   private left = false;
   private count: HTMLElement | null = null;
@@ -95,8 +100,11 @@ export class Game implements Mode {
     this.scene.add(this.built.group, this.ball.mesh);
     fitSun(this.sun, this.built);
     this.total = this.built.apples.size;
+    if (opts.admin || goldenOpen()) this.golds = this.built.golden;
+    else for (const a of this.built.golden.values()) a.visible = false;
     this.hud = h("div", { class: "hud" },
       this.total ? h("div", { class: "pill apples" }, h("span", { class: "apple-icon", innerHTML: APPLE_ICON }), (this.count = h("span", {}, `0 / ${this.total}`))) : null,
+      this.golds.size ? (this.goldMark = h("div", { class: "pill golden", title: "Golden apple (optional)" }, h("span", { class: "apple-icon", innerHTML: APPLE_EMPTY }))) : null,
       h("span", { class: "spacer" }),
       opts.admin ? h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)") : null,
       h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
@@ -163,7 +171,8 @@ export class Game implements Mode {
     this.ball.mesh.position.copy(this.shown);
     this.ball.mesh.quaternion.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
     if (this.sink) this.sinkBall(dt);
-    turnBelts(this.built, sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
+    turnBelts(sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
+    puffRings(this.built, this.level, sim.time - STEP * (1 - alpha), TUNING.puffSpeed);
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);
@@ -196,6 +205,7 @@ export class Game implements Mode {
       const panel = this.built.planks.get(pl.index), piece = this.built.pieceGroups[pl.index];
       if (panel && piece) posePlank(piece, panel, pl.body.translation(), pl.body.rotation());
     }
+    for (const sp of sim.springs) if (sp.at !== null) this.built.springs.get(sp.index)?.(sim.time - STEP * (1 - alpha) - sp.at);
     for (const pg of sim.pangolins) {
       const pose = this.built.pangolins.get(pg.index);
       const a = pangolinUnrolled(pg.track, pg.at === null ? 0 : sim.time - STEP * (1 - alpha) - pg.at, TUNING.unrollSpeed);
@@ -250,15 +260,35 @@ export class Game implements Mode {
     this.aim(p);
   }
 
-  // The ball takes every apple it touches (takesApple); the last one opens the wormhole.
+  // The red apples taken so far; golden ones are taken alongside but never needed.
+  private red(): number {
+    let n = 0;
+    for (const i of this.taken.keys()) if (this.built.apples.has(i)) n++;
+    return n;
+  }
+
+  // The ball takes every apple it touches (takesApple); the last red one opens the wormhole.
   private collect(p: { x: number; y: number; z: number }) {
-    for (const i of this.built.apples.keys()) {
+    for (const m of [this.built.apples, this.golds]) for (const i of m.keys()) {
       const a = this.level.pieces[i];
       if (!a || this.taken.has(i) || !takesApple(a, p)) continue;
       this.taken.set(i, this.time);
-      if (this.count) this.count.textContent = `${this.taken.size} / ${this.total}`;
-      if (this.taken.size === this.total) { this.openAt = this.time; this.count?.parentElement?.classList.add("done"); }
+      if (m === this.golds) { this.markGold(); continue; }
+      const n = this.red();
+      if (this.count) this.count.textContent = `${n} / ${this.total}`;
+      if (n === this.total) { this.openAt = this.time; this.count?.parentElement?.classList.add("done"); }
     }
+  }
+
+  private goldHome(): boolean {
+    return this.golds.size > 0 && [...this.golds.keys()].every((i) => this.taken.has(i));
+  }
+
+  private markGold() {
+    if (!this.goldMark) return;
+    const got = this.goldHome();
+    this.goldMark.classList.toggle("got", got);
+    this.goldMark.firstElementChild!.innerHTML = got ? GOLDEN_ICON : APPLE_EMPTY;
   }
 
   // The level ends when the ball, every apple taken, rolls back into the open wormhole at the origin,
@@ -266,7 +296,7 @@ export class Game implements Mode {
   private homecoming(p: { x: number; y: number; z: number }) {
     const o = startOf(this.level);
     if (Math.hypot(p.x - o.x, p.z - o.z) > ORIGIN_LEAVE) this.left = true;
-    if (!this.left || this.taken.size < this.total || !inOrigin(this.level, p)) return;
+    if (!this.left || this.red() < this.total || !inOrigin(this.level, p)) return;
     this.done = true;
     this.sink = { from: this.shown.clone(), to: new THREE.Vector3(o.x, o.y + START_PAD_H - 0.02, o.z), t: 0, ended: false };
   }
@@ -274,7 +304,7 @@ export class Game implements Mode {
   // Apples spin and bob until taken, then pop and vanish; the wormhole opens over OPEN_TIME.
   private poseApples() {
     const t = this.time;
-    for (const [i, a] of this.built.apples) {
+    for (const m of [this.built.apples, this.golds]) for (const [i, a] of m) {
       const at = this.taken.get(i);
       if (at === undefined) {
         a.rotation.y = t * 1.6 + i;
@@ -296,7 +326,8 @@ export class Game implements Mode {
     this.falls++;
     this.taken.clear();
     this.openAt = null;
-    for (const a of this.built.apples.values()) { a.visible = true; a.scale.setScalar(1); }
+    for (const m of [this.built.apples, this.golds]) for (const a of m.values()) { a.visible = true; a.scale.setScalar(1); }
+    this.markGold();
     if (this.count) { this.count.textContent = `0 / ${this.total}`; this.count.parentElement?.classList.remove("done"); }
     this.sim!.respawn();
     this.savePrev();
@@ -324,13 +355,18 @@ export class Game implements Mode {
     this.finish();
   }
 
+  // Played from the player's list, the clear is kept (progress.ts); the clear that makes golden apples
+  // appear says so in a popup over the card.
   private finish() {
     this.done = true;
     this.releaseMouse();
+    const gold = this.goldHome();
+    const opens = !this.opts.admin && recordClear(this.level, gold);
     this.ctx.overlay.append(
       h("div", { class: "banner" },
-        h("div", { class: "card" },
+        h("div", { class: "card complete" },
           h("h2", {}, "Level complete"),
+          h("div", { class: "marks", innerHTML: appleMarks(true, this.golds.size ? gold : null) }),
           h("div", {}, `Falls ${this.falls}`),
           h("div", { class: "row" },
             h("button", { onclick: () => this.opts.onRetry() }, "Retry"),
@@ -340,6 +376,11 @@ export class Game implements Mode {
         ),
       ),
     );
+    if (opens) openDialog(this.ctx.overlay, {
+      icon: GOLDEN_ICON, tone: "gold", title: "Golden apple has appeared",
+      body: "Some levels now hide a golden apple somewhere hard to reach. It's optional: bring it home with the others to earn it.",
+      buttons: [{ label: "Nice!", primary: true }],
+    });
   }
 
   // The in-game menu pauses the run (the clock and physics stop): Resume, Restart, Settings (the

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
-import { BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_W, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, COLUMN_R, LAMP, MAST, PILLAR_H, PILLAR_R, TREE_CROWN, TREE_STEM, mastRings, treeSize, floorOf, type FloorKind, type TreeCrown, type TreeLeaves, PLATFORM_THICKNESS, RAIL_R, SUPPORT_D, SUPPORT_W, TUBE_R, curveRollPoint, curveStrip, fenceRings, frameToWorld, isSliding, platformHeightAt, slabPoint, worldToFrame, railsRingsWorld, riders, tubeRingsWorld, isMoving, isPlatform, isShaped, isTilted, pieceRoll, pieceRot, pieceTilt, rotXZ, slabOutline, supportOver, supportPillars, surfaceAt, type Level, type Piece, type XZ } from "./level.ts";
+import { BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_W, COLUMN_R, LAMP, MAST, PILLAR_H, PILLAR_R, TREE_CROWN, TREE_STEM, mastRings, treeSize, floorOf, type FloorKind, type TreeCrown, type TreeLeaves, PLATFORM_THICKNESS, RAIL_R, SUPPORT_D, SUPPORT_W, TUBE_R, curveRollPoint, curveStrip, fenceRings, frameToWorld, isSliding, platformHeightAt, slabPoint, worldToFrame, railsRingsWorld, riders, tubeRingsWorld, isMoving, isPlatform, isShaped, isTilted, pieceRoll, pieceRot, pieceTilt, rotXZ, slabOutline, supportOver, supportPillars, surfaceAt, type Level, type Piece, type XZ } from "./level.ts";
 import { CURIO, DECOR, ENV } from "./palette.ts";
 import { patchAt, patchSeed } from "./patches.ts";
 import { INK_FADE, NEAR_ON, fadeGlsl } from "./fade.ts";
@@ -571,22 +571,23 @@ export function buildDecor(level: Level): THREE.Group {
       else add("sprig", x, y - 0.2, z, 0, 0.8 + rnd() * 0.5, pick(DECOR.leaf), 0, 0, 0, face);
     };
     // A climbing vine from height y0 up to y1 round (x, z), starting at angle a.
-    const climb = (kind: string, x: number, y0: number, y1: number, z: number, a: number) => {
+    const climb = (kind: string, x: number, y0: number, y1: number, z: number, a: number, s: number | V3 = 1) => {
       const col = pick(DECOR.vine);
-      for (let k = 0; y0 + k + 1 <= y1; k++) add(kind, x, y0 + k, z, a + k * Math.PI, 1, col);
+      for (let k = 0; y0 + k + 1 <= y1; k++) add(kind, x, y0 + k, z, a + k * Math.PI, s, col);
     };
     owner = -1;
     if (p.type === "column" && !pieceRoll(p) && !pieceTilt(p)) {
       // A steel post taken over: moss and flowers on its head, vines hanging from it and climbing it,
       // ivy, flowers and leaves all up it, ferns and flowers round its foot.
-      const R = COLUMN_R, h = p.h;
+      // The wrap is made round a COLUMN_R post; a wider or narrower one stretches it to fit.
+      const R = p.r, h = p.h, fit = (R + 0.03) / (COLUMN_R + 0.03);
       owner = index;
       add("mound", p.x, p.y + h - 0.06, p.z, rnd() * 6.3, [R / 0.3, 0.9, R / 0.3], pick(DECOR.moss));
       const crown = rnd() * 6.3;
       add("stems", p.x, p.y + h + 0.05, p.z, crown, 1, DECOR.stem);
       add("heads", p.x, p.y + h + 0.05, p.z, crown, 1, pick(DECOR.flower));
       for (let k = 0; k < 2 + rnd() * 3; k++) { const a = rnd() * 6.3; hang(p.x + Math.sin(a) * (R + 0.04), p.y + h - 0.08, p.z + Math.cos(a) * (R + 0.04), h - 0.2); }
-      for (let k = 0; k < 2 + rnd() * 2; k++) climb("wrap", p.x, p.y + 0.05, p.y + 0.05 + (h - 0.3) * (0.5 + rnd() * 0.5), p.z, rnd() * 6.3);
+      for (let k = 0; k < 2 + rnd() * 2; k++) climb("wrap", p.x, p.y + 0.05, p.y + 0.05 + (h - 0.3) * (0.5 + rnd() * 0.5), p.z, rnd() * 6.3, [fit, 1, fit]);
       for (let k = 0; k < h * 6; k++) {
         const a = rnd() * 6.3;
         onWall(p.x + Math.sin(a) * (R + 0.005), p.y + 0.6 + rnd() * Math.max(0, h - 0.7), p.z + Math.cos(a) * (R + 0.005), a, 0.55);
@@ -651,7 +652,7 @@ export function buildDecor(level: Level): THREE.Group {
     };
     if (!riding.has(index) && !pieceRoll(p) && !pieceTilt(p)) {
       owner = index;
-      if (p.type === "blockade") { cushion(BLOCKADE_H, BLOCKADE_W, BLOCKADE_D); sides(BLOCKADE_W, BLOCKADE_D, 0, BLOCKADE_H, 1.2); foot(1.5, 4); }
+      if (p.type === "blockade") { cushion(p.h, p.w, p.d); sides(p.w, p.d, 0, p.h, 1.2); foot(Math.max(p.w, p.d) / 2 + 0.5, Math.round((2 + p.w + p.d) / 1.5)); }
       if (p.type === "block") { cushion(p.h, p.w, p.d); sides(p.w, p.d, 0, p.h, 1); foot(Math.max(p.w, p.d) / 2 + 0.4, 4); }
       if (p.type === "barrier") { cushion(BARRIER_H, BARRIER_W, BARRIER_D); sides(BARRIER_W, BARRIER_D, BARRIER_LEG, BARRIER_H, 1); foot(0.9, 3); }
       if (p.type === "pillar") {
@@ -660,7 +661,7 @@ export function buildDecor(level: Level): THREE.Group {
         for (let k = 0; k < PILLAR_H * 4; k++) { const a = rnd() * 6.3; onWall(p.x + Math.sin(a) * (PILLAR_R + 0.005), p.y + 0.6 + rnd() * (PILLAR_H - 0.9), p.z + Math.cos(a) * (PILLAR_R + 0.005), a, 0.45); }
         foot(PILLAR_R + 0.35, 4);
       }
-      if (p.type === "bumper") foot(1.3, 5);
+      if (p.type === "puffer") foot(1.3, 5);
       if (p.type === "magnet") foot(1.2, 4);
       if (p.type === "kicker" && !isSliding(p)) {
         const back = -(p.d + (p.flat ?? 0)) / 2;

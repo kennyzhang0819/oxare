@@ -6,6 +6,8 @@ import { playerSettings } from "./game.ts";
 import { createScene, type SceneEnv } from "./scene.ts";
 import { levelThumbSrc, saveThumb } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
+import { appleMarks } from "./icons.ts";
+import { goldenOpen, hasGolden, isCleared, levelHasGolden } from "./progress.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Worlds players can't open yet: shown with a lock. Admin-only worlds have no tab for players.
@@ -72,7 +74,7 @@ const TITLE_IMG = `<img src="${import.meta.env.BASE_URL}title.png" alt="" dragga
 
 // `admin` swaps the player's level list for the admin panel (levels, editors); Ctrl+Shift+S
 // flips between them. It only hides the tools, it is not access control.
-export interface MenuOpts { admin: boolean; onPlay(index: number): void; onEdit(level: Level): void; onChanged(): void; onToggleAdmin(): void }
+export interface MenuOpts { admin: boolean; onPlay(index: number): void; onEdit(level: Level, file: string | null): void; onChanged(): void; onToggleAdmin(): void }
 
 export class Menu implements Mode {
   private ctx: Ctx;
@@ -120,10 +122,12 @@ export class Menu implements Mode {
         // Hidden levels are the admin's playgrounds; players see and number only the public ones.
         const select = levelSelect({ admin: false, start: [h("button", { class: "menu-btn small", onclick: home }, "Back")], end: [],
           levels: (w) => LEVELS.flatMap((l, i) => (l.hidden || worldOf(l) !== w ? [] : [i])), item: (i, n, v) => {
+          // Its red apple once cleared; its golden one, once golden apples have appeared, if it has one.
           const l = LEVELS[i]!;
           return h("button", { class: v === "grid" ? "level-card" : "level-row", onclick: () => opts.onPlay(i) },
             h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "", loading: "lazy" }),
             h("span", { class: "name" }, `${levelCode(l, n)}. ${l.name}`),
+            h("span", { class: "marks", innerHTML: appleMarks(isCleared(l), goldenOpen() && levelHasGolden(l) ? hasGolden(l) : null) }),
           );
         } });
         show(false, home, select.el);
@@ -152,7 +156,7 @@ export class Menu implements Mode {
             h("button", { class: "move", title: "Move up", disabled: n === 1, onclick: () => void moveLevel(level, -1) }, "↑"),
             h("button", { class: "move", title: "Move down", disabled: n === count, onclick: () => void moveLevel(level, 1) }, "↓"),
           ] : []),
-          h("button", { class: "edit", onclick: () => opts.onEdit(cloneLevel(level)) }, "Edit"),
+          h("button", { class: "edit", onclick: () => opts.onEdit(cloneLevel(level), level.id) }, "Edit"),
           h("button", { class: "more", title: "More", onclick: () => { const open = more.hidden; this.closeMore(); more.hidden = !open; } }, "⋯"),
           more,
         ),
@@ -180,7 +184,7 @@ export class Menu implements Mode {
       const next = cloneLevel(level);
       change(next);
       try {
-        const res = await fetch("/__level/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next) });
+        const res = await fetch(`/__level/save?overwrite=${encodeURIComponent(level.id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next) });
         if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
         opts.onChanged();
       } catch (err) {
@@ -257,7 +261,7 @@ export class Menu implements Mode {
       admin: true,
       start: [h("button", { class: "menu-btn small", title: "Back to the player's levels (Ctrl+Shift+S)", onclick: () => opts.onToggleAdmin() }, "Back")],
       end: [
-        h("button", { class: "menu-btn small primary", title: "Start a blank level in the editor", onclick: () => opts.onEdit({ ...blankLevel(), ...(tab !== "archive" ? { world: tab } : {}) }) }, "+ New level"),
+        h("button", { class: "menu-btn small primary", title: "Start a blank level in the editor", onclick: () => opts.onEdit({ ...blankLevel(LEVELS.map((l) => l.id)), ...(tab !== "archive" ? { world: tab } : {}) }, null) }, "+ New level"),
         h("button", { class: "menu-btn small", title: "Re-render and save every level's menu picture", onclick: (e: Event) => void rebuildThumbs(e.currentTarget as HTMLButtonElement) }, "Rebuild thumbs"),
       ],
       levels: (w) => LEVELS.flatMap((l, i) => (worldOf(l) === w ? [i] : [])),

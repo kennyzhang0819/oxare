@@ -1,4 +1,4 @@
-import { beltRods, curlPoint, isCurled, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
+import { beltLoop, curlPoint, isCurled, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -56,7 +56,7 @@ function topPolys(level: Level): Poly[] {
         }
       } else if (p.type === "slab" && p.belt) {
         // A treadmill's frame: the opening's edge drops square into the recess, with no lip.
-        const { ox, oz } = beltRods(p);
+        const { ox, oz } = beltLoop(p);
         for (const region of cutRegion(outline, [[W(-ox, -oz), W(ox, -oz), W(ox, oz), W(-ox, oz)]])) {
           out.push({ loops: region.map(snapXZ).map((q) => q.map((v) => ({ v, y: p.y }))), rim: (m) => onOutline(outline, m), narrow: false, piece });
         }

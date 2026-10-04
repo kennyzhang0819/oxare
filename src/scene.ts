@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { APPLE, BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, METAL_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
+import { APPLE, BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BELT_TILE, METAL_TILE, TILE, airTexture, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
-import { APPLE as APPLE_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { APPLE as APPLE_COLORS, CAUTION, GOLDEN as GOLDEN_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, PUFFER, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh, type PlatformJoins } from "./platform.ts";
 import { platformSeams } from "./floor.ts";
 import { DECOR_TIME, buildDecor, buildTree, fadePlantsOn } from "./decor.ts";
@@ -159,21 +159,21 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
   if (ENV.style === "ruin") STRUCT.body = propSteel(METAL.map!);
 }
 
-function buildBlockade(g: THREE.Group) {
-  if (ruin()) { g.add(steel(new RoundedBoxGeometry(BLOCKADE_W, BLOCKADE_H, BLOCKADE_D, 4, BLOCKADE_R).translate(0, BLOCKADE_H / 2, 0))); return; }
+function buildBlockade(g: THREE.Group, p: Piece & { type: "blockade" }) {
+  const W = p.w, H = p.h, D = p.d, R = Math.min(BLOCKADE_R, W / 2, H / 2, D / 2);
+  if (ruin()) { g.add(steel(new RoundedBoxGeometry(W, H, D, 4, R).translate(0, H / 2, 0))); return; }
   const st = STRUCT!;
-  const W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D;
-  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, BLOCKADE_R), st.body);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, R), st.body);
   body.position.y = H / 2;
   body.castShadow = body.receiveShadow = true;
-  const top = new THREE.Mesh(new THREE.BoxGeometry(W - 0.7, 0.05, D - 0.7), st.top);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.1, W - 0.7), 0.05, Math.max(0.1, D - 0.7)), st.top);
   top.position.y = H - 0.025 + PAINT;
   g.add(body, top);
   const sides: [x: number, z: number, yaw: number, len: number][] = [
     [0, D / 2, 0, W], [0, -D / 2, Math.PI, W], [W / 2, 0, Math.PI / 2, D], [-W / 2, 0, -Math.PI / 2, D],
   ];
   for (const [x, z, yaw, len] of sides) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(len - 0.4, H - 0.4), st.panel);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(0.1, len - 0.4), Math.max(0.1, H - 0.4)), st.panel);
     m.position.set(x + Math.sin(yaw) * PAINT * 0.8, H / 2, z + Math.cos(yaw) * PAINT * 0.8);
     m.rotation.y = yaw;
     g.add(m);
@@ -282,25 +282,28 @@ function buildStartPad(g: THREE.Group) {
   g.userData.origin = (open: number) => { mat.uniforms.open!.value = open; motes.visible = open > 0.6; };
 }
 
-// An apple floating APPLE.float over the spot it is placed on: a round red body, a stem and a leaf.
+// An apple floating APPLE.float over the spot it is placed on: a round body (red, or golden), a stem and a leaf.
 // Its group is what the game spins, bobs and takes away.
 const APPLE_MATS = { body: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.body, roughness: 0.45 }), stem: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.stem, roughness: 0.8 }), leaf: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.leaf, roughness: 0.7 }) };
-function buildApple(g: THREE.Group): void {
-  const a = new THREE.Group(), r = APPLE.r;
+const GOLDEN_MATS = { body: new THREE.MeshStandardMaterial({ color: GOLDEN_COLORS.body, emissive: GOLDEN_COLORS.glow, roughness: 0.3 }), stem: new THREE.MeshStandardMaterial({ color: GOLDEN_COLORS.stem, roughness: 0.8 }), leaf: new THREE.MeshStandardMaterial({ color: GOLDEN_COLORS.leaf, roughness: 0.7 }) };
+function buildApple(g: THREE.Group, golden: boolean): void {
+  const a = new THREE.Group(), r = APPLE.r, mats = golden ? GOLDEN_MATS : APPLE_MATS;
   a.position.y = APPLE.float;
-  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16).scale(1, 0.92, 1), APPLE_MATS.body);
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.08, r * 0.11, r * 0.62, 6).rotateZ(-0.25).translate(r * 0.06, r * 0.95, 0), APPLE_MATS.stem);
-  const leaf = new THREE.Mesh(new THREE.SphereGeometry(r * 0.31, 12, 8).scale(1.5, 0.3, 0.75).rotateZ(-0.45).translate(r * 0.4, r * 0.98, 0), APPLE_MATS.leaf);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16).scale(1, 0.92, 1), mats.body);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.08, r * 0.11, r * 0.62, 6).rotateZ(-0.25).translate(r * 0.06, r * 0.95, 0), mats.stem);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(r * 0.31, 12, 8).scale(1.5, 0.3, 0.75).rotateZ(-0.45).translate(r * 0.4, r * 0.98, 0), mats.leaf);
   a.add(body, stem, leaf);
   g.add(a);
-  g.userData.apple = a;
+  g.userData[golden ? "golden" : "apple"] = a;
 }
 
-// Bumper: the revolved profile in four bands, a white base, the red rubber band, a white rolled
-// rim and the flat top carrying a round circuit board, laid flat from above to fill it.
+// Puffer: the revolved profile in its bands (pufferProfile), steel with the vent recess dark, the collar in
+// red paint and louvres across the vents; and its air ring, a soft band run out and faded by puffRings.
 const BUMPER_RUBBER = new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.45 });
-function buildBumper(g: THREE.Group) {
-  const st = STRUCT!, bands = bumperProfile(), dish = bands[3]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
+const AIR_H = 0.75, AIR_Y = 0.6, AIR_OPACITY = 0.75;
+let AIR_GEO: THREE.BufferGeometry | null = null;
+function buildPuffer(g: THREE.Group) {
+  const st = STRUCT!, bands = pufferProfile(), dish = PUFFER_VENT, pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
   for (const band of bands) {
     const m = revolveMesh(band, 48), base = pos.length / 3;
     geo.addGroup(idx.length, m.indices.length, geo.groups.length);
@@ -312,13 +315,35 @@ function buildBumper(g: THREE.Group) {
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, ruin() ? [st.body, ruinPaint().hazard, st.body, SEAM_MAT] : [st.body, BUMPER_RUBBER, st.body, st.bumperTop]);
-  m.castShadow = m.receiveShadow = true;
-  g.add(m);
+  const body = new THREE.Mesh(geo, ruin() ? [st.body, st.body, SEAM_MAT, ruinPaint().hazard, st.body] : [st.body, st.body, SEAM_MAT, BUMPER_RUBBER, st.bumperTop]);
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  const vent = bands[2]!, y0 = vent[1]![1], y1 = vent[2]![1], depth = vent[0]![0] - vent[1]![0];
+  const louvres = Array.from({ length: 16 }, (_, k) =>
+    new THREE.BoxGeometry(depth, y1 - y0, 0.06).translate(PUFFER_VENT - depth / 2, (y0 + y1) / 2, 0).rotateY((k / 16) * Math.PI * 2));
+  g.add(steel(mergeGeometries(louvres)));
+  AIR_GEO ??= new THREE.CylinderGeometry(1, 1, AIR_H, 64, 1, true);
+  const mat = new THREE.MeshBasicMaterial({ color: PUFFER.air, alphaMap: airTexture(), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(AIR_GEO, mat);
+  ring.position.y = AIR_Y;
+  ring.visible = false;
+  ring.userData.air = true;
+  ring.raycast = () => {};
+  g.add(ring);
+  g.userData.puff = (r: number | null) => {
+    ring.visible = r !== null;
+    if (r === null) return;
+    ring.scale.set(r, 1, r);
+    mat.opacity = AIR_OPACITY * (1 - (r - PUFFER_VENT) / (PUFF_REACH - PUFFER_VENT));
+  };
+}
+// Runs every puffer's air ring out to where it is at time t (the sim's time), the ring running at `speed`.
+export function puffRings(built: Built, level: Level, t: number, speed: number): void {
+  for (const [i, set] of built.puffers) set(puffRing(level.pieces[i] as Puffer, t, speed));
 }
 
 // Magnet: the revolved profile, a material per band (see magnetProfile), the top carrying the
-// bumper's round circuit board, and the red aura lying on the surface out to its reach.
+// round circuit board, and the red aura lying on the surface out to its reach.
 const MAGNET_GLOW = new THREE.MeshStandardMaterial({ color: MAGNET.glow, emissive: MAGNET.glow, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.4 });
 const MAGNET_LOWER = new THREE.MeshStandardMaterial({ color: MAGNET.lower, roughness: 0.35, metalness: 0.4 });
 const MAGNET_GROOVE = new THREE.MeshStandardMaterial({ color: MAGNET.groove, roughness: 0.6 });
@@ -457,9 +482,9 @@ const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5
 // Column: a drum in the props' white with eight slate strips down it, a pale foot and head with a
 // cyan band just inside each, and every 4 layers up a pale band between two cyan lines. The strips
 // and bands are painted on, no more than PAINT proud.
-function buildColumn(g: THREE.Group, h: number) {
-  if (ENV.style === "ruin") return metalColumn(g, h);
-  const st = STRUCT!, R = COLUMN_R;
+function buildColumn(g: THREE.Group, h: number, R: number) {
+  if (ENV.style === "ruin") return metalColumn(g, h, R);
+  const st = STRUCT!;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 48), [st.body, SLATE, SLATE]);
   body.position.y = h / 2;
   body.castShadow = body.receiveShadow = true;
@@ -486,12 +511,31 @@ function buildColumn(g: THREE.Group, h: number) {
 let METAL: THREE.MeshStandardMaterial | null = null;
 const SEAM_MAT = new THREE.MeshStandardMaterial({ color: RUIN.seam, roughness: 0.8 });
 // The ruin style's props are a set of their own: each a plain steel body and at most a band or two of
-// old paint: yellow on what the ball can push or move, red on what is dangerous, nothing on the rest.
+// old paint: caution stripes on what the ball can push or move, red on what is dangerous, nothing on the rest.
 let RUIN_PAINT: Record<"move" | "hazard", THREE.MeshStandardMaterial> | null = null;
 const ruinPaint = () => (RUIN_PAINT ??= {
-  move: new THREE.MeshStandardMaterial({ color: PROPS.cyan, roughness: 0.7 }),
+  move: cautionPaint(),
   hazard: new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.7 }),
 });
+// Caution paint: yellow and dark in diagonal stripes CAUTION_STRIPE apart, laid from the mesh's own
+// coordinates so they ride with the prop, the yellow lit a little from within so it stays bright in shade.
+const CAUTION_STRIPE = 0.24;
+function cautionPaint(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: CAUTION.yellow, emissiveIntensity: 0.22, roughness: 0.6 });
+  const v = (hex: number) => { const c = new THREE.Color(hex); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = "varying vec3 vCaution;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vCaution = position;");
+    shader.fragmentShader = "varying vec3 vCaution;\n" + shader.fragmentShader
+      .replace("#include <color_fragment>", `#include <color_fragment>
+  float cautionS = (vCaution.x + vCaution.y + vCaution.z) / ${CAUTION_STRIPE.toFixed(3)};
+  float cautionW = fwidth(cautionS) * 2.0;
+  float cautionDark = smoothstep(0.5 - cautionW, 0.5 + cautionW, abs(fract(cautionS) - 0.5) * 2.0);
+  diffuseColor.rgb *= mix(${v(CAUTION.yellow)}, ${v(CAUTION.dark)}, cautionDark);`)
+      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n  totalEmissiveRadiance *= 1.0 - cautionDark;");
+  };
+  m.customProgramCacheKey = () => "caution-paint";
+  return m;
+}
 const ruin = () => ENV.style === "ruin";
 const steel = (geo: THREE.BufferGeometry, mat: THREE.Material = STRUCT!.body): THREE.Mesh => {
   const m = new THREE.Mesh(geo, mat);
@@ -532,8 +576,8 @@ function propSteel(map: THREE.Texture): THREE.MeshStandardMaterial {
   return m;
 }
 // A steel post, a flange round its foot and its head.
-function metalColumn(g: THREE.Group, h: number): void {
-  const R = COLUMN_R, geo = new THREE.CylinderGeometry(R, R, h, 32, 1, false), [du, dv] = rustShift(g.position);
+function metalColumn(g: THREE.Group, h: number, R: number): void {
+  const geo = new THREE.CylinderGeometry(R, R, h, 32, 1, false), [du, dv] = rustShift(g.position);
   const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2 * Math.PI * R + du, uv.getY(i) * h + dv);
   const body = new THREE.Mesh(geo, METAL!);
@@ -985,7 +1029,7 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, PLANK_T / 2 - 0.01), ruin() ? st.body : st.plank);
   body.castShadow = body.receiveShadow = true;
   panel.add(body);
-  if (ruin()) panel.add(paintBand(w, PLANK_T, PLANK_T / 2 - 0.01, h / 2 - 0.25, 0.2, ruinPaint().move));
+  if (ruin()) for (const y of [h / 2 - 0.25, -h / 2 + 0.3]) panel.add(paintBand(w, PLANK_T, PLANK_T / 2 - 0.01, y, 0.2, ruinPaint().move));
   else {
     const rim = rimFrame(w - 0.3, h - 0.3, 0.1, PAINT);
     for (const side of [1, -1]) {
@@ -1268,7 +1312,8 @@ function pipeMats() {
 }
 
 // Pipe (the "tube" piece): a rust-steel skin with small glass windows (the physics keeps a solid wall behind
-// it) and a ring of rail round each mouth; both mouths alike, since the pipe runs either way.
+// it) and a ring of rail round each mouth. A one-way pipe's exit-only mouth is painted red like the puffer's
+// collar: its ring, and a red band round the pipe just inside it.
 function buildTube(g: THREE.Group, p: Tube) {
   const rings = tubeRings(p);
   if (rings.length < 2) return;
@@ -1312,14 +1357,23 @@ function buildTube(g: THREE.Group, p: Tube) {
   glass.renderOrder = 1;
   glass.userData.noShadow = true;
   g.add(glass);
-  for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d));
+  const exit = exitMouth(p, rings);
+  for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d, exit && m.c === exit.c ? ruinPaint().hazard : undefined));
+  if (exit) {
+    // A closed band (a lathed rectangle) round the pipe's end, inside the mouth's ring.
+    const L = 0.45, r0 = TUBE_R + 0.005, r1 = TUBE_R + 0.045, n = new THREE.Vector3(...exit.n);
+    const band = new THREE.LatheGeometry([new THREE.Vector2(r0, -L / 2), new THREE.Vector2(r1, -L / 2), new THREE.Vector2(r1, L / 2), new THREE.Vector2(r0, L / 2), new THREE.Vector2(r0, -L / 2)], 40);
+    band.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n));
+    band.translate(exit.c[0] - n.x * (RING_T + L / 2), exit.c[1] - n.y * (RING_T + L / 2), exit.c[2] - n.z * (RING_T + L / 2));
+    g.add(steel(band, ruinPaint().hazard));
+  }
 }
 
 // A ring of the fences' and rails' own rail round centre c, axis d (a tube mouth's, or a hoop), with
 // the rails' light strip round its outside.
-function railRing(c: [number, number, number], d: [number, number, number]): THREE.Group {
+function railRing(c: [number, number, number], d: [number, number, number], paint: THREE.Material = RAIL_MAT): THREE.Group {
   const ring = new THREE.Group();
-  for (const [R, r, sides, mat] of (ruin() ? [[RING_R, RING_T, RING_SIDES, RAIL_MAT]] : [[RING_R, RING_T, RING_SIDES, RAIL_MAT], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]]) as [number, number, number, THREE.Material][]) {
+  for (const [R, r, sides, mat] of (ruin() ? [[RING_R, RING_T, RING_SIDES, paint]] : [[RING_R, RING_T, RING_SIDES, paint], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]]) as [number, number, number, THREE.Material][]) {
     const t = ringMesh(c, d, R, r, sides, RING_SEGMENTS), geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
     geo.setIndex(t.indices);
@@ -1610,6 +1664,16 @@ function cornerDecal(shape: THREE.Shape, mat: THREE.Material, cx: number, cz: nu
   return new THREE.Mesh(geo, mat);
 }
 
+// How far a jump pad's spring is stretched (0 at rest, `peak` times its rest height at full), `t` seconds
+// after it launched something: it shoots up after what it threw, then bounces back and settles.
+const SPRING = { peak: 3, attack: 0.07, decay: 0.16, period: 0.3, settle: 1.2 };
+function springStretch(t: number): number {
+  if (!(t >= 0) || t >= SPRING.settle) return 0;
+  if (t < SPRING.attack) { const k = t / SPRING.attack; return SPRING.peak * (1 - (1 - k) * (1 - k)); }
+  const u = t - SPRING.attack;
+  return Math.max(-0.6, SPRING.peak * Math.exp(-u / SPRING.decay) * Math.cos((2 * Math.PI * u) / SPRING.period));
+}
+
 // Jump pad: a low white platform with a grey ramp all round up to its flat top, the launch square
 // in the middle of the top, a dark grille with a yellow rim, under three hovering amber squares.
 // The body is jumpHull rounded like the kicker's, and is its collider too.
@@ -1626,6 +1690,12 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   const deck = new THREE.Group();
   deck.position.y = H;
   g.add(deck);
+  // The rings (or hovering squares) are its spring, posed by the game from the pad's last launch.
+  const rungs: THREE.Object3D[] = [];
+  g.userData.spring = (t: number) => {
+    const e = springStretch(t);
+    rungs.forEach((r, k) => { r.position.y = ((k + 1) * JUMP_REACH * (1 + e)) / 3; });
+  };
   if (ruin()) {
     body.material = st.body;
     const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.05, 10, 48).rotateX(Math.PI / 2);
@@ -1633,6 +1703,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
       const ring = new THREE.Mesh(ringGeo, PALE);
       ring.position.y = (k * JUMP_REACH) / 3;
       deck.add(ring);
+      rungs.push(ring);
     }
     return;
   }
@@ -1646,6 +1717,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
       const ring = new THREE.Mesh(ringGeo, st.glow);
       ring.position.y = (k * JUMP_REACH) / 3;
       deck.add(ring);
+      rungs.push(ring);
     }
     return;
   }
@@ -1680,6 +1752,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     };
     sq.add(fill);
     deck.add(sq);
+    rungs.push(sq);
   }
   // The four ramp faces are alike: each gets a vent over most of its straight part, its group
   // tilted to the slope with local +z pointing out and down it.
@@ -2324,14 +2397,18 @@ export interface Built {
   planks: Map<number, THREE.Group>;
   // Each pangolin's pose: bends it to `a` unrolled (pangolinLine).
   pangolins: Map<number, (a: number) => void>;
+  // Each jump pad's spring pose, by piece index: `t` seconds since it launched something.
+  springs: Map<number, (t: number) => void>;
   // Each moving platform's piece group, placed by its schedule every frame in play.
   movers: Map<number, THREE.Group>;
-  // Every treadmill rod, local to its piece group, with its z and radius (turnBelts).
-  beltRods: { mesh: THREE.Mesh; z: number; r: number }[];
+  // Each puffer's air ring by piece index: shown that far out, or hidden for null (puffRings).
+  puffers: Map<number, (r: number | null) => void>;
   // The scattered overgrowth (decor.ts), kept apart so the editor can carry it over a rebuild.
   decor: THREE.Group;
-  // Each apple's floating group, by piece index; and the origin's wormhole, opened `open` (0 to 1) of the way.
+  // Each apple's floating group, by piece index, the golden ones apart; and the origin's wormhole, opened
+  // `open` (0 to 1) of the way.
   apples: Map<number, THREE.Group>;
+  golden: Map<number, THREE.Group>;
   origin: ((open: number) => void) | null;
   // Each piece group's ink hulls (stylize) with the group's bounds in its own frame, hidden while the
   // camera is near the piece (hideHullsAround).
@@ -2380,7 +2457,6 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
   const planks = new Map<number, THREE.Group>();
   const pangolins = new Map<number, (a: number) => void>();
   const movers = new Map<number, THREE.Group>();
-  const beltRodMeshes: Built["beltRods"] = [];
   const pool = new Map<string, number[]>(), kept = new Set<THREE.Group>();
   reuse?.pieceGroups.forEach((g, i) => { const k = g.userData.buildKey as string | undefined; if (k) pool.set(k, [...(pool.get(k) ?? []), i]); });
 
@@ -2396,7 +2472,6 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.pangolins, pangolins], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
         if (from.has(was)) to.set(index, from.get(was));
       }
-      for (const r of reuse.beltRods) { let o: THREE.Object3D | null = r.mesh; while (o && o !== g) o = o.parent; if (o) beltRodMeshes.push(r); }
       kept.add(g);
       group.add(g);
       pieceGroups.push(g);
@@ -2411,12 +2486,12 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     if (p.type === "kicker" || p.type === "jump") { g.rotation.z = ((p.roll ?? 0) * Math.PI) / 180; g.rotation.x = ((p.tilt ?? 0) * Math.PI) / 180; }
     else if (pieceRoll(p) || pieceTilt(p)) { g.rotation.z = (pieceRoll(p) * Math.PI) / 180; g.rotation.x = (pieceTilt(p) * Math.PI) / 180; }
     g.userData.pieceIndex = index;
-    if (p.type === "blockade") buildBlockade(g);
+    if (p.type === "blockade") buildBlockade(g, p);
     if (p.type === "barrier") buildBarrier(g);
     if (p.type === "pillar") buildPillar(g);
-    if (p.type === "bumper") buildBumper(g);
+    if (p.type === "puffer") buildPuffer(g);
     if (p.type === "magnet") buildMagnet(g);
-    if (p.type === "column") buildColumn(g, p.h);
+    if (p.type === "column") buildColumn(g, p.h, p.r);
     if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
     if (p.type === "barrel") { buildBarrel(g, p.r, p.h); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
     if (p.type === "cube") { buildCube(g, CUBE_S); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
@@ -2460,7 +2535,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       m.receiveShadow = true;
       g.add(m);
       if (isGlass(p) && !isBelt(p)) g.add(glassPane(geo));
-      if (isBelt(p)) beltRodMeshes.push(...buildBelt(g, p));
+      if (isBelt(p)) buildBelt(g, p);
       if (isMoving(p)) {
         m.castShadow = true;
         if (editor) buildMoverRoute(g, p);
@@ -2491,7 +2566,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       g.add(bar, hub);
       spinnerBars.set(index, bar);
     }
-    if (p.type === "apple") buildApple(g);
+    if (p.type === "apple") buildApple(g, !!p.golden);
     if (p.type === "start") {
       buildStartPad(g);
       if (editor) {
@@ -2522,7 +2597,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
   const hulls = pieceGroups.flatMap((g, i) => {
     const box = new THREE.Box3(), inv = g.matrixWorld.clone().invert(), list: THREE.Mesh[] = [], meshes: THREE.Mesh[] = [], m = new THREE.Matrix4();
     g.traverse((o) => {
-      if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh) return;
+      if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh || o.userData.air) return;
       meshes.push(o);
       if (o.userData.outline) { if (o.parent instanceof THREE.Mesh) list.push(o); return; }
       if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
@@ -2530,8 +2605,11 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     });
     return list.length && !box.isEmpty() ? [{ group: g, index: i, box, hulls: list, meshes, platform: isPlatform(level.pieces[i]!) }] : [];
   });
-  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, movers, beltRods: beltRodMeshes, decor, hulls,
+  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, movers, decor, hulls,
+    puffers: new Map(pieceGroups.flatMap((g, i) => (g.userData.puff ? [[i, g.userData.puff as (r: number | null) => void]] : []))),
+    springs: new Map(pieceGroups.flatMap((g, i) => (g.userData.spring ? [[i, g.userData.spring as (t: number) => void]] : []))),
     apples: new Map(pieceGroups.flatMap((g, i) => (g.userData.apple ? [[i, g.userData.apple as THREE.Group]] : []))),
+    golden: new Map(pieceGroups.flatMap((g, i) => (g.userData.golden ? [[i, g.userData.golden as THREE.Group]] : []))),
     origin: (pieceGroups.find((g) => g.userData.origin)?.userData.origin as Built["origin"] | undefined) ?? null };
 }
 
@@ -2666,20 +2744,6 @@ function buildMoverRoute(g: THREE.Group, p: Mover) {
   g.add(line);
 }
 
-let BAD_MAT: THREE.MeshStandardMaterial | null = null;
-// Editor: paint the platforms at `bad` indices red and restore the rest, so an overlap reads at a glance.
-export function markOverlapping(built: Built, bad: Set<number>) {
-  if (!MAT) return;
-  BAD_MAT ??= new THREE.MeshStandardMaterial({ map: MAT.platform.map, color: 0xe0392b, emissive: 0x5a0a05, roughness: 0.85 });
-  built.pieceGroups.forEach((g, i) => {
-    for (const o of g.children) {
-      if (!(o instanceof THREE.Mesh) || !Array.isArray(o.material)) continue;
-      const m = o.material as THREE.Material[];
-      if (isFloorMat(m[0]!) || m[0] === BAD_MAT) { if (bad.has(i)) { o.userData.floor ??= m[0]; m[0] = BAD_MAT!; } else if (m[0] === BAD_MAT) m[0] = o.userData.floor as THREE.Material; }
-    }
-  });
-}
-
 export interface Ball { mesh: THREE.Mesh; reflect(renderer: THREE.WebGLRenderer, env: SceneEnv): void; dispose(): void }
 
 // Lacquered ball mirroring the live scene: a cube camera at the ball re-renders the surroundings
@@ -2730,34 +2794,55 @@ export function makeBall(): Ball {
 }
 
 // Treadmill: the opening's walls (a dark box seen from inside, so it looks the same from below) and
-// its rods. Each rod starts turned back by its own z over its radius, so the chevrons on the rods'
-// tops line up into one pattern, and turned on as the belt runs (turnBelts) the pattern runs with
-// them: forward over the tops, back under the bottoms.
-let BELT: { rod: THREE.MeshStandardMaterial; bed: THREE.MeshStandardMaterial } | null = null;
-function buildBelt(g: THREE.Group, p: Slab): Built["beltRods"] {
+// the belt loop in it (beltOutline), its texture laid along the loop in world units so every belt shares
+// it, and run along as the belt runs (turnBelts): forward over the top, back under the bottom.
+let BELT: { belt: THREE.MeshStandardMaterial; bed: THREE.MeshStandardMaterial; side: THREE.MeshStandardMaterial } | null = null;
+function buildBelt(g: THREE.Group, p: Slab): void {
   if (!BELT) {
     const t = beltTextures();
     BELT = {
-      rod: new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.glow, emissive: 0xffffff, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.5, metalness: 0.05 }),
+      belt: new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.glow, emissive: 0xffffff, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.75 }),
       bed: new THREE.MeshStandardMaterial({ color: TREADMILL.bed, roughness: 0.8, side: THREE.BackSide }),
+      side: new THREE.MeshStandardMaterial({ color: TREADMILL.bed, roughness: 0.8 }),
     };
   }
-  const b = beltRods(p), mats = BELT;
+  const b = beltLoop(p), mats = BELT;
   const walls = new THREE.Mesh(new THREE.BoxGeometry(2 * b.ox, PLATFORM_THICKNESS, 2 * b.oz), mats.bed);
   walls.position.y = -PLATFORM_THICKNESS / 2;
   g.add(walls);
-  // Turned so the axis runs along x with u going round the way the rod turns (see beltTextures).
-  const geo = new THREE.CylinderGeometry(b.r, b.r, 2 * b.half, 48).rotateZ(-Math.PI / 2), uv = geo.getAttribute("uv");
-  for (let i = 0; i < uv.count; i++) uv.setY(i, (uv.getY(i) * 2 * b.half) / BELT_TILE);
-  return b.z.map((z) => {
-    const m = new THREE.Mesh(geo, mats.rod);
-    m.position.set(0, -PLATFORM_THICKNESS / 2, z);
-    m.rotation.x = -z / b.r;
-    g.add(m);
-    return { mesh: m, z, r: b.r };
-  });
+  const pts = beltOutline(p), n = pts.length, pos: number[] = [], nrm: number[] = [], uv: number[] = [], idx: number[] = [];
+  let s = 0;
+  for (let i = 0; i <= n; i++) {
+    const [z, y] = pts[i % n]!, round = Math.abs(z) > b.end + 1e-6, c = z < 0 ? -b.end : b.end;
+    if (i) { const [pz, py] = pts[i - 1]!; s += Math.hypot(z - pz, y - py); }
+    const nz = round ? (z - c) / b.r : 0, ny = round ? (y - b.cy) / b.r : Math.sign(y - b.cy);
+    for (const x of [-b.half, b.half]) { pos.push(x, y, z); nrm.push(0, ny, nz); uv.push(s / BELT_TILE, x / BELT_TILE); }
+    if (i) { const k = 2 * i; idx.push(k - 2, k - 1, k + 1, k - 2, k + 1, k); }
+  }
+  const run = idx.length;
+  for (const sx of [-1, 1]) {
+    const base = pos.length / 3;
+    pos.push(sx * b.half, b.cy, 0); nrm.push(sx, 0, 0); uv.push(0, 0);
+    for (const [z, y] of pts) { pos.push(sx * b.half, y, z); nrm.push(sx, 0, 0); uv.push(0, 0); }
+    for (let i = 0; i < n; i++) {
+      const [z0, y0] = pts[i]!, [z1, y1] = pts[(i + 1) % n]!, cx = (y0 - b.cy) * z1 - z0 * (y1 - b.cy);
+      const a = base + 1 + i, c = base + 1 + ((i + 1) % n);
+      idx.push(...(cx * sx > 0 ? [base, a, c] : [base, c, a]));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.addGroup(0, run, 0);
+  geo.addGroup(run, idx.length - run, 1);
+  const belt = new THREE.Mesh(geo, [mats.belt, mats.side]);
+  belt.receiveShadow = true;
+  g.add(belt);
 }
-// Turns every treadmill rod for its tops having run `travel` along the belt (the sim's beltTravel).
-export function turnBelts(built: Built, travel: number): void {
-  for (const r of built.beltRods) r.mesh.rotation.x = -(r.z + travel) / r.r;
+// Runs every belt's pattern along for the belts having run `travel` (the sim's beltTravel).
+export function turnBelts(travel: number): void {
+  if (!BELT) return;
+  BELT.belt.map!.offset.x = BELT.belt.emissiveMap!.offset.x = -travel / BELT_TILE;
 }

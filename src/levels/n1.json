@@ -6,14 +6,13 @@
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "slab", "x": 0, "y": 0, "z": -9, "w": 20, "d": 26, "rot": 0, "tilt": 0},
-    {"type": "curve", "x": -10, "y": 0, "z": 4, "inner": 8, "outer": 16, "rot": 90},
+    {"type": "curve", "x": -10, "y": 0, "z": 1.5, "inner": 6, "outer": 14, "rot": 90},
     {"type": "pillar", "x": 6, "y": 0, "z": -13, "rot": 180},
     {"type": "pillar", "x": -4, "y": 0, "z": -8, "rot": 180},
     {"type": "ramp", "x": 14, "y": 0, "z": -15, "w": 8, "d": 16, "rot": 0, "rise": 4},
-    {"type": "blockade", "x": 1, "y": 0, "z": -6, "rot": 0},
-    {"type": "blockade", "x": -7, "y": 0, "z": -20, "rot": 0},
+    {"type": "blockade", "x": 1, "y": 0, "z": -6, "w": 2, "h": 1.5, "d": 2, "rot": 0},
+    {"type": "blockade", "x": -7, "y": 0, "z": -20, "w": 2, "h": 1.5, "d": 2, "rot": 0},
     {"type": "fence", "x": 9.5, "y": 0, "z": 4, "rot": 0, "path": [{"x": -19, "y": 0, "z": 0, "bend": 0.2}]},
-    {"type": "fence", "x": -10, "y": 0, "z": -12, "rot": 0, "path": [{"x": -1.68, "y": 0, "z": 0, "bend": 0.2}, {"x": -15.36, "y": 0, "z": 13.68, "bend": 0.2, "mid": {"x": -11.353, "y": 0, "z": 4.007}}, {"x": -15.36, "y": 0, "z": 15.36, "bend": 0.2}]},
     {"type": "barrier", "x": -8, "y": 0, "z": -12, "rot": 0},
     {"type": "barrier", "x": -5, "y": 0, "z": -12, "rot": 0},
     {"type": "barrier", "x": -3, "y": 0, "z": -14, "rot": 90},
@@ -21,8 +20,9 @@
     {"type": "apple", "x": -6.5, "y": 0, "z": -15.5},
     {"type": "pillar", "x": 6, "y": 0, "z": 0, "rot": 180},
     {"type": "apple", "x": 14, "y": 4, "z": -20},
-    {"type": "apple", "x": -22, "y": 0, "z": 1},
-    {"type": "blockade", "x": -20, "y": 0, "z": -2, "rot": 0},
-    {"type": "mast", "x": 4, "y": 0, "z": -17, "h": 9, "rot": 0}
+    {"type": "apple", "x": -20, "y": 0, "z": -1},
+    {"type": "blockade", "x": -16, "y": 0, "z": -7.5, "w": 2, "h": 1.5, "d": 2, "rot": 0},
+    {"type": "mast", "x": 4, "y": 0, "z": -17, "h": 9, "rot": 0},
+    {"type": "apple", "x": 6, "y": 2.5, "z": -13, "golden": true}
   ]
 }

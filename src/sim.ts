@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, beltRods, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, softProps, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCapsules, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, PANGOLIN_SEG, pangolinCuts, pangolinLine, pangolinPoint, pangolinRest, pangolinRing, pangolinTrack, pangolinUnrolled, type Pangolin, type PangolinTrack, pangolinSlices, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, beltLoop, beltOutline, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, PUFFER_H, PUFFER_VENT, PUFF_REACH, PUFF_MIN_EVERY, pufferProfile, type Puffer, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, exitMouth, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, softProps, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCapsules, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, PANGOLIN_SEG, pangolinCuts, pangolinLine, pangolinPoint, pangolinRest, pangolinRing, pangolinTrack, pangolinUnrolled, type Pangolin, type PangolinTrack, pangolinSlices, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -26,9 +26,13 @@ const STOOL_LIFT = 0.02;
 const SLIDE_GRACE = 0.3;
 // Crates and barrels: one light, slippery, barely bouncy body each; a gate's cube shares the feel.
 const PROP_MASS = 0.2, PROP_FRICTION = 0.35, PROP_RESTITUTION = 0.1;
+// How fast (per second) a prop on a treadmill is brought to the belt's speed.
+const BELT_GRIP = 6;
+// Launches closer together than this (s) are one spring of the pad, not a new one.
+const SPRING_AGAIN = 0.25;
 // A bean's skin: slippery, so it shoves the ball on rather than dragging it along.
 const BEAN_FRICTION = 0.3;
-// A bean throws the ball off itself like a bumper's side, never slower than this.
+// A bean throws the ball off itself, never slower than this.
 const BEAN_KICK = 0.5;
 // A gate's chain link: light beside the cube it holds.
 const GATE_LINK_MASS = 0.02;
@@ -61,6 +65,8 @@ export interface SimTube { index: number; centre: [number, number, number][]; ch
 export interface SimMover { index: number; body: RAPIER.RigidBody; piece: Mover }
 // `at` is the sim time it was first touched, null while it lies curled.
 export interface SimPangolin { index: number; piece: Pangolin; track: PangolinTrack; at: number | null }
+// `at` is the sim time the jump pad last launched something (the ball or a prop), null until then.
+export interface SimSpring { index: number; at: number | null }
 // `at` is the sim time the ball last bumped it into stretching, null until then.
 export interface Sim {
   world: RAPIER.World;
@@ -72,11 +78,12 @@ export interface Sim {
   bridges: SimBridge[];
   planks: SimPlank[];
   pangolins: SimPangolin[];
+  springs: SimSpring[];
   tubes: SimTube[];
   movers: SimMover[];
   // Seconds of play stepped so far: the clock moving platforms run their schedules on.
   readonly time: number;
-  // How far every treadmill's rod tops have run along it so far.
+  // How far every treadmill's belt has run so far.
   readonly beltTravel: number;
   // Below this a fallen ball respawns and a fallen crate goes home (respawnY in level.ts).
   readonly respawnY: number;
@@ -203,25 +210,25 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       );
     }
   };
-  const bumpers: RAPIER.Collider[] = [], magnets: RAPIER.Collider[] = [];
-  const rods: { body: RAPIER.RigidBody; axis: { x: number; z: number }; r: number }[] = [];
-  // Each rod's collider and the way its treadmill carries (local -z).
+  const puffers: { c: RAPIER.Collider; piece: Puffer; pushed: number }[] = [], magnets: RAPIER.Collider[] = [];
+  // Each treadmill's belt: a kinematic body run at the belt's speed every step and put back after it,
+  // so the solver sees its surface moving while it stays where it is.
+  const loops: { body: RAPIER.RigidBody; home: { x: number; y: number; z: number }; dir: { x: number; z: number } }[] = [];
+  // Each belt's collider and the way its top carries (local -z).
   const belts = new Map<number, { x: number; z: number }>();
-  let beltSpeed = NaN, beltTravel = 0;
+  let beltTravel = 0;
   level.pieces.forEach((p, index) => {
     const rot = pieceRot(p);
     riding = rides.get(index) ?? moverOf.get(index);
     rolled = rollFrame(p);
     if (isBelt(p) && !isTilted(p) && !isMoving(p)) {
-      // Each rod spins on its own kinematic body.
-      const b = beltRods(p), q = yQuat(rot), axis = rotXZ(1, 0, rot);
-      for (const z of b.z) {
-        const o = rotXZ(0, z, rot);
-        const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicVelocityBased().setTranslation(p.x + o.x, p.y - PLATFORM_THICKNESS / 2, p.z + o.z).setRotation(qmul(q, Z90)));
-        const c = world.createCollider(RAPIER.ColliderDesc.cylinder(b.half, b.r).setFriction(1), body);
-        rods.push({ body, axis, r: b.r });
-        belts.set(c.handle, { x: axis.z, z: -axis.x });
-      }
+      const b = beltLoop(p), dir = rotXZ(0, -1, rot), pts: number[] = [];
+      for (const [z, y] of beltOutline(p)) for (const x of [-b.half, b.half]) { const o = rotXZ(x, z, rot); pts.push(o.x, y, o.z); }
+      const home = { x: p.x, y: p.y, z: p.z };
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicVelocityBased().setTranslation(home.x, home.y, home.z));
+      const c = world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts))!.setFriction(1), body);
+      loops.push({ body, home, dir });
+      belts.set(c.handle, dir);
     }
     if (p.type === "curve" && isTilted(p)) {
       // The floor it would have lying flat (top, sides, underside and solids), rolled with it.
@@ -329,12 +336,12 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(revolvePoints(prof, 32)));
       if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setFriction(1));
     }
-    if (p.type === "bumper") {
-      const m = revolveMesh(bumperProfile().flatMap((band, i) => (i ? band.slice(1) : band)), 48);
-      bumpers.push(fixed(
+    if (p.type === "puffer") {
+      const m = revolveMesh(pufferProfile().flatMap((band, i) => (i ? band.slice(1) : band)), 48);
+      puffers.push({ piece: p, pushed: -1, c: fixed(
         RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES)
           .setTranslation(p.x, p.y, p.z).setFriction(1),
-      ));
+      ) });
     }
     if (p.type === "magnet") {
       const m = revolveMesh(magnetProfile().flatMap((band, i) => (i ? band.slice(1) : band)), 48);
@@ -689,12 +696,14 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   const fallY = respawnY(level);
 
   // Jump pads: a fixed rounded convex hull each, like a kicker, so the ramp all round is seamless.
+  const pads: (RAPIER.Collider | null)[] = [];
+  const springs: SimSpring[] = jumps.map((j) => ({ index: level.pieces.indexOf(j), at: null }));
   for (const p of jumps) {
     riding = rides.get(level.pieces.indexOf(p));
     const hull = jumpHull(p);
     const pts = new Float32Array(hull.corners.flatMap((c) => frameToWorld(p, c)));
     const desc = RAPIER.ColliderDesc.roundConvexHull(pts, hull.r);
-    if (desc) fixed(desc.setFriction(1));
+    pads.push(desc ? fixed(desc.setFriction(1)) : null);
   }
 
   // Kickers: a fixed rounded convex wedge each, so the slope is one flat face with no seams to catch on.
@@ -736,10 +745,14 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setFriction(1));
   };
   const tubes: SimTube[] = [];
+  // One-way tubes' exit-only mouths, and whether the ball was last outside each (in front of it, past its own radius).
+  const exits: { c: [number, number, number]; n: [number, number, number]; outside: boolean }[] = [];
   level.pieces.forEach((p, index) => {
     if (p.type !== "tube") return;
     const rings = tubeRingsWorld(p);
     if (rings.length < 2) return;
+    const ex = exitMouth(p, rings);
+    if (ex) exits.push({ ...ex, outside: true });
     const skin = sweepTube(rings, TUBE_R, true, TUBE_SKIN_SIDES);
     world.createCollider(
       RAPIER.ColliderDesc.trimesh(new Float32Array(skin.positions), new Uint32Array(skin.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(0.6),
@@ -791,14 +804,19 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   );
   const ballCollider = world.createCollider(RAPIER.ColliderDesc.ball(BALL_RADIUS).setMass(1).setFriction(1).setRestitution(0.05), ball);
   const down = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
-  // The way the treadmill under the ball carries, if it is touching one's rods.
-  const beltUnder = (): { x: number; z: number } | null => {
+  // The way the treadmill under the ball (or `who`) carries, if it is touching one's belt.
+  const beltUnder = (who = ballCollider): { x: number; z: number } | null => {
     let dir: { x: number; z: number } | null = null;
-    if (belts.size) world.contactPairsWith(ballCollider, (other) => {
+    if (belts.size) world.contactPairsWith(who, (other) => {
       const d = belts.get(other.handle);
-      if (d && !dir) world.contactPair(ballCollider, other, (m) => { for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) < 0.02) dir = d; });
+      if (d && !dir) world.contactPair(who, other, (m) => { for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) < 0.02) dir = d; });
     });
     return dir;
+  };
+  const touching = (a: RAPIER.Collider, b: RAPIER.Collider): boolean => {
+    let hit = false;
+    world.contactPair(a, b, (m) => { for (let i = 0; i < m.numContacts(); i++) if (m.contactDist(i) < 0.02) hit = true; });
+    return hit;
   };
 
   return {
@@ -809,6 +827,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     bridges,
     planks,
     pangolins,
+    springs,
     tubes,
     movers,
     riders: rides,
@@ -857,7 +876,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           const a = moverAt(rode.piece, time), b = moverAt(rode.piece, time + STEP);
           carry = [(b.x - a.x) / STEP, (b.y - a.y) / STEP, (b.z - a.z) / STEP];
         } else {
-          // On a treadmill the rods' tops are the ground, moving: the same give-back makes the ball
+          // On a treadmill the belt is the ground, moving: the same give-back makes the ball
           // ride at their speed without spinning, where friction alone would leave it at 2/7 of it.
           const belt = beltUnder();
           if (belt) carry = [belt.x * TUNING.beltSpeed, 0, belt.z * TUNING.beltSpeed];
@@ -879,7 +898,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         push = [push[0] - heading[0] * back * k, push[1] - heading[1] * back * k, push[2] - heading[2] * back * k];
       }
       // Speed cap: the player's own push (throttle and climb assist) never takes the ball's level speed,
-      // over the ground or the platform carrying it, past maxSpeed; bumpers, jump pads, slopes and props can.
+      // over the ground or the platform carrying it, past maxSpeed; puffers, jump pads, slopes and props can.
       // At the cap the push still turns the ball, keeping its speed. Push is read as acceleration: the ball's mass is 1.
       const vb = ball.linvel(), rx = vb.x - carry[0], rz = vb.z - carry[2], cap = Math.max(TUNING.maxSpeed, Math.hypot(rx, rz));
       const wx = rx + push[0] * STEP, wz = rz + push[2] * STEP, wh = Math.hypot(wx, wz);
@@ -936,27 +955,51 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         b.resetForces(false);
         b.addForce({ x: v.x * k, y: v.y * k, z: v.z * k }, true);
       }
-      // Treadmill rods turn backward about their local x, so their tops run toward local -z.
-      if (beltSpeed !== TUNING.beltSpeed) {
-        beltSpeed = TUNING.beltSpeed;
-        for (const r of rods) { const w = -beltSpeed / r.r; r.body.setAngvel({ x: r.axis.x * w, y: 0, z: r.axis.z * w }, true); }
+      for (const l of loops) l.body.setLinvel({ x: l.dir.x * TUNING.beltSpeed, y: 0, z: l.dir.z * TUNING.beltSpeed }, true);
+      beltTravel += TUNING.beltSpeed * STEP;
+      // Props on a treadmill ride it as the ball does: the belt's friction alone barely moves a damped
+      // prop, so each is eased toward the belt's speed along it, the damping on that speed given back.
+      if (belts.size) for (const c of crates) {
+        const d = beltUnder(c.body.collider(0));
+        if (!d) continue;
+        const v = c.body.linvel(), m = c.body.mass(), along = v.x * d.x + v.z * d.z;
+        const dv = (TUNING.beltSpeed - along) * Math.min(1, BELT_GRIP * STEP) + TUNING.beltSpeed * TUNING.propDamping * STEP;
+        c.body.applyImpulse({ x: d.x * dv * m, y: 0, z: d.z * dv * m }, true);
       }
-      beltTravel += beltSpeed * STEP;
       const v0 = ball.linvel();
       world.step();
       time += STEP;
-      // Bumpers: a ball that ran into one's side leaves straight out from its axis, at a share of the
-      // speed it came in with but never slower than the kick; along the side its speed is kept.
-      for (const c of bumpers) {
-        // In the bumper's own frame (rolled or not): out from its axis, level in that frame.
-        const o = c.translation(), q = c.rotation(), b = ball.translation(), l = qunrot(q, { x: b.x - o.x, y: b.y - o.y, z: b.z - o.z }), d = Math.hypot(l.x, l.z);
-        if (d < 1e-6 || d > BUMPER_R + BALL_RADIUS + 0.05 || l.y < 0 || l.y > BUMPER_H) continue;
-        const n = qrot(q, { x: l.x / d, y: 0, z: l.z / d }), vin = v0.x * n.x + v0.y * n.y + v0.z * n.z;
-        if (vin >= 0) continue;
-        const v = ball.linvel(), vn = v.x * n.x + v.y * n.y + v.z * n.z, out = Math.max(TUNING.bumperKick, -vin * TUNING.bumperBounce);
-        if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
+      for (const l of loops) l.body.setTranslation(l.home, false);
+      // An exit-only mouth: a ball that was outside it, in line with the bore, is held out at the mouth
+      // (its front on the mouth's plane) and its speed into it turned back; one inside leaves freely.
+      for (const ex of exits) {
+        const b = ball.translation(), rx = b.x - ex.c[0], ry = b.y - ex.c[1], rz = b.z - ex.c[2], s = rx * ex.n[0] + ry * ex.n[1] + rz * ex.n[2];
+        const radial = Math.hypot(rx - s * ex.n[0], ry - s * ex.n[1], rz - s * ex.n[2]);
+        if (radial > RING_R + RING_T || s > BALL_RADIUS + 1) { ex.outside = true; continue; }
+        if (s >= BALL_RADIUS) { ex.outside = true; continue; }
+        if (s < 0) { ex.outside = false; continue; }
+        if (!ex.outside) continue;
+        const push = BALL_RADIUS - s, v = ball.linvel(), vn = v.x * ex.n[0] + v.y * ex.n[1] + v.z * ex.n[2];
+        ball.setTranslation({ x: b.x + ex.n[0] * push, y: b.y + ex.n[1] * push, z: b.z + ex.n[2] * push }, true);
+        if (vn < 0) ball.setLinvel({ x: v.x - 1.3 * vn * ex.n[0], y: v.y - 1.3 * vn * ex.n[1], z: v.z - 1.3 * vn * ex.n[2] }, true);
       }
-      // Beans: like a bumper's side, out from the nearest point of the bean's axis, but measured against
+      // Puffers: as a ring's front reaches the ball's near side it pushes the ball once straight out from the
+      // puffer's axis (level in its own frame), puffKick at the vents fading to puffFade of that at its reach.
+      for (const pf of puffers) {
+        const { c, piece } = pf;
+        const a = time - (piece.offset ?? 0), every = Math.max(PUFF_MIN_EVERY, piece.every);
+        if (a < 0) continue;
+        const ring = Math.floor(a / every), age = a - ring * every, r1 = PUFFER_VENT + TUNING.puffSpeed * age, r0 = age < STEP ? 0 : r1 - TUNING.puffSpeed * STEP;
+        if (r0 >= PUFF_REACH || pf.pushed === ring) continue;
+        const o = c.translation(), q = c.rotation(), b = ball.translation(), l = qunrot(q, { x: b.x - o.x, y: b.y - o.y, z: b.z - o.z }), d = Math.hypot(l.x, l.z), near = d - BALL_RADIUS;
+        // A little slack inside the front, for a ball rolling in across it.
+        if (d < 1e-6 || near <= r0 - 0.15 || near > Math.min(r1, PUFF_REACH) || l.y < -BALL_RADIUS || l.y > PUFFER_H + BALL_RADIUS) continue;
+        const n = qrot(q, { x: l.x / d, y: 0, z: l.z / d }), s = Math.max(0, (near - PUFFER_VENT) / (PUFF_REACH - PUFFER_VENT)), k = TUNING.puffKick * (1 - (1 - TUNING.puffFade) * s);
+        const v = ball.linvel();
+        ball.setLinvel({ x: v.x + n.x * k, y: v.y + n.y * k, z: v.z + n.z * k }, true);
+        pf.pushed = ring;
+      }
+      // Beans: out from the nearest point of the bean's axis, but measured against
       // the bean's own motion, so a bean running into a resting ball throws it ahead.
       for (const bn of beans) {
         const o = bn.body.translation(), q = bn.body.rotation(), b = ball.translation(), h = Math.max(0, bn.piece.len / 2 - bn.piece.r);
@@ -966,7 +1009,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         const n = qrot(q, { x: rx / d, y: ry / d, z: rz / d }), bv = bn.vel;
         const vin = (v0.x - bv.x) * n.x + (v0.y - bv.y) * n.y + (v0.z - bv.z) * n.z;
         if (vin >= 0) continue;
-        const v = ball.linvel(), vn = (v.x - bv.x) * n.x + (v.y - bv.y) * n.y + (v.z - bv.z) * n.z, out = Math.max(BEAN_KICK, -vin * TUNING.bumperBounce);
+        const v = ball.linvel(), vn = (v.x - bv.x) * n.x + (v.y - bv.y) * n.y + (v.z - bv.z) * n.z, out = Math.max(BEAN_KICK, -vin * TUNING.beanBounce);
         if (vn < out) ball.setLinvel({ x: v.x + n.x * (out - vn), y: v.y + n.y * (out - vn), z: v.z + n.z * (out - vn) }, true);
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
@@ -975,15 +1018,26 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       // tilted pad's own up) becomes what carries it the pad's rise above its top from where it is, so
       // setting it again on the way up adds nothing; its speed across the pad is left as it is.
       // A pad on a moving platform is where the platform has carried it, and launches relative to it.
-      for (const j of jumps) {
+      // A prop pushed onto the launch square (its middle over it, touching the pad) goes up the same way.
+      for (const [k, j] of jumps.entries()) {
         const m = rides.get(level.pieces.indexOf(j)), s = m ? moverShift(m.piece, time) : { x: 0, y: 0, z: 0 }, s0 = m ? moverShift(m.piece, time - STEP) : s;
-        const b = ball.translation(), half = jumpPadSize(j) / 2;
-        const u = worldToFrame(j, [b.x - s.x, b.y - s.y, b.z - s.z]), up = u[1] - JUMP_H - BALL_RADIUS;
-        if (Math.abs(u[0]) > half || Math.abs(u[2]) > half || up > JUMP_REACH || up < -0.3) continue;
-        const nr = frameToWorld({ ...j, x: 0, y: 0, z: 0 }, [0, 1, 0]), n = { x: nr[0], y: nr[1], z: nr[2] };
+        const half = jumpPadSize(j) / 2, nr = frameToWorld({ ...j, x: 0, y: 0, z: 0 }, [0, 1, 0]), n = { x: nr[0], y: nr[1], z: nr[2] };
         const pv = { x: (s.x - s0.x) / STEP, y: (s.y - s0.y) / STEP, z: (s.z - s0.z) / STEP };
-        const v = ball.linvel(), vn = (v.x - pv.x) * n.x + (v.y - pv.y) * n.y + (v.z - pv.z) * n.z, want = launchSpeed(j.rise - Math.max(0, up), TUNING.gravity, TUNING.linearDamping);
-        if (vn < want) ball.setLinvel({ x: v.x + n.x * (want - vn), y: v.y + n.y * (want - vn), z: v.z + n.z * (want - vn) }, true);
+        const local = (b: RAPIER.RigidBody) => { const t = b.translation(); return worldToFrame(j, [t.x - s.x, t.y - s.y, t.z - s.z]); };
+        const launch = (body: RAPIER.RigidBody, up: number, damping: number) => {
+          const v = body.linvel(), vn = (v.x - pv.x) * n.x + (v.y - pv.y) * n.y + (v.z - pv.z) * n.z, want = launchSpeed(j.rise - Math.max(0, up), TUNING.gravity, damping);
+          if (vn >= want) return;
+          body.setLinvel({ x: v.x + n.x * (want - vn), y: v.y + n.y * (want - vn), z: v.z + n.z * (want - vn) }, true);
+          const sp = springs[k]!;
+          if (sp.at === null || time - sp.at > SPRING_AGAIN) sp.at = time;
+        };
+        const u = local(ball), up = u[1] - JUMP_H - BALL_RADIUS;
+        if (Math.abs(u[0]) <= half && Math.abs(u[2]) <= half && up <= JUMP_REACH && up >= -0.3) launch(ball, up, TUNING.linearDamping);
+        const pad = pads[k];
+        if (pad) for (const c of crates) {
+          const w = local(c.body);
+          if (Math.abs(w[0]) <= half && Math.abs(w[2]) <= half && touching(c.body.collider(0), pad)) launch(c.body, 0, TUNING.propDamping);
+        }
       }
       ball.resetForces(true);
     },

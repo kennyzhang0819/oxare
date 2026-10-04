@@ -11,7 +11,7 @@ export const PLATFORM_LIP = { inset: PLATFORM_EDGE_INSET, drop: PLATFORM_EDGE_DR
 export const BALL_RADIUS = 0.5;
 export const SPINNER_HEIGHT = 0.6;
 export const SPINNER_WIDTH = 0.4;
-export const BLOCKADE_W = 2, BLOCKADE_H = 1.5, BLOCKADE_D = 2;
+export const BLOCKADE_W = 2, BLOCKADE_H = 1.5, BLOCKADE_D = 2, BLOCKADE_MIN = 0.5;
 export const PILLAR_R = 0.6, PILLAR_H = 2.6;
 export const BARRIER_W = 2.5, BARRIER_H = 1.4, BARRIER_D = 0.5;
 // A barrier is a rounded pod BARRIER_LEG off the surface on two legs, the pod's top at BARRIER_H.
@@ -82,7 +82,7 @@ export function jumpHull(p: Piece & { type: "jump" }, round?: number): { corners
 export const ORIGIN_PULL = 0.75, ORIGIN_REACH = 1;
 // An apple floats `float` above the height it is placed at, `r` round, and never moves (it is not in the
 // physics, so nothing holds it up or pulls it down); the ball takes it once their centres are `take` apart.
-export const APPLE = { r: 0.48, float: 0.85, take: 1 };
+export const APPLE = { r: 0.4, float: 0.85, take: 1 };
 // The start pad: a low disc like a nest, its centre carved into a shallow bowl the ball spawns in.
 // START_PAD_H is the rim's height; the bowl is START_PAD_BOWL across in radius and START_PAD_DIP
 // deep, so the ball rests with its centre START_PAD_REST above the pad's base.
@@ -407,20 +407,28 @@ export const SUPPORT_W = 0.8, SUPPORT_D = 0.7, SUPPORT_RISE = 4;
 // Column: a mostly decorative round pillar `h` tall standing at y, twice as thick as a support's
 // pillar (radius 0.8 against its half-width 0.4). Solid as drawn; it keeps the y it is given.
 export const COLUMN_R = SUPPORT_W, COLUMN_H = 4;
-// Bumper: a round puck BUMPER_H tall whose rubber band bulges out to BUMPER_R round its middle.
-// Hitting its side throws the ball straight back out (sim.ts).
-export const BUMPER_R = 1, BUMPER_H = 1;
-// The bumper's outline as [radius, y], outside in over the top, in its four drawn bands: the
-// base, the rubber band, the rim rounding up onto the top, and the flat top. Revolved; drawn and solid alike.
-export function bumperProfile(): [number, number][][] {
-  const R = BUMPER_R, H = BUMPER_H, inner = R - 0.08;
-  const arc = (cr: number, cy: number, rr: number, ry: number, a0: number, a1: number, n: number) =>
-    Array.from({ length: n + 1 }, (_, k): [number, number] => { const a = a0 + ((a1 - a0) * k) / n; return [cr + rr * Math.cos(a), cy + ry * Math.sin(a)]; });
-  const base: [number, number][] = [[inner - 0.02, 0], [inner, 0.24]];
-  const band = arc(inner, 0.43, R - inner, 0.19, -Math.PI / 2, Math.PI / 2, 10);
-  const rim = arc(inner - 0.16, 0.62, 0.16, H - 0.62, 0, Math.PI / 2, 8);
-  const edge = rim[rim.length - 1]!;
-  return [base, band, rim, [edge, [0, H]]];
+// Puffer: a squat drum PUFFER_H tall and PUFFER_R round at its foot that, every `every` seconds from
+// `offset` seconds in, blows a ring of air out of the vents round its middle; the ring runs out at
+// puffSpeed to PUFF_REACH and pushes the ball away from the puffer as it passes (sim.ts).
+export const PUFFER_R = 0.95, PUFFER_VENT = 0.86, PUFFER_H = 1.15, PUFF_REACH = 5, PUFF_EVERY = 3, PUFF_MIN_EVERY = 1;
+// The puffer's outline as [radius, y], bottom up and outside in over the top, in its drawn bands: the
+// foot, the drum, the vent recess, the collar and the cap. Revolved; drawn and solid alike.
+export function pufferProfile(): [number, number][][] {
+  const V = PUFFER_VENT, H = PUFFER_H;
+  return [
+    [[PUFFER_R, 0], [PUFFER_R, 0.12], [V, 0.15]],
+    [[V, 0.15], [V, 0.56]],
+    [[V, 0.56], [V - 0.1, 0.58], [V - 0.1, 0.8], [V, 0.82]],
+    [[V, 0.82], [V + 0.06, 0.84], [V + 0.06, 0.94], [V, 0.97]],
+    [[V, 0.97], [V - 0.2, 1.07], [V - 0.5, H - 0.02], [0, H]],
+  ];
+}
+// The puffer's air ring at time t: how far out it is, null between rings.
+export function puffRing(p: Puffer, t: number, speed: number): number | null {
+  const a = t - (p.offset ?? 0);
+  if (a < 0) return null;
+  const r = PUFFER_VENT + speed * (a % Math.max(PUFF_MIN_EVERY, p.every));
+  return r < PUFF_REACH ? r : null;
 }
 // Magnet: a puck MAGNET_R round and MAGNET_H tall, two discs stacked with a groove between, that
 // pulls the ball toward its axis while the ball's centre is within MAGNET_REACH of it (the red aura
@@ -627,7 +635,8 @@ export function gateLinks(p: Gate): number[] {
 // last being the other mouth. Node y is the tube's inner floor, so a mouth sitting on a platform
 // top is flush with it. A node's `bend` is the radius of the arc through it, 0 for a sharp mitred
 // elbow. Nothing is checked: the designer places mouths and turns freely. Nothing pushes the
-// ball either; it runs either way under the player's own push, so the two mouths are alike.
+// ball either; it runs either way under the player's own push. `out` makes it one way: that mouth
+// ("a" the first, "b" the last) can only be left by, never entered from outside (sim.ts), and is marked red.
 // A single glass skin with no wall thickness.
 export const TUBE_R = 0.51;
 // The glass is drawn as one thin skin, but in the physics it is a solid wall this thick outside the
@@ -646,6 +655,12 @@ export function mouthRings(rings: TubeRing[]): { c: V3; d: V3 }[] {
   if (rings.length < 2) return [];
   const ends: [TubeRing, number][] = [[rings[0]!, -1], [rings[rings.length - 1]!, 1]];
   return ends.map(([q]) => ({ c: q.c, d: q.d }));
+}
+// A one-way tube's exit-only mouth: its centre and the way out of it.
+export function exitMouth(p: Tube, rings: TubeRing[]): { c: V3; n: V3 } | null {
+  if (!p.out || rings.length < 2) return null;
+  const q = p.out === "a" ? rings[0]! : rings[rings.length - 1]!, k = p.out === "a" ? -1 : 1;
+  return { c: q.c, n: [q.d[0] * k, q.d[1] * k, q.d[2] * k] };
 }
 // A hoop's ring: TUBE_R up, where a tube mouth on that surface would be, facing along local z.
 export function hoopRing(p: Piece & { type: "hoop" }): { c: V3; d: V3 } {
@@ -908,7 +923,7 @@ export function moverAt(p: Mover, t: number): { x: number; y: number; z: number 
 // What a moving platform carries: every piece standing on its top where the level places it
 // (structures, planks, seesaws and crates; not other platforms, paths, the start or the goal),
 // by index, to the index of the platform. A tilted moving platform carries nothing.
-const RIDES: PieceType[] = ["fence", "block", "blockade", "pillar", "bumper", "magnet", "barrier", "crate", "barrel", "cube", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
+const RIDES: PieceType[] = ["fence", "block", "blockade", "pillar", "puffer", "magnet", "barrier", "crate", "barrel", "cube", "stool", "kicker", "jump", "hoop", "plank", "seesaw"];
 export function riders(level: Level): Map<number, number> {
   const out = new Map<number, number>();
   level.pieces.forEach((s, si) => {
@@ -942,6 +957,7 @@ export function moverShift(p: Mover, t: number): { x: number; y: number; z: numb
 // segment's curve) and goes round without a pause. `offset` starts it that many seconds into its
 // schedule. Its place is a pure function of time, so the physics, the picture and the editor agree.
 export type Bean = Piece & { type: "bean" };
+export type Puffer = Piece & { type: "puffer" };
 // A bean is as fat as the ball; its `r` is always BEAN_R, never set per bean.
 export const BEAN_R = BALL_RADIUS, BEAN_LEN = 2, BEAN_SPEED = 6;
 // A bean floats this far above the surface it follows.
@@ -1108,7 +1124,7 @@ export type Piece =
   | (At & { type: "tree"; rot: number; size: number; crown?: TreeCrown; leaves?: TreeLeaves })
   | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number; roll?: number; tilt?: number; track?: number; offset?: number; top?: number })
   | (At & { type: "block"; w: number; h: number; d: number; rot: number })
-  | (At & { type: "blockade"; rot: number; roll?: number; tilt?: number })
+  | (At & { type: "blockade"; w: number; h: number; d: number; rot: number; roll?: number; tilt?: number })
   | (At & { type: "pillar"; rot?: number; roll?: number; tilt?: number })
   | (At & { type: "barrier"; rot: number; roll?: number; tilt?: number })
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number; tilt?: number })
@@ -1119,19 +1135,20 @@ export type Piece =
   | (At & { type: "jump"; w: number; d: number; rot: number; rise: number; roll?: number; tilt?: number })
   | (At & { type: "hole"; w: number; d: number; rot: number; tilt?: number; roll?: number })
   | (At & { type: "spinner"; length: number; speed: number })
-  | (At & { type: "apple" })
-  | (At & { type: "tube"; rot: number; path: TubeNode[]; smooth?: true })
+  | (At & { type: "apple"; golden?: true })
+  | (At & { type: "tube"; rot: number; path: TubeNode[]; smooth?: true; out?: "a" | "b" })
   | (At & { type: "fence"; rot: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "hoop"; rot: number; roll?: number; tilt?: number })
-  | (At & { type: "column"; h: number; rot?: number; roll?: number; tilt?: number })
-  | (At & { type: "bumper"; rot?: number; roll?: number; tilt?: number })
+  | (At & { type: "column"; h: number; r: number; rot?: number; roll?: number; tilt?: number })
+  | (At & { type: "puffer"; rot?: number; roll?: number; tilt?: number; every: number; offset?: number })
   | (At & { type: "magnet"; rot?: number; roll?: number; tilt?: number })
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "gate", "arch", "lamp", "mast", "tree", "clearing", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "gate", "arch", "lamp", "mast", "tree", "clearing", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "puffer", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
+  { name: "golden apple", base: "apple", make: (x, y, z) => ({ type: "apple", x, y, z, golden: true }) },
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
   { name: "side kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: 1, d: KICKER_D, h: KICKER_H, rot: 0, top: 0.4 }) },
   { name: "sliding kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0, track: KICKER_TRACK, offset: 0 }) },
@@ -1149,7 +1166,7 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
-  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "cube" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "hoop" || p.type === "column" || p.type === "bumper" || p.type === "magnet" || p.type === "lamp" || p.type === "mast" || p.type === "tree" || p.type === "clearing";
+  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "cube" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "hoop" || p.type === "column" || p.type === "puffer" || p.type === "magnet" || p.type === "lamp" || p.type === "mast" || p.type === "tree" || p.type === "clearing";
 export type Platform = Piece & { type: "slab" | "curve" | "ramp" };
 export const isPlatform = (p: Piece): p is Platform => p.type === "slab" || p.type === "curve" || p.type === "ramp";
 export type Ramp = Piece & { type: "ramp" };
@@ -1204,15 +1221,23 @@ export function rollPoint(deg: number, v: [number, number, number]): [number, nu
   return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
 }
 // Treadmill: a slab with `belt`, its tiled top and underside (everything inside BELT_FRAME of the
-// edge, where platformMesh starts its tiles) opened right through and filled with fat rods across
-// it (along local x), shared by both faces: as thick as the platform less BELT_GAP, centred in it.
-// They turn so their tops run toward local -z and their bottoms back (docs/levels.md).
-export const BELT_FRAME = PLATFORM_EDGE_INSET * 1.5, BELT_PITCH = 0.95, BELT_GAP = 0.04, BELT_MIN = 2;
-// The opening's half sizes, each rod's centre z (local; its axis is half the thickness down), radius and half length.
-export function beltRods(p: Slab): { ox: number; oz: number; z: number[]; r: number; half: number } {
-  const ox = p.w / 2 - BELT_FRAME, oz = p.d / 2 - BELT_FRAME, n = Math.max(1, Math.round((2 * oz) / BELT_PITCH)), pitch = (2 * oz) / n;
-  const r = Math.min(PLATFORM_THICKNESS - BELT_GAP, pitch - BELT_GAP) / 2;
-  return { ox, oz, z: Array.from({ length: n }, (_, i) => -oz + pitch * (i + 0.5)), r, half: ox - 0.02 };
+// edge, where platformMesh starts its tiles) opened right through and filled with one belt loop across
+// it: flat on top and bottom, BELT_GAP in from both faces, round over a roller at each end. Its top
+// runs toward local -z and its bottom back (docs/levels.md).
+export const BELT_FRAME = PLATFORM_EDGE_INSET * 1.5, BELT_GAP = 0.04, BELT_MIN = 2;
+// The opening's half sizes, the loop's half width across, and its end rollers' radius, centre z and centre y
+// (local; a short treadmill's rollers are thinner, their tops still BELT_GAP down).
+export function beltLoop(p: Slab): { ox: number; oz: number; half: number; r: number; end: number; cy: number } {
+  const ox = p.w / 2 - BELT_FRAME, oz = p.d / 2 - BELT_FRAME, r = Math.min(PLATFORM_THICKNESS / 2 - BELT_GAP, oz - 0.02);
+  return { ox, oz, half: ox - 0.02, r, end: Math.max(0, oz - 0.02 - r), cy: -BELT_GAP - r };
+}
+// The loop's outline as [z, y] (y from the platform's top), closed, in the way it runs: round the -z roller
+// from the top, back along the bottom, round the +z roller and along the top.
+export function beltOutline(p: Slab, n = 12): [number, number][] {
+  const { r, end, cy } = beltLoop(p), out: [number, number][] = [];
+  for (const [c, a0] of [[-end, Math.PI / 2], [end, -Math.PI / 2]] as const)
+    for (let k = 0; k <= n; k++) { const a = a0 + (Math.PI * k) / n; out.push([c + r * Math.cos(a), cy + r * Math.sin(a)]); }
+  return out;
 }
 export const isBelt = (p: Piece): p is Slab => p.type === "slab" && !!p.belt;
 export const twistAt = (p: Slab, z: number): number => (((p.twist ?? 0) * Math.PI) / 180) * Math.max(0, Math.min(1, (p.d / 2 - z) / p.d));
@@ -1524,7 +1549,7 @@ export function pieceBoxes(p: Piece): Box[] {
   if (p.type === "slab") return [{ kind: "platform", x: 0, y: -T / 2, z: 0, w: p.w, h: T, d: p.d }];
   if (p.type === "block") return [{ kind: "block", x: 0, y: p.h / 2, z: 0, w: p.w, h: p.h, d: p.d, r: Math.min(BLOCK_R, p.w / 2, p.h / 2, p.d / 2) }];
   if (p.type === "blockade") return [
-    { kind: "block", x: 0, y: BLOCKADE_H / 2, z: 0, w: BLOCKADE_W, h: BLOCKADE_H, d: BLOCKADE_D, r: BLOCKADE_R },
+    { kind: "block", x: 0, y: p.h / 2, z: 0, w: p.w, h: p.h, d: p.d, r: Math.min(BLOCKADE_R, p.w / 2, p.h / 2, p.d / 2) },
   ];
   if (p.type === "lamp") return [
     { kind: "block", x: 0, y: LAMP.foot / 2, z: 0, w: LAMP.footW, h: LAMP.foot, d: LAMP.footW },
@@ -1552,7 +1577,7 @@ export function stoolSlide(p: Piece & { type: "stool" }): { lo: number; hi: numb
 // Upright cylinders standing on the piece's y.
 export function pieceCylinders(p: Piece): Cylinder[] {
   if (p.type === "barrier") return (softProps() ? [0] : [BARRIER_LEG_X, -BARRIER_LEG_X]).map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 }));
-  if (p.type === "column") return [{ r: COLUMN_R, h: p.h }];
+  if (p.type === "column") return [{ r: p.r, h: p.h }];
   if (p.type === "pillar") return [
     { r: PILLAR_R, h: PILLAR_H - PILLAR_CAP },
     { r: PILLAR_R + PILLAR_COLLAR.r, h: PILLAR_COLLAR.h, y0: PILLAR_H - PILLAR_CAP },
@@ -1793,7 +1818,7 @@ export function pieceRot(p: Piece): number {
 // (a crate's or barrel's centre), so one can stand out of a wall or lean. Kickers and jump pads turn their
 // own way, the same order; a slab's are part of its own frame.
 export const MIRRORED: PieceType[] = ["kicker"];
-export const ROLLED_PROPS: PieceType[] = ["blockade", "barrier", "pillar", "column", "bumper", "magnet", "hoop", "crate", "barrel", "cube"];
+export const ROLLED_PROPS: PieceType[] = ["blockade", "barrier", "pillar", "column", "puffer", "magnet", "hoop", "crate", "barrel", "cube"];
 export const pieceRoll = (p: Piece): number => (ROLLED_PROPS.includes(p.type) && "roll" in p && typeof p.roll === "number" ? p.roll : 0);
 export const pieceTilt = (p: Piece): number => (ROLLED_PROPS.includes(p.type) && "tilt" in p && typeof p.tilt === "number" ? p.tilt : 0);
 // How high above its y a crate's or barrel's centre rests when rolled and tilted: how far down its turned
@@ -1832,11 +1857,11 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
     case "hole": return { type, x, y, z, w: 4, d: 4, rot: 0 };
     case "block": return { type, x, y, z, w: 4, h: 1.2, d: 4, rot: 0 };
-    case "blockade": return { type, x, y, z, rot: 0 };
+    case "blockade": return { type, x, y, z, w: BLOCKADE_W, h: BLOCKADE_H, d: BLOCKADE_D, rot: 0 };
     case "pillar": return { type, x, y, z };
-    case "bumper": return { type, x, y, z };
+    case "puffer": return { type, x, y, z, every: PUFF_EVERY };
     case "magnet": return { type, x, y, z };
-    case "column": return { type, x, y, z, h: COLUMN_H };
+    case "column": return { type, x, y, z, h: COLUMN_H, r: COLUMN_R };
     case "barrier": return { type, x, y, z, rot: 0 };
     case "crate": return { type, x, y, z, w: CRATE_W, h: CRATE_H, d: CRATE_D, rot: 0 };
     case "cube": return { type, x, y, z, rot: 0 };
@@ -2014,6 +2039,9 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
+    if (p.type === "blockade" && Math.min(p.w, p.h, p.d) < BLOCKADE_MIN) out.push(`piece ${i}: blockade w, h and d must be at least ${BLOCKADE_MIN}`);
+    if (p.type === "puffer" && p.every < PUFF_MIN_EVERY) out.push(`piece ${i}: puffer every must be at least ${PUFF_MIN_EVERY}`);
+    if (p.type === "puffer" && (p.offset ?? 0) < 0) out.push(`piece ${i}: puffer offset can't be negative`);
     if (p.type === "bean" && p.r <= 0) out.push(`piece ${i}: bean r must be positive`);
     if (p.type === "bean" && p.len < 2 * p.r) out.push(`piece ${i}: bean len must be at least twice its r`);
     if (p.type === "bean" && p.speed <= 0) out.push(`piece ${i}: bean speed must be positive`);
@@ -2043,7 +2071,6 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
     if (p.type === "pangolin") for (const m of pangolinProblems(p)) out.push(`piece ${i}: pangolin ${m}`);
   });
-  for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
   return out;
 }
 
@@ -2165,11 +2192,12 @@ export function validateLevel(raw: unknown): Level {
       case "tree": return { type: "tree", ...at, rot: num(p.rot ?? 0, "rot"), size: num(p.size ?? 1, "size"),
         ...(TREE_CROWNS.includes(p.crown as TreeCrown) && p.crown !== "round" ? { crown: p.crown as TreeCrown } : {}), ...(TREE_LEAVES.includes(p.leaves as TreeLeaves) && p.leaves !== "green" ? { leaves: p.leaves as TreeLeaves } : {}) };
       case "block": return { type: "block", ...at, w: num(p.w, "w"), h: num(p.h, "h"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
-      case "blockade": return { type: "blockade", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
+      case "blockade": return { type: "blockade", ...at, w: num(p.w ?? BLOCKADE_W, "w"), h: num(p.h ?? BLOCKADE_H, "h"), d: num(p.d ?? BLOCKADE_D, "d"), rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "pillar": return { type: "pillar", ...at, ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
-      case "bumper": return { type: "bumper", ...at, ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
+      case "bumper": case "puffer": return { type: "puffer", ...at, ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}),
+        every: num(p.every ?? PUFF_EVERY, "every"), ...(p.offset ? { offset: num(p.offset, "offset") } : {}) };
       case "magnet": return { type: "magnet", ...at, ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
-      case "column": return { type: "column", ...at, h: num(p.h ?? COLUMN_H, "h"), ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
+      case "column": return { type: "column", ...at, h: num(p.h ?? COLUMN_H, "h"), r: Math.max(0.1, num(p.r ?? COLUMN_R, "r")), ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "barrier": return { type: "barrier", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "crate": {
         // Older levels give a cube's side as `s`.
@@ -2185,10 +2213,10 @@ export function validateLevel(raw: unknown): Level {
       case "bean": return { type: "bean", ...at, rot: num(p.rot ?? 0, "rot"), r: BEAN_R, len: num(p.len ?? BEAN_LEN, "len"), speed: num(p.speed ?? BEAN_SPEED, "speed"),
         wait: num(p.wait ?? 0, "wait"), offset: num(p.offset ?? 0, "offset"), loop: p.loop === "loop" ? "loop" : "pingpong", ...(p.turn ? { turn: num(p.turn, "turn") } : {}), ...(p.face === "follow" ? { face: "follow" as const } : {}), path: parsePath(p.path ?? [], i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "spinner": return { type: "spinner", ...at, length: num(p.length, "length"), speed: num(p.speed, "speed") };
-      case "apple": return { type: "apple", ...at };
+      case "apple": return { type: "apple", ...at, ...(p.golden === true ? { golden: true as const } : {}) };
       // Levels from before apples ended at a goal; the start is now where they end, so it is dropped.
       case "goal": return null;
-      case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
+      case "tube": return { type: "tube", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}), ...(p.out === "a" || p.out === "b" ? { out: p.out } : {}) };
       case "hoop": return { type: "hoop", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       default: throw new Error(`piece ${i}: unknown type ${String(p.type)}`);
     }
