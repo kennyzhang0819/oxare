@@ -4,14 +4,14 @@ import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { BALL_RADIUS, BEAN_LIFT, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
-import { BUMPER, EFFECTS, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { BUMPER, EFFECTS, ENV, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
 export const EDGE_RADIUS = BLOCK_R;
 
-export const SKY_TOP = 0x448fec;
-export const SKY_HORIZON = 0xafcde9;
+export const SKY_TOP = ENV.skyTop;
+export const SKY_HORIZON = ENV.skyHorizon;
 // Far enough out that the shadow camera sits above everything a level stacks over the ball.
 export const SUN_OFFSET = new THREE.Vector3(24, 42, 18);
 export const SUN_DIR = SUN_OFFSET.clone().normalize();
@@ -61,32 +61,32 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
   MAT = {
     platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.85 }),
     block: new THREE.MeshStandardMaterial({ map: tiles, color: PLATFORM.block, roughness: 0.8 }),
-    edge: new THREE.MeshStandardMaterial({ map: edge.map, emissiveMap: edge.glow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.6 }),
-    rim: new THREE.MeshStandardMaterial({ color: PLATFORM.rim, roughness: 0.35, metalness: 0.05 }),
+    edge: new THREE.MeshStandardMaterial({ map: edge.map, emissiveMap: edge.glow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.6 }),
+    rim: new THREE.MeshStandardMaterial({ color: PLATFORM.rim, roughness: Math.min(0.35, ENV.bodyRoughness), metalness: 0.05 }),
     border: new THREE.MeshStandardMaterial({ color: PLATFORM.border, roughness: 0.7 }),
     glass: new THREE.MeshPhysicalMaterial({ color: PLATFORM.glass, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.34, depthWrite: false, clearcoat: 1, clearcoatRoughness: 0.08 }),
   };
   const st = structTextures();
   STRUCT = {
-    body: new THREE.MeshStandardMaterial({ color: PROPS.white, roughness: 0.45, metalness: 0.05 }),
+    body: new THREE.MeshStandardMaterial({ color: PROPS.white, roughness: ENV.bodyRoughness, metalness: 0.05 }),
     top: new THREE.MeshStandardMaterial({ color: PROPS.grey, roughness: 0.7 }),
-    panel: new THREE.MeshStandardMaterial({ map: st.panel, emissiveMap: st.panelGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 }),
+    panel: new THREE.MeshStandardMaterial({ map: st.panel, emissiveMap: st.panelGlow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.5 }),
     pillar: new THREE.MeshStandardMaterial({ map: st.pillar, roughness: 0.5, metalness: 0.05 }),
-    glow: new THREE.MeshStandardMaterial({ color: PROPS.cyan, emissive: PROPS.cyan, emissiveIntensity: 0.9, roughness: 0.4 }),
-    crate: new THREE.MeshStandardMaterial({ map: st.crate, emissiveMap: st.crateGlow, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.6 }),
+    glow: new THREE.MeshStandardMaterial({ color: PROPS.cyan, emissive: PROPS.cyan, emissiveIntensity: 0.9 * ENV.glow, roughness: ENV.lightRoughness, metalness: ENV.lightMetal }),
+    crate: new THREE.MeshStandardMaterial({ map: st.crate, emissiveMap: st.crateGlow, emissive: 0xffffff, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.6 }),
     disc: new THREE.MeshStandardMaterial({ map: st.goalDisc, color: 0xffffff, roughness: 0.7 }),
-    padTop: new THREE.MeshStandardMaterial({ map: st.padTop, emissiveMap: st.padGlow, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 }),
+    padTop: new THREE.MeshStandardMaterial({ map: st.padTop, emissiveMap: st.padGlow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.5 }),
     padCentre: new THREE.MeshStandardMaterial({ map: st.padCentre, roughness: 0.6 }),
     padSkirt: new THREE.MeshStandardMaterial({ map: st.padSkirt, roughness: 0.7 }),
     barrierPanel: new THREE.MeshStandardMaterial({ map: st.barrierPanel, roughness: 0.55 }),
     grille: new THREE.MeshStandardMaterial({ map: st.grille, roughness: 0.7 }),
     plank: new THREE.MeshStandardMaterial({ map: tiles, color: PLATFORM.plank, roughness: 0.85 }),
-    plankGlow: new THREE.MeshStandardMaterial({ color: PROPS.green, emissive: PROPS.green, emissiveIntensity: 0.8, roughness: 0.4 }),
+    plankGlow: new THREE.MeshStandardMaterial({ color: PROPS.green, emissive: PROPS.green, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.4 }),
     stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, roughness: 0.55 }),
     barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, roughness: 0.55 }),
     bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, roughness: 0.55 }),
-    cubeFace: new THREE.MeshStandardMaterial({ map: st.cubeFace, emissiveMap: st.cubeFaceGlow, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.55 }),
-    cubeTop: new THREE.MeshStandardMaterial({ map: st.cubeTop, emissiveMap: st.cubeTopGlow, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.55 }),
+    cubeFace: new THREE.MeshStandardMaterial({ map: st.cubeFace, emissiveMap: st.cubeFaceGlow, emissive: 0xffffff, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.55 }),
+    cubeTop: new THREE.MeshStandardMaterial({ map: st.cubeTop, emissiveMap: st.cubeTopGlow, emissive: 0xffffff, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.55 }),
     hinge: new THREE.MeshStandardMaterial({ color: PROPS.hinge, roughness: 0.5, metalness: 0.3 }),
     // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
     tread: new THREE.MeshStandardMaterial({ color: PROPS.tread, roughness: 0.6, metalness: 0.15 }),
@@ -207,7 +207,7 @@ function buildBumper(g: THREE.Group) {
 
 // Magnet: the revolved profile, a material per band (see magnetProfile), the top carrying the
 // bumper's round circuit board, and the red aura lying on the surface out to its reach.
-const MAGNET_GLOW = new THREE.MeshStandardMaterial({ color: MAGNET.glow, emissive: MAGNET.glow, emissiveIntensity: 0.9, roughness: 0.4 });
+const MAGNET_GLOW = new THREE.MeshStandardMaterial({ color: MAGNET.glow, emissive: MAGNET.glow, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.4 });
 const MAGNET_LOWER = new THREE.MeshStandardMaterial({ color: MAGNET.lower, roughness: 0.35, metalness: 0.4 });
 const MAGNET_GROOVE = new THREE.MeshStandardMaterial({ color: MAGNET.groove, roughness: 0.6 });
 const MAGNET_UPPER = new THREE.MeshStandardMaterial({ color: MAGNET.upper, roughness: 0.35, metalness: 0.4 });
@@ -524,7 +524,7 @@ function buildCube(g: THREE.Group, C: number): void {
 }
 
 const SLIDE_TREAD = new THREE.MeshStandardMaterial({ color: KICKER.slideTread, roughness: 0.6, metalness: 0.15 });
-const KICKER_ORANGE = new THREE.MeshStandardMaterial({ color: KICKER.light, emissive: KICKER.glow, emissiveIntensity: 0.6, roughness: 0.45 });
+const KICKER_ORANGE = new THREE.MeshStandardMaterial({ color: KICKER.light, emissive: KICKER.glow, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.45 });
 
 // Kicker: a white wedge with a dark tread inset on its slope, pale slats across the tread and an
 // orange light strip along each side of it; a deck past the high edge carries the same tread, flat.
@@ -1211,7 +1211,7 @@ function roundedBox(w: number, h: number, d: number, r: number): THREE.BufferGeo
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   return geo;
 }
-const SPINNER_MAT = new THREE.MeshStandardMaterial({ color: 0xff8a3d, flatShading: true, roughness: 0.6 });
+const SPINNER_MAT = new THREE.MeshStandardMaterial({ color: KICKER.light, flatShading: true, roughness: 0.6 });
 const START_MAT = new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true });
 
 // The sky dome lives on this layer: the main camera skips it and sees the low-res sky
@@ -1236,8 +1236,8 @@ export const FOG_PLAY = 0.0075, FOG_EDITOR = 0.0018;
 // sun's shadow at a level with fitSun.
 export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
   // The sun carries most of the light, so what it can't reach (shadows) reads clearly darker.
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7ea0c8, 0.7));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  scene.add(new THREE.HemisphereLight(ENV.hemiSky, ENV.hemiGround, ENV.hemi));
+  const sun = new THREE.DirectionalLight(ENV.sun, ENV.sunPower);
   sun.position.copy(SUN_OFFSET);
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
@@ -1341,12 +1341,12 @@ function makeSky(): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: {
-      top: { value: new THREE.Color(SKY_TOP) }, bottom: { value: new THREE.Color(SKY_HORIZON) },
+      top: { value: new THREE.Color(SKY_TOP) }, bottom: { value: new THREE.Color(SKY_HORIZON) }, cloud: { value: new THREE.Color(ENV.cloud) }, cloudShade: { value: new THREE.Color(ENV.cloudShade) },
       time: { value: 0 }, cloudY: { value: CLOUD_Y }, cloudTop: { value: CLOUD_TOP }, sunDir: { value: SUN_DIR }, detail: { value: 1 },
     },
     // Pinned to the far plane: anything in the scene draws in front, and covered pixels skip the march.
     vertexShader: `varying vec3 vP; void main(){ vP = position; vec4 c = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = c.xyww; }`,
-    fragmentShader: `uniform vec3 top, bottom, sunDir; uniform float time, cloudY, cloudTop, detail; varying vec3 vP;
+    fragmentShader: `uniform vec3 top, bottom, sunDir, cloud, cloudShade; uniform float time, cloudY, cloudTop, detail; varying vec3 vP;
       ${NOISE_GLSL}
       // Soft top and bottom so the ray march never crosses a hard edge (hard edges show as bands).
       float shape(float cover, float h) {
@@ -1368,7 +1368,7 @@ function makeSky(): THREE.Mesh {
           // Flat deck for reflection passes.
           float t = max((cloudY - cameraPosition.y) / d.y, 0.0);
           vec2 p = cameraPosition.xz + d.xz * t;
-          col = mix(sky, vec3(0.97), cloudCoverLow(p, time) * exp(-t * 0.0016));
+          col = mix(sky, cloud, cloudCoverLow(p, time) * exp(-t * 0.0016));
         } else if (d.y > 0.01) {
           float t0 = max((cloudY - cameraPosition.y) / d.y, 0.0);
           float t1 = (cloudTop - cameraPosition.y) / d.y;
@@ -1389,7 +1389,7 @@ function makeSky(): THREE.Mesh {
                 float hs = (ps.y - cloudY) / (cloudTop - cloudY);
                 float shade = exp(-cs * shape(cs, hs) * 2.4);
                 float h = (p.y - cloudY) / (cloudTop - cloudY);
-                vec3 light = mix(vec3(0.58, 0.65, 0.78), vec3(1.0, 0.99, 0.97), shade) * (0.86 + 0.14 * h);
+                vec3 light = mix(cloudShade, cloud, shade) * (0.86 + 0.14 * h);
                 float a = 1.0 - exp(-den * dt * 0.14);
                 acc += trans * a * light;
                 trans *= 1.0 - a;
@@ -1417,7 +1417,8 @@ function makeOcean(): THREE.Mesh {
     fog: true,
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       time: { value: 0 }, sunDir: { value: SUN_DIR },
-      deep: { value: new THREE.Color(0x2a6cb0) }, shallow: { value: new THREE.Color(0x3a80c4) }, sky: { value: new THREE.Color(0x8fb8e0) },
+      deep: { value: new THREE.Color(ENV.seaDeep) }, shallow: { value: new THREE.Color(ENV.seaShallow) }, sky: { value: new THREE.Color(ENV.seaSky) },
+      grid: { value: new THREE.Color(ENV.seaGrid ?? 0) }, ruled: { value: ENV.seaGrid === null ? 0 : 1 },
       detail: { value: 1 },
     }]),
     vertexShader: `#include <fog_pars_vertex>
@@ -1430,10 +1431,23 @@ function makeOcean(): THREE.Mesh {
         #include <fog_vertex>
       }`,
     fragmentShader: `#include <fog_pars_fragment>
-      uniform float time, detail; uniform vec3 sunDir, deep, shallow, sky; varying vec3 vWorld;
+      uniform float time, detail, ruled; uniform vec3 sunDir, deep, shallow, sky, grid; varying vec3 vWorld;
       ${NOISE_GLSL}
       void main(){
         vec2 p = vWorld.xz;
+        if (ruled > 0.5) {
+          // A ruled mat: a line every unit, a heavier one every fifth, fading with distance.
+          float dist = length(cameraPosition - vWorld);
+          float w = 0.03 + dist * 0.0012;
+          vec2 f1 = min(fract(p), 1.0 - fract(p)), f5 = min(fract(p / 5.0), 1.0 - fract(p / 5.0)) * 5.0;
+          float l1 = 1.0 - smoothstep(w, w * 2.0, min(f1.x, f1.y));
+          float l5 = 1.0 - smoothstep(w * 1.5, w * 3.0, min(f5.x, f5.y));
+          vec3 col = mix(deep, grid, max(l1 * 0.45, l5 * 0.9) * exp(-dist * 0.004));
+          gl_FragColor = vec4(col, 1.0);
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+          return;
+        }
         vec2 g = vec2(0.0);
         if (detail > 0.5) {
           vec2 rp = p * 0.35 + vec2(time * 0.012, -time * 0.008);
@@ -1692,7 +1706,7 @@ export function makeBall(): Ball {
     new THREE.SphereGeometry(BALL_RADIUS, 48, 24),
     new THREE.MeshPhysicalMaterial({
       map: maps.map, roughnessMap: maps.roughness, roughness: 1, metalness: 1,
-      emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1,
+      emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1 * ENV.glow,
       envMap: target.texture, envMapIntensity: 1.2, clearcoat: 0.6, clearcoatRoughness: 0.15,
     }),
   );
@@ -1727,7 +1741,7 @@ function buildBelt(g: THREE.Group, p: Slab): Built["beltRods"] {
   if (!BELT) {
     const t = beltTextures();
     BELT = {
-      rod: new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.glow, emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.05 }),
+      rod: new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.glow, emissive: 0xffffff, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.5, metalness: 0.05 }),
       bed: new THREE.MeshStandardMaterial({ color: TREADMILL.bed, roughness: 0.8, side: THREE.BackSide }),
     };
   }

@@ -20,3 +20,7 @@ Floor tiles are `WHITE` in `TILE_SHADES` (5) fixed shades, each `TILE_STEP` (1.2
 ## Effects
 
 Effects are not pieces and keep their own colors, in `EFFECTS`: the jump pad's rising squares (#f0c45a), the magnet's aura (#ff2828) and the ball's blues. The goal's beam is drawn in its own shader. Sky, sea, lighting and the editor's guides are outside the palette too.
+
+## Looks
+
+`ENV` in `palette.ts` holds the rest of a look: sky top and horizon, the lit and shaded cloud colours, the sea's deep, shallow and sky colours (or `seaGrid`, which flattens the sea into a ruled mat in that colour), the hemisphere and sun light, a `glow` multiplier on every emissive, the light strips' metalness and roughness, the white bodies' roughness, the mosaic's wide-tile width and an optional grout colour between tiles. `EFFECTS.ball.chrome` makes the ball one polished colour with no lines. `scripts/themes/` holds six whole alternative palettes (`nightline`, `kiln`, `maquette`, `gumdrop`, `floe`, `terrace`); copying one over `src/palette.ts` restyles every piece without touching geometry or physics. `render.html` (dev only, `src/render.ts`) builds `src/showcase.json`, a level with every piece type, and exposes `window.shoot` so a headless browser can take fixed-camera stills of a look.

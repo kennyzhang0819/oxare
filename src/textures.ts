@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
+import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, ENV, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
 import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
@@ -22,9 +22,10 @@ export function tileTexture(anisotropy: number): THREE.Texture {
   const taken = new Set<number>();
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
     if (taken.has(y * n + x)) continue;
-    const wide = x + 1 < n && !taken.has(y * n + x + 1) && rnd() < 0.35;
-    if (wide) taken.add(y * n + x + 1);
-    const w = wide ? 2 : 1;
+    const room = Array.from({ length: ENV.tileWide - 1 }, (_, i) => x + 1 + i).every((xx) => xx < n && !taken.has(y * n + xx));
+    const wide = ENV.tileWide > 1 && room && rnd() < 0.35;
+    if (wide) for (let i = 1; i < ENV.tileWide; i++) taken.add(y * n + x + i);
+    const w = wide ? ENV.tileWide : 1;
     const k = 1 - (1 + Math.floor(rnd() * TILE_SHADES)) * TILE_STEP;
     ctx.fillStyle = css(shade(PLATFORM.tile, k));
     ctx.fillRect(x * px, y * px, w * px, px);
@@ -34,6 +35,11 @@ export function tileTexture(anisotropy: number): THREE.Texture {
     ctx.fillStyle = css(shade(PLATFORM.tile, k - 2 * TILE_STEP));
     ctx.fillRect(x * px, y * px + px - 2, w * px, 2);
     ctx.fillRect((x + w) * px - 2, y * px, 2, px);
+    if (ENV.tileGrout !== null) {
+      ctx.strokeStyle = css(ENV.tileGrout);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x * px + 1.5, y * px + 1.5, w * px - 3, px - 3);
+    }
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -600,11 +606,17 @@ export function ballTextures(): BallMaps {
       }
     });
   };
-  stroke(ctx, css(EFFECTS.ball.bevel), 26, []);
-  stroke(ctx, css(EFFECTS.ball.groove), 14, []);
-  stroke(ctx, css(EFFECTS.ball.dash), 6, [150, 90]);
-  stroke(ectx, css(PROPS.cyan), 6, [150, 90]);
-  stroke(rctx, "#aaaaaa", 14, []);
+  if (EFFECTS.ball.chrome) {
+    // A plain polished ball: one colour, mirror-smooth, no lines or lights.
+    ctx.fillStyle = css(EFFECTS.ball.mid); ctx.fillRect(0, 0, W, H);
+    rctx.fillStyle = "#141414"; rctx.fillRect(0, 0, W, H);
+  } else {
+    stroke(ctx, css(EFFECTS.ball.bevel), 26, []);
+    stroke(ctx, css(EFFECTS.ball.groove), 14, []);
+    stroke(ctx, css(EFFECTS.ball.dash), 6, [150, 90]);
+    stroke(ectx, css(PROPS.cyan), 6, [150, 90]);
+    stroke(rctx, "#aaaaaa", 14, []);
+  }
 
   const mk = (cv: HTMLCanvasElement, srgb: boolean) => {
     const t = new THREE.CanvasTexture(cv);

@@ -1,14 +1,14 @@
 import * as THREE from "three";
-import { RAILS } from "./palette.ts";
+import { ENV, RAILS } from "./palette.ts";
 import { railSweep } from "./geometry.ts";
 import { PAINT, FENCE_RAIL_Y, RAIL_R, fenceRings, railsLines, railsRings, tubeRings, type FencePiece, type Level, type Rails, type TubeRing } from "./level.ts";
 
 
 // The props' surface exactly, so the same white looks the same on a rail as on a prop.
-export const RAIL_MAT = new THREE.MeshStandardMaterial({ color: RAILS.rail, roughness: 0.45, metalness: 0.05 });
+export const RAIL_MAT = new THREE.MeshStandardMaterial({ color: RAILS.rail, roughness: ENV.bodyRoughness, metalness: 0.05 });
 // A light strip's outer face sits this far in from the rail's centre: PAINT proud of the tube.
 const STRIPE_IN = RAIL_R + PAINT;
-export const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: RAILS.stripe, emissive: RAILS.stripe, emissiveIntensity: 0.8, roughness: 0.4 });
+export const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: RAILS.stripe, emissive: RAILS.stripe, emissiveIntensity: 0.8 * ENV.glow, roughness: ENV.lightRoughness, metalness: ENV.lightMetal });
 
 const mesh = (m: { positions: number[]; indices: number[] }, mat: THREE.Material) => {
   const geo = new THREE.BufferGeometry();
