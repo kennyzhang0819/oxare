@@ -979,9 +979,15 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
     g.add(line);
   }
   const bean = new THREE.Group();
-  const body = new THREE.Mesh(beanGeometry(p.r, p.len), mat);
+  const body = new THREE.Mesh(beanGeometry(p.r, p.len), ENV.props === "soft" ? softMats().tint : mat);
   body.castShadow = body.receiveShadow = true;
   bean.add(body);
+  if (ENV.props === "soft") {
+    // The plain capsule in the tint and one round button in the hazard colour on top of its middle.
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), softMats().glaze);
+    button.position.y = p.r - 0.03;
+    bean.add(button);
+  }
   g.add(bean);
   const at = beanAt(p, track, 0);
   posePlank(g, bean, at, at.q);
@@ -1036,13 +1042,11 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   body.castShadow = body.receiveShadow = true;
   block.add(body);
   if (ENV.props === "soft") {
-    const top = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * sr, 0.02, d - 2 * sr), [st.top, st.top, st.stoolTop, st.top, st.top, st.top]);
-    top.position.y = h / 2 - 0.01 + PAINT;
-    const belt = new THREE.Mesh(new THREE.TorusGeometry(Math.min(w, d) * 0.5, 0.05, 10, 48), st.plankGlow);
-    belt.rotation.x = Math.PI / 2;
-    belt.position.y = -h / 2 + sr * 0.6;
-    belt.scale.set(w / Math.min(w, d), d / Math.min(w, d), 1);
-    block.add(top, belt);
+    // Like the pillow: the plain block in the tint and one round button, in the movables' colour, on top.
+    body.material = softMats().tint;
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.plankGlow);
+    button.position.y = h / 2 - 0.03;
+    block.add(button);
     g.add(block);
     return block;
   }
@@ -1497,19 +1501,21 @@ function softBlockade(g: THREE.Group) {
 function softBarrier(g: THREE.Group) {
   const st = STRUCT!, sm = softMats(), W = BARRIER_W, D = BARRIER_D, y0 = BARRIER_LEG;
   const puffs: [number, number, number][] = [[0, 0.62, 0.78], [-0.7, 0.54, 0.7], [0.7, 0.54, 0.7]];
+  // The puffs in the pillow's tint, the stick and a button on top in the pillar's light colour.
   for (const [x, r, cy] of puffs) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 36, 20), st.body);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 36, 20), sm.tint);
     m.scale.z = (D / 2) / r;
     m.position.set(x, cy, 0);
     m.castShadow = m.receiveShadow = true;
     g.add(m);
   }
   if (faced()) { const f = faceDecal(0.8); f.position.set(0, 0.8, D / 2 - 0.02); g.add(f); }
-  // One stick from the cloud into the ground, like a lollipop's.
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 20), sm.glaze);
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 20), st.glow);
   stick.position.y = 0.45;
   stick.castShadow = true;
-  g.add(stick);
+  const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.glow);
+  button.position.y = BARRIER_H - 0.03;
+  g.add(stick, button);
   void W; void y0;
 }
 // Barrel: a pill capsule, white below and tinted above, with a light ring round its middle.
