@@ -1,9 +1,11 @@
 import * as THREE from "three";
-import "@fontsource/orbitron/700.css";
-import "@fontsource/orbitron/900.css";
-import "@fontsource/chakra-petch/400.css";
-import "@fontsource/chakra-petch/600.css";
-import "@fontsource/chakra-petch/700.css";
+import "@fontsource/fredoka/500.css";
+import "@fontsource/fredoka/600.css";
+import "@fontsource/fredoka/700.css";
+import "@fontsource/nunito/500.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
+import "@fontsource/nunito/800.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./style.css";
 import { Editor } from "./editor.ts";

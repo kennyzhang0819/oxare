@@ -1,4 +1,4 @@
-# Oxare
+# Zoosky
 
 Ball-rolling sky puzzle game. TypeScript + Vite + Three.js + Rapier. No engine, no editor files, no image assets: levels are JSON, art is procedural geometry.
 

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, ENV, GOAL, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
+import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, ENV, GRASS, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
 import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
 
 export const TILE = 4;
@@ -15,8 +15,10 @@ function seeded(seed: number): () => number {
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-export function tileTexture(anisotropy: number): THREE.Texture {
+// The platform top's tiles; `floor` false is the same look for blocks and planks, which never get the grass.
+export function tileTexture(anisotropy: number, floor = true): THREE.Texture {
   if (ENV.floes) return iceTileTexture(anisotropy);
+  if (ENV.grass && floor) return grassTexture(anisotropy);
   if (ENV.style === "cute") return padTileTexture(anisotropy);
   const n = 16, px = 64;
   const tints = ENV.tileTints;
@@ -46,6 +48,50 @@ export function tileTexture(anisotropy: number): THREE.Texture {
       ctx.strokeRect(x * px + 1.5, y * px + 1.5, w * px - 3, px - 3);
     }
   }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
+// Grass, drawn flat like a sticker: plain turf with a few flat lighter round patches, a small
+// three-spike tuft on most cells of a jittered grid in the dark shade, each turned its own way, and
+// the odd daisy. Nothing is shaded and nothing lines up, so a platform's turn can't be read off it.
+// Everything is drawn again a repeat over on each side it is near, so the texture tiles seamlessly.
+function grassTexture(anisotropy: number): THREE.Texture {
+  const S = 1024, [c, ctx] = canvas(S, S), rnd = seeded(97);
+  const wrapped = (x: number, y: number, reach: number, draw: (x: number, y: number) => void) => {
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+      const xx = x + ox, yy = y + oy;
+      if (xx > -reach && xx < S + reach && yy > -reach && yy < S + reach) draw(xx, yy);
+    }
+  };
+  ctx.fillStyle = css(GRASS.turf); ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = css(GRASS.light);
+  for (let i = 0; i < 5; i++) {
+    const r = 70 + rnd() * 70;
+    wrapped(rnd() * S, rnd() * S, r, (x, y) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
+  }
+  // A tuft: three spikes from one root, the middle one tallest, each a thin triangle.
+  const N = 7, cell = S / N, H = 20;
+  ctx.fillStyle = css(GRASS.dark);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    if (rnd() < 0.3) continue;
+    const x0 = (i + 0.25 + rnd() * 0.5) * cell, y0 = (j + 0.25 + rnd() * 0.5) * cell, turn = rnd() * Math.PI * 2;
+    wrapped(x0, y0, H + 4, (x, y) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(turn);
+      for (const [dx, h] of [[-9, 0.7], [0, 1], [9, 0.7]] as const) {
+        ctx.beginPath(); ctx.moveTo(-3.5, 0); ctx.lineTo(dx, -H * h); ctx.lineTo(3.5, 0); ctx.fill();
+      }
+      ctx.restore();
+    });
+  }
+  for (let i = 0; i < 5; i++) wrapped(rnd() * S, rnd() * S, 16, (x, y) => {
+    ctx.fillStyle = css(GRASS.petal);
+    for (let p = 0; p < 5; p++) { const a = (p / 5) * Math.PI * 2; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 4.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = css(GRASS.pollen); ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+  });
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -129,7 +175,7 @@ function iceTileTexture(anisotropy: number): THREE.Texture {
 }
 
 // Treadmill rod: u runs once round the rod, the way its top runs, v along BELT_TILE of its length.
-// Two staggered orange chevrons point toward -u (the way the surface runs under them) between dark
+// Two staggered yellow chevrons point toward -u (the way the surface runs under them) between dark
 // grooves along the rod; `glow` is the chevrons alone.
 export const BELT_TILE = 1.5;
 export function beltTextures(): { map: THREE.Texture; glow: THREE.Texture } {
@@ -265,7 +311,7 @@ function cuteEdgeTextures(): EdgeMaps {
 }
 
 export interface StructMaps {
-  panel: THREE.Texture; panelGlow: THREE.Texture; pillar: THREE.Texture; crate: THREE.Texture; crateGlow: THREE.Texture; goalDisc: THREE.Texture;
+  panel: THREE.Texture; panelGlow: THREE.Texture; pillar: THREE.Texture; crate: THREE.Texture; crateGlow: THREE.Texture;
   padTop: THREE.Texture; padGlow: THREE.Texture; padCentre: THREE.Texture; padSkirt: THREE.Texture;
   barrierPanel: THREE.Texture; grille: THREE.Texture; stoolTop: THREE.Texture; bumperTop: THREE.Texture; barrelPanel: THREE.Texture;
   cubeFace: THREE.Texture; cubeFaceGlow: THREE.Texture; cubeTop: THREE.Texture; cubeTopGlow: THREE.Texture;
@@ -631,7 +677,6 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   cc.fillStyle = css(START_PAD.centre); cc.fillRect(0, 0, S, S);
   if (ENV.style === "cute") {
     cc.fillStyle = css(START_PAD.centreLight); cc.beginPath(); cc.arc(c0, c0, R * 0.6, 0, Math.PI * 2); cc.fill();
-    star(cc, c0, c0, R * 0.36, css(START_PAD.groove));
   } else for (let i = 5; i >= 1; i--) {
     cc.fillStyle = css(i % 2 ? START_PAD.centreDark : START_PAD.centreLight);
     cc.beginPath(); cc.arc(c0, c0, R * (i / 5) * 0.96, 0, Math.PI * 2); cc.fill();
@@ -645,7 +690,7 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
 }
 
 // Crate face, on every face: a white plate crossed by a dark band with stepped ends and a dark stem
-// up and down to a tab at each edge, a framed screen where they cross, and a green bracket glowing
+// up and down to a tab at each edge, a framed screen where they cross, and an orange bracket glowing
 // round each corner, right at the edge so it wraps the rounded corner.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
   if (ENV.style === "ice") return iceCrateFaces();
@@ -745,7 +790,7 @@ function cuteCrateFaces(): [THREE.Texture, THREE.Texture] {
   return [mk(c), mk(e)];
 }
 
-// Cube faces, one square each: slate, with an octagon in the middle, a plate inside a green glowing
+// Cube faces, one square each: slate, with an octagon in the middle, a plate inside an orange glowing
 // border of three dashes a side (a pale plate, on every face) or one solid line (a white plate, on
 // the top). Each with its glow map.
 function cubeFaces(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Texture] {
@@ -826,32 +871,6 @@ export function faceTexture(): THREE.Texture {
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   return t;
-}
-
-// Goal base: dark disc with light spokes and a hub.
-function goalDisc(): THREE.Texture {
-  const S = 256;
-  const [c, ctx] = canvas(S, S);
-  ctx.fillStyle = css(GOAL.disc);
-  ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.fill();
-  if (ENV.style === "cute") {
-    ctx.fillStyle = css(GOAL.spokes); ctx.beginPath(); ctx.arc(S / 2, S / 2, S * 0.38, 0, Math.PI * 2); ctx.fill();
-    star(ctx, S / 2, S / 2, S * 0.3, css(GOAL.hub));
-    const tx = new THREE.CanvasTexture(c);
-    tx.colorSpace = THREE.SRGBColorSpace;
-    return tx;
-  }
-  ctx.strokeStyle = css(GOAL.spokes);
-  ctx.lineWidth = 3;
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2;
-    ctx.beginPath(); ctx.moveTo(S / 2, S / 2); ctx.lineTo(S / 2 + Math.cos(a) * S * 0.46, S / 2 + Math.sin(a) * S * 0.46); ctx.stroke();
-  }
-  ctx.fillStyle = css(GOAL.hub);
-  ctx.beginPath(); ctx.arc(S / 2, S / 2, 10, 0, Math.PI * 2); ctx.fill();
-  const tx = new THREE.CanvasTexture(c);
-  tx.colorSpace = THREE.SRGBColorSpace;
-  return tx;
 }
 
 // Bean wrap: u once round, v from tip to tip along its length, drawn to the bean's own size so the
@@ -972,7 +991,7 @@ export function structTextures(): StructMaps {
   const [barrierPanel, grille] = barrierTextures();
   const stoolTop = stoolTopTexture(), bumperTop = bumperTopTexture(), barrelPanel = barrelPanelTexture();
   const [cubeFace, cubeFaceGlow, cubeTop, cubeTopGlow] = cubeFaces();
-  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, goalDisc: goalDisc(), padTop, padGlow, padCentre, padSkirt, barrierPanel, grille, stoolTop, bumperTop, barrelPanel, cubeFace, cubeFaceGlow, cubeTop, cubeTopGlow };
+  return { panel: mk(c), panelGlow: mk(e), pillar, crate, crateGlow, padTop, padGlow, padCentre, padSkirt, barrierPanel, grille, stoolTop, bumperTop, barrelPanel, cubeFace, cubeFaceGlow, cubeTop, cubeTopGlow };
 }
 
 export interface BallMaps { map: THREE.Texture; emissive: THREE.Texture; roughness: THREE.Texture }

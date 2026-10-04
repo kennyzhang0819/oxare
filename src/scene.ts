@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, faceTexture, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
-import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
-import { BUMPER, EFFECTS, ENV, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_T, pangolinEnds, pangolinRest, pangolinLine, pangolinRing, pangolinSize, pangolinSlope, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, BUNNY, GIRAFFE, FROG, LADYBUG, OCTOPUS, ringHead, pieceBalls, whaleParts, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
+import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece, snakeBody, snakeHeadMesh } from "./rails.ts";
+import { ANIMALS, BUMPER, EFFECTS, ENV, GOAL, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
@@ -50,17 +50,22 @@ function platformGeometry(...args: Parameters<typeof platformMesh>): THREE.Buffe
   geo.setIndex(m.indices);
   for (const [start, count, mat] of m.groups) geo.addGroup(start, count, mat);
   geo.computeVertexNormals();
+  const n = geo.getAttribute("normal") as THREE.BufferAttribute, v = new THREE.Vector3(), w = new THREE.Vector3();
+  for (const [a, b] of m.seams) {
+    v.fromBufferAttribute(n, a).add(w.fromBufferAttribute(n, b)).normalize();
+    n.setXYZ(a, v.x, v.y, v.z); n.setXYZ(b, v.x, v.y, v.z);
+  }
   return geo;
 }
-let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "disc" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel" | "cubeFace" | "cubeTop", THREE.MeshStandardMaterial> | null = null;
+let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel" | "cubeFace" | "cubeTop", THREE.MeshStandardMaterial> | null = null;
 
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
   if (MAT) return;
-  const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy());
+  const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy()), propTiles = tileTexture(renderer.capabilities.getMaxAnisotropy(), false);
   const edge = edgeTextures();
   MAT = {
     platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: ENV.floorRoughness }),
-    block: new THREE.MeshStandardMaterial({ map: tiles, color: PLATFORM.block, roughness: 0.8 }),
+    block: new THREE.MeshStandardMaterial({ map: propTiles, color: PLATFORM.block, roughness: 0.8 }),
     edge: new THREE.MeshStandardMaterial({ map: edge.map, emissiveMap: edge.glow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.6 }),
     rim: new THREE.MeshStandardMaterial({ color: PLATFORM.rim, roughness: Math.min(0.35, ENV.bodyRoughness), metalness: 0.05 }),
     border: new THREE.MeshStandardMaterial({ color: PLATFORM.border, roughness: 0.7 }),
@@ -74,14 +79,13 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     pillar: new THREE.MeshStandardMaterial({ map: st.pillar, roughness: 0.5, metalness: 0.05 }),
     glow: new THREE.MeshStandardMaterial({ color: PROPS.cyan, emissive: PROPS.cyan, emissiveIntensity: 0.9 * ENV.glow, roughness: ENV.lightRoughness, metalness: ENV.lightMetal }),
     crate: new THREE.MeshStandardMaterial({ map: st.crate, emissiveMap: st.crateGlow, emissive: 0xffffff, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.6 }),
-    disc: new THREE.MeshStandardMaterial({ map: st.goalDisc, color: 0xffffff, roughness: 0.7 }),
     padTop: new THREE.MeshStandardMaterial({ map: st.padTop, emissiveMap: st.padGlow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.5 }),
     padCentre: new THREE.MeshStandardMaterial({ map: st.padCentre, roughness: 0.6 }),
     padSkirt: new THREE.MeshStandardMaterial({ map: st.padSkirt, roughness: 0.7 }),
     barrierPanel: new THREE.MeshStandardMaterial({ map: st.barrierPanel, roughness: 0.55 }),
     grille: new THREE.MeshStandardMaterial({ map: st.grille, roughness: 0.7 }),
-    plank: new THREE.MeshStandardMaterial({ map: tiles, color: PLATFORM.plank, roughness: 0.85 }),
-    plankGlow: new THREE.MeshStandardMaterial({ color: PROPS.green, emissive: PROPS.green, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.4 }),
+    plank: new THREE.MeshStandardMaterial({ map: propTiles, color: PLATFORM.plank, roughness: 0.85 }),
+    plankGlow: new THREE.MeshStandardMaterial({ color: PROPS.movable, emissive: PROPS.movable, emissiveIntensity: 0.8 * ENV.glow, roughness: 0.4 }),
     stoolTop: new THREE.MeshStandardMaterial({ map: st.stoolTop, roughness: 0.55 }),
     barrelPanel: new THREE.MeshStandardMaterial({ map: st.barrelPanel, roughness: 0.55 }),
     bumperTop: new THREE.MeshStandardMaterial({ map: st.bumperTop, roughness: 0.55 }),
@@ -240,7 +244,7 @@ function addAura(g: THREE.Group) {
   g.add(aura);
 }
 
-// Hanging bridge: each plank is a tiled slat with a green light strip round its rim and a hinge
+// Hanging bridge: each plank is a tiled slat with an orange light strip round its rim and a hinge
 // barrel across its near end, so a barrel sits in every gap; the far anchor carries the last one.
 // Plank groups are returned in chain order for the physics to pose each frame; a fixed mount
 // bracket at each end stays with the piece.
@@ -298,7 +302,7 @@ function rimFrame(w: number, h: number, strip: number, lip: number): THREE.Buffe
   return new THREE.ExtrudeGeometry(frame, { depth: lip, bevelEnabled: false });
 }
 
-// Knock-down plank: a tall tiled panel with a green rim on both faces, on a hinge barrel
+// Knock-down plank: a tall tiled panel with an orange rim on both faces, on a hinge barrel
 // through its base that rests in a lit yoke at each side, or a wall bracket for a side plank.
 // The panel group is centred on the physics body, like a crate, and is returned for the physics
 // to pose; the yokes stay put.
@@ -348,7 +352,7 @@ const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5
 // cyan band just inside each, and every 4 layers up a pale band between two cyan lines. The strips
 // and bands are painted on, no more than PAINT proud.
 function buildColumn(g: THREE.Group, h: number) {
-  if (ENV.props === "soft") return softBeads(g, COLUMN_R, h, false);
+  if (ENV.props === "soft") return softPenguin(g, h);
   const st = STRUCT!, R = COLUMN_R;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 48), [st.body, SLATE, SLATE]);
   body.position.y = h / 2;
@@ -375,6 +379,7 @@ function buildSupport(parent: THREE.Group, p: Piece & { type: "support" }) {
   const st = STRUCT!, g = new THREE.Group();
   if (supportOver(p)) { g.rotation.z = Math.PI; g.position.y = -PLATFORM_THICKNESS; }
   parent.add(g);
+  if (ENV.props === "soft") return softWhale(g, p);
   for (const c of supportPillars(p)) {
     const col = new THREE.Group();
     col.position.set(c.x, 0, c.z);
@@ -570,7 +575,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
 
 // The cube, the gate's and the pushable prop's alike, `C` a side and centred on its body: a slate
 // rounded box wearing the ribbed octagon face on every side (the top face its white, solid-bordered
-// one on a plate over it), and on every face a pale rim with a green lit line just inside it.
+// one on a plate over it), and on every face a pale rim with an orange lit line just inside it.
 function buildCube(g: THREE.Group, C: number): void {
   if (ENV.props === "soft") return softSugar(g, C);
   const st = STRUCT!;
@@ -595,11 +600,11 @@ function buildCube(g: THREE.Group, C: number): void {
 }
 
 const SLIDE_TREAD = new THREE.MeshStandardMaterial({ color: KICKER.slideTread, roughness: 0.6, metalness: 0.15 });
-const KICKER_ORANGE = new THREE.MeshStandardMaterial({ color: KICKER.light, emissive: KICKER.glow, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.45 });
+const KICKER_LIGHT = new THREE.MeshStandardMaterial({ color: KICKER.light, emissive: KICKER.glow, emissiveIntensity: 0.6 * ENV.glow, roughness: 0.45 });
 
 // Kicker: a white wedge with a dark tread inset on its slope, pale slats across the tread and an
-// orange light strip along each side of it; a deck past the high edge carries the same tread, flat.
-// A sliding kicker's strips are green like the stool's, with < > chevrons at the foot of its slope;
+// yellow light strip along each side of it; a deck past the high edge carries the same tread, flat.
+// A sliding kicker's strips are orange like the stool's, with < > chevrons at the foot of its slope;
 // its track is invisible in play and outlined in the editor, and its wedge group is returned for
 // the physics to pose.
 function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: boolean): THREE.Group | undefined {
@@ -618,27 +623,41 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   }
   const outer = g;
   if (sliding) { g = new THREE.Group(); g.position.x = slide.at; outer.add(g); }
-  const stripMat = sliding ? st.plankGlow : KICKER_ORANGE;
+  const stripMat = sliding ? st.plankGlow : KICKER_LIGHT;
   // The rounded solid: the hull of a small sphere at each pulled-in corner.
   const soft = ENV.props === "soft";
   // Soft: the same wedge drawn with fatter rounding (kickerHull insets it, so it stays inside the solid).
   const hull = kickerHull(p, soft ? Math.min(0.2, p.h * 0.28, p.w * 0.28, D * 0.28) : undefined), ball = new THREE.SphereGeometry(hull.r, 16, 8).getAttribute("position");
-  const pts: THREE.Vector3[] = [];
-  for (const [x, y, z] of hull.corners) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
+  // The buried toe (the first corner pair) is drawn sharp: a fat round there pokes above the surface as a lip.
+  const toe = D / 2 + (KICKER_SINK * p.d) / p.h, [ta, tb] = kickerSpan(p, 0);
+  const pts: THREE.Vector3[] = [new THREE.Vector3(ta, -KICKER_SINK, toe), new THREE.Vector3(tb, -KICKER_SINK, toe)];
+  for (const [x, y, z] of hull.corners.slice(2)) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
   const body = new THREE.Mesh(new ConvexGeometry(pts), soft ? softMats().tint : st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
   if (soft) {
-    // Like the pillow: the plain wedge and one round button in the thrust colour at the top of the slope.
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), stripMat);
-    const [a0, b0] = kickerSpan(p, 0.85);
-    button.position.set((a0 + b0) / 2, p.h * 0.85 + 0.02, f / 2 - p.d * 0.35);
-    g.add(button);
+    // A turtle: the wedge is its shell in teal with lemon plates sunk into the slope, a head out of the
+    // high wall and a foot at each side corner (TURTLE, solid), eyes on the head.
+    const A = ANIMALS.turtle, skin = fur(A.skin), balls = pieceBalls(p), head = balls[0]!;
+    body.material = fur(A.shell);
+    for (const b of balls) g.add(blob(b.r, b.x, b.y, b.z, skin));
+    for (const s of [-1, 1]) g.add(eye(0.06, head.x + s * 0.12, head.y + 0.1, head.z - head.r * 0.75, 1, 1.2, 0.6));
+    // Plates lie on the slope, `v` of the way up it and `u` of its width across, sunk in and turned to
+    // the slope's normal; the side ones only where the slope is wide enough.
+    const L = Math.hypot(p.d, p.h), ny = p.d / L, nz = p.h / L, front = D / 2;
+    for (const [u, v] of [[0, 0.22], [0, 0.5], [0, 0.78], [-0.3, 0.36], [0.3, 0.36], [-0.3, 0.64], [0.3, 0.64]] as const) {
+      const [a, b] = kickerSpan(p, v);
+      if (u && b - a < 2) continue;
+      const plate = decal(blob(0.13, (a + b) / 2 + u * (b - a), v * p.h - ny * 0.02, front - v * p.d - nz * 0.02, fur(A.plate), 1, 1, 0.05 / 0.13));
+      plate.rotation.x = -Math.atan2(p.d, p.h);
+      g.add(plate);
+    }
+    if (sliding) g.add(pushMark(p.h + 0.45));
     return sliding ? g : undefined;
   }
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
   // plate in view: plate, then stripes, then strips. `at(z)` is the height fraction (see kickerSpan)
-  // of the slope at tread z, so on a side kicker it narrows with the solid. The orange strips run the
+  // of the slope at tread z, so on a side kicker it narrows with the solid. The yellow strips run the
   // whole length near each edge; between them, a dark plate with well-rounded corners fills most of the
   // middle, striped across in thick light and dark bands. `marks` keeps the plate's
   // low end (local +z) clear of stripes for the < > chevrons.
@@ -731,12 +750,15 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, PLANK_T / 2 - 0.01), st.plank);
   body.castShadow = body.receiveShadow = true;
   panel.add(body);
-  const rim = rimFrame(w - 0.3, h - 0.3, 0.1, PAINT);
-  for (const side of [1, -1]) {
-    const m = new THREE.Mesh(rim, st.plankGlow);
-    m.position.z = side * PLANK_T / 2;
-    if (side < 0) m.rotation.y = Math.PI;
-    panel.add(m);
+  if (ENV.props === "soft") { body.material = fur(ANIMALS.butterfly.panel); softButterfly(panel, w, h); }
+  else {
+    const rim = rimFrame(w - 0.3, h - 0.3, 0.1, PAINT);
+    for (const side of [1, -1]) {
+      const m = new THREE.Mesh(rim, st.plankGlow);
+      m.position.z = side * PLANK_T / 2;
+      if (side < 0) m.rotation.y = Math.PI;
+      panel.add(m);
+    }
   }
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(PLANK_T / 2, PLANK_T / 2, w + 2 * PLANK_BARREL, 16), st.body);
   barrel.rotation.z = Math.PI / 2;
@@ -744,7 +766,7 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   barrel.castShadow = true;
   panel.add(barrel);
   g.add(panel);
-  // The mounts: white rounded blocks, a green band round a wall bracket near its top and bottom,
+  // The mounts: white rounded blocks, an orange band round a wall bracket near its top and bottom,
   // round a yoke near its top. The bands stand 0.004 proud, a painted line rather than a ledge.
   for (const m of plankMounts(p)) {
     const block = new THREE.Mesh(new RoundedBoxGeometry(m.w, m.h, m.d, 2, PLANK_MOUNT_R), st.body);
@@ -760,7 +782,139 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   return panel;
 }
 
-// Board: the seesaw's tiled board with its green rim on both faces, loose, PLANK_T thick. The group is
+// Pangolin: one body mesh, bent along its belly line (pangolinLine) every frame, with flat paint discs
+// riding it: in the soft look staggered rows of scales on back and belly (the belly is the coil's
+// outside), each a pale plate over a darker one showing as a rim on its tail side, and on its head a
+// cream face, two eyes and an orange nose, the push accent; in the lab look orange bands.
+// Returns what poses it `a` unrolled; the editor also outlines where it lies unrolled.
+function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number) => void {
+  const st = STRUCT!, soft = ENV.props === "soft", A = ANIMALS.pangolin, L = p.d;
+  const n = Math.max(24, Math.ceil(L / 0.06)), ss = Array.from({ length: n + 1 }, (_, i) => (i * L) / n);
+  const rings = ss.map((s) => pangolinRing(p, s)), R = rings[0]!.length, caps = (n + 1) * R;
+  const pos = new Float32Array((caps + 2 * (R + 1)) * 3), nor = new Float32Array(pos.length), idx: number[] = [];
+  for (let i = 0; i < n; i++) for (let k = 0; k < R; k++) {
+    const a = i * R + k, b = i * R + ((k + 1) % R);
+    idx.push(a, a + R, b, b, a + R, b + R);
+  }
+  for (let k = 0; k < R; k++) {
+    idx.push(caps, caps + 1 + k, caps + 1 + ((k + 1) % R));
+    const c = caps + R + 1;
+    idx.push(c, c + 1 + ((k + 1) % R), c + 1 + k);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  geo.setIndex(idx);
+  const body = new THREE.Mesh(geo, soft ? fur(A.body) : st.plank);
+  body.userData.live = true;
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  // Paint: discs `rx` across and `rs` along, on the back or the belly at (s, x), each colour one mesh;
+  // `over` lifts one a paint layer, onto the discs under it.
+  type Disc = { s: number; x: number; top: boolean; rx: number; rs: number; over?: boolean };
+  const discs: [Disc[], THREE.Material, boolean?][] = [];
+  const across = (s: number) => pangolinSize(p, s).w / 2 - 0.1;
+  if (soft) {
+    const rows: Disc[] = [], plates: Disc[] = [], head = pangolinEnds(p).head;
+    for (let s = Math.min(head, 1.7) + 0.2, row = 0; s < L - 0.25; s += 0.38, row++) {
+      const w = across(s), m = Math.max(1, Math.round((2 * w) / 0.55)) + (row % 2), step = (2 * w) / m;
+      for (let j = 0; j < m; j++) for (const top of [true, false]) {
+        const x = -w + step * (j + 0.5);
+        rows.push({ s, x, top, rx: step * 0.56, rs: 0.22 });
+        plates.push({ s: s - 0.07, x, top, rx: step * 0.46, rs: 0.16, over: true });
+      }
+    }
+    discs.push([rows, fur(A.scale)], [plates, fur(A.plate)]);
+    const face = Math.min(0.8, head * 0.4);
+    discs.push([[{ s: face, x: 0, top: true, rx: across(face) * 0.85, rs: face * 0.7 }], fur(A.face)]);
+    discs.push([[{ s: 0.2, x: 0, top: true, rx: 0.17, rs: 0.12 }], fur(A.tip)]);
+    discs.push([[-1, 1].map((k) => ({ s: face * 1.05, x: k * across(face * 1.05) * 0.36, top: true, rx: 0.1, rs: 0.12 })), fur(ANIMALS.eye), true]);
+  } else {
+    const bands: Disc[] = [];
+    for (let s = 1; s < L - 0.6; s += 1) for (const top of [true, false]) bands.push({ s, x: 0, top, rx: across(s) * 0.9, rs: 0.06 });
+    discs.push([bands, st.plankGlow]);
+  }
+  // Each paint vertex rides the body at its own s, so a disc bends with the coil and the sloping ends.
+  // What doesn't change as it unrolls is worked out here: per vertex its sample and the share of the
+  // way to the next (at, u), its height off the belly line (h), the turn of the surface under it from
+  // the line's (ct, st), and its offset and normal in the disc (x, y, nx, ny, nz).
+  const unit = new THREE.SphereGeometry(1, 12, 6), up = unit.getAttribute("position"), un = unit.getAttribute("normal"), ui = unit.getIndex()!;
+  const painted = discs.map(([list, mat, ink]) => {
+    const V = up.count, count = list.length * V, ix: number[] = [];
+    const at = new Int32Array(count), u = new Float32Array(count), h = new Float32Array(count), ct = new Float32Array(count), st = new Float32Array(count);
+    const x = new Float32Array(count), y = new Float32Array(count), nx = new Float32Array(count), ny = new Float32Array(count), nz = new Float32Array(count);
+    list.forEach((d, j) => {
+      for (let v = 0; v < V; v++) {
+        const o = j * V + v, sv = d.s - up.getZ(v) * d.rs, f = Math.max(0, Math.min(n - 1e-6, (sv / L) * n)), lift = d.over ? 2 * LAYER : 0;
+        const a = d.top ? Math.atan(pangolinSlope(p, sv)) : 0, mx = un.getX(v) / d.rx, my = un.getY(v) / 0.025, mz = un.getZ(v) / d.rs, l = Math.hypot(mx, my, mz);
+        at[o] = Math.floor(f); u[o] = f - at[o]!;
+        h[o] = d.top ? pangolinSize(p, sv).t - 0.02 + lift : 0.02 - lift;
+        ct[o] = Math.cos(a); st[o] = Math.sin(a);
+        x[o] = d.x + up.getX(v) * d.rx; y[o] = up.getY(v) * 0.025;
+        nx[o] = mx / l; ny[o] = my / l; nz[o] = mz / l;
+      }
+      for (let k = 0; k < ui.count; k++) ix.push(j * V + ui.getX(k));
+    });
+    const dg = new THREE.BufferGeometry();
+    dg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    dg.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    dg.setIndex(ix);
+    const m = new THREE.Mesh(dg, mat);
+    m.userData.live = true;
+    if (ink) m.userData.noShadow = true;
+    g.add(m);
+    return { count, at, u, h, ct, st, x, y, nx, ny, nz, geo: dg };
+  });
+  unit.dispose();
+  const Y = new Float32Array(n + 1), Z = new Float32Array(n + 1), C = new Float32Array(n + 1), S = new Float32Array(n + 1);
+  // One sphere round every pose, curled to laid out, so culling never needs it worked out again.
+  const bound = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), L / 2 + 2);
+  for (const m of [geo, ...painted.map((d) => d.geo)]) m.boundingSphere = bound;
+  if (editor) {
+    const guide = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, PANGOLIN_T, L)), ROUTE_MAT);
+    guide.position.y = PANGOLIN_T / 2;
+    guide.renderOrder = 9;
+    g.add(guide);
+  }
+  return (a: number) => {
+    const line = pangolinLine(p, a, ss);
+    line.forEach(({ z, y, phi }, i) => {
+      const c = Math.cos(phi), sn = Math.sin(phi);
+      Y[i] = y; Z[i] = z; C[i] = c; S[i] = sn;
+      rings[i]!.forEach(([x, t, nx, nt], k) => {
+        const o = (i * R + k) * 3;
+        pos[o] = x; pos[o + 1] = y + t * c; pos[o + 2] = z + t * sn;
+        nor[o] = nx; nor[o + 1] = nt * c; nor[o + 2] = nt * sn;
+      });
+    });
+    // The two end caps: a fan round each end ring's middle, facing out along the body.
+    for (const [i, base, dir] of [[0, caps, 1], [n, caps + R + 1, -1]] as const) {
+      const { phi } = line[i]!, tz = -Math.cos(phi) * dir, ty = Math.sin(phi) * dir;
+      let cx = 0, cy = 0, cz = 0;
+      for (let k = 0; k < R; k++) {
+        const f = (i * R + k) * 3, o = (base + 1 + k) * 3;
+        pos[o] = pos[f]!; pos[o + 1] = pos[f + 1]!; pos[o + 2] = pos[f + 2]!;
+        cx += pos[f]!; cy += pos[f + 1]!; cz += pos[f + 2]!;
+      }
+      pos[base * 3] = cx / R; pos[base * 3 + 1] = cy / R; pos[base * 3 + 2] = cz / R;
+      for (let k = 0; k <= R; k++) { const o = (base + k) * 3; nor[o] = 0; nor[o + 1] = -ty; nor[o + 2] = -tz; }
+    }
+    geo.attributes.position!.needsUpdate = geo.attributes.normal!.needsUpdate = true;
+    for (const d of painted) {
+      const P = d.geo.attributes.position!.array as Float32Array, N = d.geo.attributes.normal!.array as Float32Array;
+      for (let v = 0; v < d.count; v++) {
+        const i = d.at[v]!, u = d.u[v]!, w = 1 - u, h = d.h[v]!, o = v * 3;
+        const c = C[i]! * w + C[i + 1]! * u, sn = S[i]! * w + S[i + 1]! * u, ct = c * d.ct[v]! - sn * d.st[v]!, st = sn * d.ct[v]! + c * d.st[v]!;
+        const ly = d.y[v]!, my = d.ny[v]!, mz = d.nz[v]!;
+        P[o] = d.x[v]!; P[o + 1] = Y[i]! * w + Y[i + 1]! * u + h * c + ly * ct; P[o + 2] = Z[i]! * w + Z[i + 1]! * u + h * sn + ly * st;
+        N[o] = d.nx[v]!; N[o + 1] = my * ct - mz * st; N[o + 2] = my * st + mz * ct;
+      }
+      d.geo.attributes.position!.needsUpdate = d.geo.attributes.normal!.needsUpdate = true;
+    }
+  };
+}
+
+// Board: the seesaw's tiled board with its orange rim on both faces, loose, PLANK_T thick. The group is
 // centred on the physics body and returned for the physics to pose.
 function buildBoard(g: THREE.Group, p: Piece & { type: "board" }): THREE.Group {
   const st = STRUCT!, board = new THREE.Group();
@@ -770,18 +924,21 @@ function buildBoard(g: THREE.Group, p: Piece & { type: "board" }): THREE.Group {
   const body = new THREE.Mesh(roundedBox(p.w, PLANK_T, p.d, PLANK_T / 2 - 0.01), st.plank);
   body.castShadow = body.receiveShadow = true;
   board.add(body);
-  const rim = rimFrame(p.w - 0.2, p.d - 0.2, 0.1, PAINT);
-  for (const side of [1, -1]) {
-    const m = new THREE.Mesh(rim, st.plankGlow);
-    m.rotation.x = -side * Math.PI / 2;
-    m.position.y = side * PLANK_T / 2;
-    board.add(m);
+  if (ENV.props === "soft") { body.material = fur(ANIMALS.flounder.skin); softFlounder(board, p.w, p.d, PLANK_T); }
+  else {
+    const rim = rimFrame(p.w - 0.2, p.d - 0.2, 0.1, PAINT);
+    for (const side of [1, -1]) {
+      const m = new THREE.Mesh(rim, st.plankGlow);
+      m.rotation.x = -side * Math.PI / 2;
+      m.position.y = side * PLANK_T / 2;
+      board.add(m);
+    }
   }
   g.add(board);
   return board;
 }
 
-// Seesaw: a tiled board with a green rim on both faces, on an
+// Seesaw: a tiled board with an orange rim on both faces, on an
 // axle between two rounded white posts that carry a dark slotted face and a lit cap. The board
 // group is centred on the physics body and returned for the physics to pose; the posts stay.
 function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: boolean): THREE.Group {
@@ -792,12 +949,15 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: bool
   const body = new THREE.Mesh(roundedBox(W, T, D, T / 2 - 0.01), st.plank);
   body.castShadow = body.receiveShadow = true;
   board.add(body);
-  const rim = rimFrame(W - 0.2, D - 0.2, 0.1, PAINT);
-  for (const side of [1, -1]) {
-    const m = new THREE.Mesh(rim, st.plankGlow);
-    m.rotation.x = -side * Math.PI / 2;
-    m.position.y = side * T / 2;
-    board.add(m);
+  if (ENV.props === "soft") { body.material = fur(ANIMALS.crocodile.skin); softCrocodile(board, W, D, T); }
+  else {
+    const rim = rimFrame(W - 0.2, D - 0.2, 0.1, PAINT);
+    for (const side of [1, -1]) {
+      const m = new THREE.Mesh(rim, st.plankGlow);
+      m.rotation.x = -side * Math.PI / 2;
+      m.position.y = side * T / 2;
+      board.add(m);
+    }
   }
   g.add(board);
   // The axle shows only as a stub from each post into the board's edge: the board is thinner than
@@ -893,21 +1053,17 @@ function tubeMilk(): THREE.MeshPhysicalMaterial {
 function railRing(c: [number, number, number], d: [number, number, number]): THREE.Group {
   const ring = new THREE.Group();
   if (ENV.props === "soft") {
-    // A plain ring with six round beads in the light colour round it.
-    const t = ringMesh(c, d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS), geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
-    geo.setIndex(t.indices);
-    geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, RAIL_MAT);
-    m.castShadow = true;
-    ring.add(m);
+    // A snake biting its tail: the ring is a snake's body, RING_T thick, and its head sits on top
+    // looking along the ring (ringHead, solid).
     const axis = new THREE.Vector3(...d).normalize(), u = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0).cross(axis).normalize() : new THREE.Vector3(1, 0, 0).cross(axis).normalize(), v = axis.clone().cross(u);
-    const bead = new THREE.SphereGeometry(RING_T * 1.35, 14, 10);
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2, b = new THREE.Mesh(bead, STRUCT!.glow);
-      b.position.set(c[0], c[1], c[2]).addScaledVector(u, Math.cos(a) * (RING_R + RING_T * 0.4)).addScaledVector(v, Math.sin(a) * (RING_R + RING_T * 0.4));
-      ring.add(b);
-    }
+    const loop: TubeRing[] = Array.from({ length: RING_SEGMENTS + 1 }, (_, k) => {
+      const a = (k / RING_SEGMENTS) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const at = new THREE.Vector3(...c).addScaledVector(u, ca * RING_R).addScaledVector(v, sa * RING_R), dir = u.clone().multiplyScalar(-sa).addScaledVector(v, ca);
+      return { c: [at.x, at.y, at.z], d: [dir.x, dir.y, dir.z], m: [dir.x, dir.y, dir.z] };
+    });
+    snakeBody(loop, ring, false, RING_T);
+    const h = ringHead({ c, d }), top = new THREE.Vector3(...h.c).sub(new THREE.Vector3(...c)).normalize();
+    snakeHeadMesh(h.c, h.d, ring, [top.x, top.y, top.z]);
     return ring;
   }
   for (const [R, r, sides, mat] of [[RING_R, RING_T, RING_SIDES, RAIL_MAT], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]] as const) {
@@ -927,7 +1083,7 @@ function buildHoop(g: THREE.Group) {
   g.add(railRing([0, TUBE_R, 0], [0, 0, 1]));
 }
 
-// Barrel: a white rounded drum with a green ring near its foot and its head, and four circuit
+// Barrel: a white rounded drum with an orange ring near its foot and its head, and four circuit
 // panels round its side, each in a dark frame. Rings and panels are painted on, PAINT proud at most.
 // Like a crate, the group is centred on the physics body and placed by it each frame.
 function buildBarrel(g: THREE.Group, r: number, h: number) {
@@ -979,15 +1135,20 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
     g.add(line);
   }
   const bean = new THREE.Group();
-  const body = new THREE.Mesh(beanGeometry(p.r, p.len), ENV.props === "soft" ? softMats().tint : mat);
+  const body = new THREE.Mesh(beanGeometry(p.r, p.len), ENV.props === "soft" ? fur(ANIMALS.caterpillar.skin) : mat);
   body.castShadow = body.receiveShadow = true;
   bean.add(body);
   if (ENV.props === "soft") {
-    // The plain capsule in the tint and one round button in the hazard colour on top of its middle.
-    // beanAt lays the capsule's axis flat by turning local y to +x, which leaves local -x pointing up.
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), softMats().glaze);
-    button.position.x = -(p.r - 0.03);
-    bean.add(button);
+    // A caterpillar: the capsule in coral with a dark band round it every 0.3 along its straight, and
+    // two eyes on its +y end (the end it leads with on its track).
+    const A = ANIMALS.caterpillar, straight = Math.max(0, p.len - 2 * p.r), n = Math.max(1, Math.round(straight / 0.3));
+    for (let k = 0; k < n; k++) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(p.r - 0.01, 0.018, 8, 40), fur(A.band));
+      band.rotation.x = Math.PI / 2;
+      band.position.y = -straight / 2 + (k + 0.5) * (straight / n);
+      bean.add(band);
+    }
+    for (const s of [-1, 1]) bean.add(eye(p.r * 0.2, s * p.r * 0.38, p.len / 2 - p.r + p.r * 0.75, p.r * 0.5, 1, 1.2, 0.6));
   }
   g.add(bean);
   const at = beanAt(p, track, 0);
@@ -1016,7 +1177,7 @@ function roundRectPlane(w: number, h: number, r: number): THREE.ShapeGeometry {
   return new THREE.ShapeGeometry(s, 4);
 }
 
-// Stool: a white block with a green ring round its base and a circuit board inset in its top. The
+// Stool: a white block with an orange ring round its base and a circuit board inset in its top. The
 // two faces it is pushed on (square to its slide) carry a tall screen with ^ v chevrons; the two it
 // slides past carry a screen with < > chevrons between two dark slots. Its track is invisible in
 // play; the editor outlines the block at both ends of its slide, like a mover's stops. The block
@@ -1043,11 +1204,14 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   body.castShadow = body.receiveShadow = true;
   block.add(body);
   if (ENV.props === "soft") {
-    // Like the pillow: the plain block in the tint and one round button, in the movables' colour, on top.
-    body.material = softMats().tint;
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.plankGlow);
-    button.position.y = h / 2 - 0.03;
-    block.add(button);
+    // A pig: the block in pink with a ball ear at each top corner (solid, carried with the block), and
+    // on its front a snout with two nostrils and two eyes.
+    const A = ANIMALS.pig;
+    body.material = fur(A.skin);
+    for (const b of pieceBalls(p)) block.add(blob(b.r, b.x, b.y, b.z, fur(A.skin)));
+    block.add(decal(blob(0.17, 0, -h * 0.1, d / 2 - 0.02, fur(A.snout), 1.25, 0.85, 0.3)));
+    for (const s of [-1, 1]) block.add(eye(0.03, s * 0.06, -h * 0.1, d / 2 + 0.03, 1, 1.2, 0.5), eye(0.07, s * 0.3, h * 0.2, d / 2 - 0.015));
+    block.add(pushMark(h / 2 + 0.5));
     g.add(block);
     return block;
   }
@@ -1112,7 +1276,7 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   return block;
 }
 
-// The jump pad shares the kicker's white (body), dark tread, pale stripes and orange; the
+// The jump pad shares the kicker's white (body), dark tread, pale stripes and yellow; the
 // hovering squares are unlit and faint, in a soft amber.
 const JUMP_HOLO_COLOR = EFFECTS.jumpHolo;
 const JUMP_HOLO = new THREE.MeshBasicMaterial({ color: JUMP_HOLO_COLOR, transparent: true, opacity: 0.45, depthWrite: false });
@@ -1211,7 +1375,7 @@ function cornerDecal(shape: THREE.Shape, mat: THREE.Material, cx: number, cz: nu
 }
 
 // Jump pad: a low white platform with a grey ramp all round up to its flat top, the launch square
-// in the middle of the top, a dark grille with an orange rim, under three hovering amber squares.
+// in the middle of the top, a dark grille with a yellow rim, under three hovering amber squares.
 // The body is jumpHull rounded like the kicker's, and is its collider too.
 function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   const st = STRUCT!, H = JUMP_H;
@@ -1227,9 +1391,20 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   deck.position.y = H;
   g.add(deck);
   if (soft) {
-    // The plain pad with a round button, and the three hovering rings as solid light rings like the
-    // pillar's, so they take the toon shading and the outline.
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), KICKER_ORANGE);
+    // A frog: the pad in lime with darker spots sunk into its top, a flat ink eye near each +z corner
+    // (the ball crosses a pad anywhere, so nothing stands up), a smile on the +z ramp, and the launch
+    // button under its three light rings.
+    const A = ANIMALS.frog;
+    body.material = fur(A.skin);
+    for (const s of [-1, 1]) { const e = eye(FROG.eye.r, s * (p.w / 2 - JUMP_RUN - FROG.eye.in), H - 0.02, p.d / 2 - JUMP_RUN - FROG.eye.in, 1.1, 1, 0.05 / FROG.eye.r); e.rotateX(Math.PI / 2); g.add(e); }
+    for (const [u, v, r] of [[-0.8, -0.75, 0.17], [0.75, -0.8, 0.14], [0, -0.85, 0.11], [-0.85, 0.15, 0.13], [0.85, 0.2, 0.12]] as const) g.add(decal(blob(r, (u * tw) / 2, H - 0.02, (v * td) / 2, fur(A.spot), 1, 1, 0.05 / r)).rotateX(Math.PI / 2));
+    // The smile sits high on the +z ramp, a quarter of the way down from the top edge.
+    const ln = Math.hypot(1, H), smile = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.014, 6, 24, Math.PI).rotateZ(Math.PI).scale(1, 0.4, 1), fur(ANIMALS.eye));
+    smile.position.set(0, H * 0.75 - 0.01 / ln, td / 2 + 0.25 - (0.01 * H) / ln);
+    smile.rotation.x = Math.atan2(-1, H);
+    smile.userData.noShadow = true;
+    g.add(smile);
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), KICKER_LIGHT);
     button.position.y = 0.02;
     deck.add(button);
     const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.05, 10, 48).rotateX(Math.PI / 2);
@@ -1240,7 +1415,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     }
     return;
   }
-  // Launch square: a light frame, the dark grille, an orange rim, all painted on the top, their
+  // Launch square: a light frame, the dark grille, a yellow rim, all painted on the top, their
   // corners rounded alike.
   const square = new THREE.Group(), rs = ventRound(s, s);
   deck.add(square);
@@ -1250,7 +1425,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   square.add(dotGrille(s));
   const rimShape = roundRect(new THREE.Shape(), s + 0.05, s + 0.05, rs + 0.025);
   rimShape.holes.push(roundRect(new THREE.Path(), s - 0.05, s - 0.05, rs - 0.025));
-  const rim = new THREE.Mesh(flatShape(rimShape), KICKER_ORANGE);
+  const rim = new THREE.Mesh(flatShape(rimShape), KICKER_LIGHT);
   rim.position.y = 3 * LAYER;
   square.add(rim);
   paint(square, "y");
@@ -1286,7 +1461,7 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     paint(f, "y");
   }
   // Each corner: a light grey panel holding a white triangle outlined in dark grey, pointing up
-  // the slope, and an orange arc near the foot. Shape y runs down the slope (see cornerDecal).
+  // the slope, and a yellow arc near the foot. Shape y runs down the slope (see cornerDecal).
   // The fill is the outline's triangle shrunk about its incentre, so the dark border is even.
   const t0 = -0.06, tb = 0.2, th = 0.31, e = 0.045, yb = t0 + 0.14, inc = (tb * th) / (tb + Math.hypot(tb, th)), k = (inc - e) / inc;
   const tri = (q: number): [number, number][] => ([[0, yb - th], [tb, yb], [-tb, yb]] as [number, number][]).map(([x, y]) => [x * q, yb - inc + (y - yb + inc) * q]);
@@ -1294,53 +1469,89 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
     [roundRect(new THREE.Shape(), 0.6, 0.46, 0.1, 0, t0), PALE, PAINT],
     [roundPoly(new THREE.Shape(), tri(1), 0.05), st.tread, PAINT + LAYER],
     [roundPoly(new THREE.Shape(), tri(k), 0.03), st.body, PAINT + 2 * LAYER],
-    [roundRect(new THREE.Shape(), 0.64, 0.08, 0.04, 0, 0.29), KICKER_ORANGE, PAINT],
+    [roundRect(new THREE.Shape(), 0.64, 0.08, 0.04, 0, 0.29), KICKER_LIGHT, PAINT],
   ];
   for (const [sx, sz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]] as const) {
     for (const [shape, mat, lift] of shapes) g.add(cornerDecal(shape, mat, sx * (tw / 2 - rt), sz * (td / 2 - rt), Math.atan2(sz, sx), rt, lift));
   }
 }
 
-const BEAM_MAT = new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-  uniforms: { height: { value: GOAL_BEAM_H }, time: { value: 0 }, tint: { value: new THREE.Color(PROPS.cyan) } },
-  vertexShader: `varying float vY; varying vec3 vN, vV;
-    void main(){ vY = position.y; vec4 wp = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - wp.xyz);
-      gl_Position = projectionMatrix * viewMatrix * wp; }`,
-  fragmentShader: `uniform float height, time; uniform vec3 tint; varying float vY; varying vec3 vN, vV;
+// Shared clock for the goal portal's swirl and motes, advanced by the scene's tick.
+const PORTAL_TIME = { value: 0 };
+// The portal's face: a black event horizon ringed by a thin white photon ring, inside an accretion
+// disc whose spiral arms wind inward, hot lemon near the hole cooling to blue at the rim.
+const PORTAL_MAT = new THREE.ShaderMaterial({
+  fog: false,
+  uniforms: { time: PORTAL_TIME, hot: { value: new THREE.Color(PROPS.cyan) }, cool: { value: new THREE.Color(GOAL.disc) } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform float time; uniform vec3 hot, cool; varying vec2 vUv;
     void main(){
-      // Bright at the disc, thinning quickly with height.
-      float t = clamp(vY / height, 0.0, 1.0);
-      float fade = pow(1.0 - t, 3.0);
-      float rim = abs(dot(vN, vV));
-      float a = fade * (0.035 + 0.2 * pow(rim, 1.5));
-      vec3 col = mix(tint, vec3(1.0), rim * 0.6);
-      gl_FragColor = vec4(col * a, a);
+      vec2 p = vUv * 2.0 - 1.0;
+      float r = length(p), a = atan(p.y, p.x), hole = 0.34;
+      float arms = 0.5 + 0.5 * sin(3.0 * a - 9.0 * log(max(r, 0.01)) - time * 2.6);
+      float fine = 0.5 + 0.5 * sin(7.0 * a - 16.0 * log(max(r, 0.01)) - time * 4.1 + 1.3);
+      float d = max(r - hole, 0.0);
+      float heat = exp(-d * 3.2);
+      vec3 col = mix(cool * 0.25, mix(cool * 1.3, hot, heat), 0.15 + 0.85 * pow(arms, 2.0) * (0.55 + 0.45 * fine));
+      col *= 0.4 + 1.2 * heat + 0.2 * (1.0 - smoothstep(0.85, 1.0, r));
+      col = mix(col, vec3(1.0), exp(-pow((r - hole) / 0.025, 2.0)));
+      col = mix(vec3(0.015, 0.02, 0.05), col, smoothstep(hole - 0.03, hole + 0.005, r));
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+// Motes: sparks that drift in from past the rim, circling ever faster as they fall into the hole.
+const MOTES = 28;
+const MOTE_MAT = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  uniforms: { time: PORTAL_TIME, tint: { value: new THREE.Color(PROPS.cyan) } },
+  vertexShader: `attribute float seed; uniform float time; varying float vFade;
+    void main(){
+      float life = fract(time * (0.18 + 0.1 * fract(seed * 7.3)) + seed);
+      float r = mix(1.35, 0.34, pow(life, 0.8));
+      float a = seed * 6.2832 + 2.2 / (r + 0.15) - time * 0.4;
+      vec3 pos = vec3(cos(a) * r, 0.12 + 0.55 * (1.0 - life) * fract(seed * 3.7), sin(a) * r);
+      vFade = smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.7, 1.0, life));
+      vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+      gl_PointSize = 9.0 * (0.5 + 0.5 * (1.0 - life)) * projectionMatrix[1][1] * 4.0 / -mv.z;
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `uniform vec3 tint; varying float vFade;
+    void main(){
+      float d = length(gl_PointCoord - 0.5);
+      float a = vFade * smoothstep(0.5, 0.1, d);
+      gl_FragColor = vec4(mix(tint, vec3(1.0), 0.5) * a, a);
       #include <colorspace_fragment>
     }`,
 });
 
-// Goal: a spoked disc with a cyan ring and a tall beam of light fading upward.
+// Goal: a black-hole portal sunk in a low disc, a glowing lip round it and sparks spiralling in.
 function buildGoal(g: THREE.Group, r: number) {
   const st = STRUCT!;
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, GOAL_DISC_H, 64), [st.top, st.disc, st.top]);
-  disc.position.y = GOAL_DISC_H / 2;
+  const side = new THREE.Mesh(new THREE.CylinderGeometry(r, r, GOAL_DISC_H, 64, 1, true), st.top);
+  side.position.y = GOAL_DISC_H / 2;
+  const face = new THREE.Mesh(new THREE.CircleGeometry(r, 64).rotateX(-Math.PI / 2), PORTAL_MAT);
+  face.position.y = GOAL_DISC_H;
+  face.rotation.y = Math.PI;
+  face.userData.noShadow = true;
   const t = torusMesh(r + GOAL_RING.gap, GOAL_RING.tube), ringGeo = new THREE.BufferGeometry();
   ringGeo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
   ringGeo.setIndex(t.indices);
   ringGeo.computeVertexNormals();
   const ring = new THREE.Mesh(ringGeo, st.glow);
   ring.position.y = GOAL_RING.y;
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r * 0.7, GOAL_BEAM_H, 32, 1, true), BEAM_MAT);
-  beam.position.y = GOAL_BEAM_H / 2;
-  beam.frustumCulled = false;
-  const core = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.3, r * 0.3, GOAL_BEAM_H, 16, 1, true), BEAM_MAT);
-  core.position.y = GOAL_BEAM_H / 2;
-  g.add(disc, ring, beam, core);
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(MOTES * 3), 3));
+  moteGeo.setAttribute("seed", new THREE.Float32BufferAttribute(Array.from({ length: MOTES }, (_, i) => (i * 0.618034) % 1), 1));
+  const motes = new THREE.Points(moteGeo, MOTE_MAT);
+  motes.position.y = GOAL_DISC_H;
+  motes.scale.setScalar(r);
+  motes.frustumCulled = false;
+  g.add(side, face, ring, motes);
 }
 
-function buildPillar(g: THREE.Group) {
-  if (ENV.props === "soft") return softBeads(g, PILLAR_R, PILLAR_H, true);
+function buildPillar(g: THREE.Group): ((e: number) => void) | undefined {
+  if (ENV.props === "soft") return softGiraffe(g);
   const st = STRUCT!;
   const R = PILLAR_R, H = PILLAR_H, capH = PILLAR_CAP, C = PILLAR_COLLAR, RG = PILLAR_RING;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H - capH, 64), st.pillar);
@@ -1358,10 +1569,8 @@ function buildPillar(g: THREE.Group) {
   g.add(body, collar, dome, ring);
 }
 
-// Soft props: the same colliders, different bodies. Everything here stays inside the lab prop's
-// footprint so the physics is untouched; where a soft body is thinner (a bead's waist, a donut's
-// hole) the collider is simply a little bigger than what is drawn.
-let FACE_MAT: THREE.MeshStandardMaterial | null = null;
+// Soft props: the animals (docs/animals.md). Each stays inside its lab prop's collider, and whatever
+// stands out of it (ears, heads, a spout) is laid out in level.ts and built by the physics as drawn.
 let SOFT: { tint: THREE.MeshStandardMaterial; glaze: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial } | null = null;
 function softMats() {
   SOFT ??= {
@@ -1371,49 +1580,10 @@ function softMats() {
   };
   return SOFT;
 }
-// A face decal `size` across on a plane facing +z, PAINT off the surface it is put on.
-// Faces belong to the cute style only; elsewhere the soft props stay plain.
-const faced = (): boolean => ENV.style === "cute" && ENV.faces;
-function faceDecal(size: number): THREE.Mesh {
-  FACE_MAT ??= new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, roughness: 0.6 });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), FACE_MAT);
-  m.userData.noShadow = true;
-  return m;
-}
-// A sphere squashed to `h` tall and `r` wide, centre at y.
-function bead(r: number, h: number, y: number, mat: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 40, 24), mat);
-  m.scale.y = h / (2 * r);
-  m.position.y = y;
-  m.castShadow = m.receiveShadow = true;
-  return m;
-}
-// Pillar and column: a stack of fat beads, alternating tints, a light ring in each waist and a
-// small knob on top; a pillar's top bead wears a face.
-function softBeads(g: THREE.Group, R: number, H: number, face: boolean) {
-  const st = STRUCT!, sm = softMats();
-  const knob = R * 0.42, n = Math.max(2, Math.round((H - knob) / (R * 1.3))), bh = (H - knob) / n;
-  for (let i = 0; i < n; i++) {
-    g.add(bead(R, bh + 0.02, bh * (i + 0.5), i % 2 ? sm.tint : st.body));
-    if (i > 0) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(R * 0.78, R * 0.07, 10, 48), st.glow);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = bh * i;
-      g.add(ring);
-    }
-  }
-  const top = bead(knob, knob * 1.6, H - knob * 0.8, st.glow);
-  g.add(top);
-  if (face && faced()) {
-    const f = faceDecal(R * 1.1);
-    f.position.set(0, bh * (n - 0.5), R + 0.006);
-    g.add(f);
-  }
-}
-// Bumper: a pudding, a smooth squashed dome with a band of jam round its middle, a cherry on top
-// and a face on its front.
+// Bumper: a ladybug, the pudding's dome in red with an ink line down its back and six ink spots sunk
+// in, and a cream head out of its front (LADYBUG, solid) wearing two eyes.
 function softBumper(g: THREE.Group) {
-  const st = STRUCT!, sm = softMats(), R = 1, H = 1;
+  const A = ANIMALS.ladybug, R = 1, H = 1;
   const prof: [number, number][] = [];
   for (let k = 0; k <= 18; k++) { const t = k / 18, y = t * H, u = (y - 0.42) / 0.6; prof.push([Math.max(0.001, R * 0.985 * Math.sqrt(Math.max(0, 1 - u * u))), y]); }
   prof[0] = [R * 0.72, 0];
@@ -1422,138 +1592,329 @@ function softBumper(g: THREE.Group) {
   geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
   geo.setIndex(m.indices);
   geo.computeVertexNormals();
-  const body = new THREE.Mesh(geo, st.body);
+  const body = new THREE.Mesh(geo, fur(A.shell));
   body.castShadow = body.receiveShadow = true;
-  const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.085, 12, 64), sm.glaze);
-  band.rotation.x = Math.PI / 2;
-  band.position.y = 0.42;
-  const cherry = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), sm.glaze);
-  cherry.position.y = H - 0.11;
-  cherry.castShadow = true;
-  g.add(body, band, cherry);
-  if (faced()) { const f = faceDecal(0.7); f.position.set(0, 0.64, R * 0.925); f.rotation.x = -0.42; g.add(f); }
+  g.add(body);
+  // The line: the upper half of a thin ring in the plane down the middle, squashed to the dome's section.
+  const line = new THREE.Mesh(new THREE.TorusGeometry(0.99, 0.014, 6, 48, Math.PI).rotateY(Math.PI / 2).scale(1, 0.6, 0.985).translate(0, 0.42, 0), fur(ANIMALS.eye));
+  line.userData.noShadow = true;
+  g.add(line);
+  // Spots on the dome, each turned to its normal there and sunk in.
+  const rs = (y: number) => { const u = (y - 0.42) / 0.6; return R * 0.985 * Math.sqrt(Math.max(0, 1 - u * u)); };
+  for (const [deg, y, r] of [[50, 0.82, 0.12], [-50, 0.82, 0.12], [105, 0.62, 0.13], [-105, 0.62, 0.13], [155, 0.78, 0.11], [-155, 0.78, 0.11]] as const) {
+    const a = (deg * Math.PI) / 180, rr = rs(y), n = new THREE.Vector3((Math.sin(a) * rr) / 0.985 ** 2, (y - 0.42) / 0.6 ** 2, (Math.cos(a) * rr) / 0.985 ** 2).normalize();
+    const spot = decal(blob(r, Math.sin(a) * rr - n.x * 0.02, y - n.y * 0.02, Math.cos(a) * rr - n.z * 0.02, fur(ANIMALS.eye), 1, 1, 0.05 / r));
+    spot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+    g.add(spot);
+  }
+  const hd = LADYBUG.head;
+  g.add(blob(hd.r, 0, hd.y, hd.z, fur(A.head)));
+  for (const s of [-1, 1]) g.add(eye(0.07, s * 0.12, hd.y + 0.12, hd.z + hd.r * 0.78, 1, 1.2, 0.6));
 }
-// Magnet: a donut, glazed in the hazard colour on top with sprinkles, sitting flat.
+// Magnet: an octopus, the donut as its head in lavender with red spots sunk into its top, two big eyes
+// on its front and eight arm stubs round its foot (OCTOPUS, solid).
 function softMagnet(g: THREE.Group) {
-  const st = STRUCT!, sm = softMats(), Rm = 0.6, r = 0.39;
-  const dough = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), st.body);
+  const A = ANIMALS.octopus, skin = fur(A.skin), Rm = 0.6, r = 0.39;
+  const dough = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), skin);
   dough.rotation.x = Math.PI / 2;
   dough.position.y = r;
   dough.castShadow = dough.receiveShadow = true;
-  const glaze = new THREE.Mesh(new THREE.TorusGeometry(Rm, r + 0.012, 24, 64, Math.PI * 2), sm.glaze);
-  glaze.rotation.x = Math.PI / 2;
-  glaze.position.y = r;
-  glaze.scale.y = 1;
-  // Only the upper half of the glaze torus shows: clip the lower half by drawing it a hair under the dough.
-  const gg = glaze.geometry.getAttribute("position");
-  for (let i = 0; i < gg.count; i++) if (gg.getZ(i) < 0.02) gg.setZ(i, -0.01);
-  gg.needsUpdate = true;
-  glaze.geometry.computeVertexNormals();
-  g.add(dough, glaze);
-  const colours = [st.glow, STRUCT!.plankGlow, st.body];
-  for (let i = 0; i < 26; i++) {
-    const a = (i / 26) * Math.PI * 2 + (i % 3) * 0.3, rr = Rm + (((i * 7) % 5) / 5 - 0.5) * r * 1.1;
-    const sp = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.09, 4, 8), colours[i % 3]!);
-    const yy = r + Math.sqrt(Math.max(0, (r + 0.02) ** 2 - (rr - Rm) ** 2));
-    sp.position.set(Math.cos(a) * rr, yy, Math.sin(a) * rr);
-    sp.rotation.set(Math.PI / 2 + (i % 4) * 0.4, 0, a + (i % 5) * 0.5);
-    g.add(sp);
+  g.add(dough);
+  for (let k = 0; k < 5; k++) {
+    const a = ((k + 0.5) / 5) * Math.PI * 2 + 0.4, rr = 0.09 + (k % 2) * 0.03;
+    g.add(decal(blob(rr, Math.sin(a) * Rm, 2 * r - 0.02, Math.cos(a) * Rm, fur(A.spot), 1, 1, 0.05 / rr)).rotateX(Math.PI / 2));
   }
+  const O = OCTOPUS.arm;
+  for (let k = 0; k < O.n; k++) { const a = ((k + 0.5) / O.n) * Math.PI * 2; g.add(blob(O.r, Math.sin(a) * O.at, O.y, Math.cos(a) * O.at, skin)); }
+  for (const s of [-1, 1]) g.add(eye(0.12, s * 0.28, r + 0.1, Rm + r * 0.9, 1, 1.2, 0.6));
 }
-// Crate: a mochi, a box rounded nearly to a blob, with the cute face texture on every side.
+// Crate: a cow, the box in white with ink patches on its top, back and sides (none on its face), a pink
+// muzzle with nostrils and two eyes on its front, a ball ear out of each side near the front and a
+// knob horn on top (solid, carried with the box).
 function softCrate(g: THREE.Group, w: number, h: number, d: number) {
-  const st = STRUCT!, r = Math.min(w, h, d) * 0.42;
-  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 8, r), st.body);
+  const A = ANIMALS.cow, r = Math.min(w, h, d) * 0.3;
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 8, r), fur(A.hide));
   m.castShadow = m.receiveShadow = true;
   g.add(m);
-  const size = Math.min(w, d, h) * 0.6;
-  if (faced()) for (const [x, z, yaw] of [[0, d / 2, 0], [0, -d / 2, Math.PI], [w / 2, 0, Math.PI / 2], [-w / 2, 0, -Math.PI / 2]] as const) {
-    const f = faceDecal(size);
-    f.position.set(x + Math.sin(yaw) * 0.006, 0, z + Math.cos(yaw) * 0.006);
-    f.rotation.y = yaw;
-    g.add(f);
+  // Patches: on a face, u and v of the way across its flat middle, rx by ry.
+  const fw = (a: number) => (a - 2 * r) / 2;
+  for (const [face, u, v, rx, ry] of [["top", -0.3, -0.3, 0.22, 0.17], ["top", 0.35, 0.3, 0.19, 0.25], ["left", 0.1, -0.1, 0.22, 0.3], ["right", -0.3, 0.2, 0.2, 0.22], ["back", 0, 0, 0.26, 0.2]] as const) {
+    const s = flat(1, 0, 0, 0, fur(A.patch), rx, ry);
+    if (face === "top") { s.position.set(u * fw(w), h / 2 - 0.02, v * fw(d)); s.rotation.x = Math.PI / 2; }
+    else if (face === "back") s.position.set(u * fw(w), v * fw(h), -(d / 2 - 0.02));
+    else { s.position.set((face === "left" ? -1 : 1) * (w / 2 - 0.02), v * fw(h), u * fw(d)); s.rotation.y = Math.PI / 2; }
+    g.add(s);
   }
-  // A glowing dot on the top face's corners, where the lab crate's brackets were.
-  const dot = new THREE.SphereGeometry(0.09, 14, 10);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const o = new THREE.Mesh(dot, st.plankGlow);
-    o.position.set(sx * (w / 2 - r * 0.9), h / 2 - 0.03, sz * (d / 2 - r * 0.9));
-    g.add(o);
-  }
+  g.add(decal(blob(0.22, 0, -h * 0.22, d / 2 - 0.02, fur(A.muzzle), 1.3, 0.8, 0.25)));
+  for (const s of [-1, 1]) g.add(eye(0.03, s * 0.09, -h * 0.2, d / 2 + 0.03, 1, 1.3, 0.5), eye(0.08, s * 0.32, h * 0.12, d / 2 - 0.015));
+  for (const b of pieceBalls({ type: "crate", x: 0, y: 0, z: 0, w, h, d, rot: 0 } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(b.r < 0.1 ? A.horn : A.hide)));
+  g.add(pushMark(h / 2 + 0.5));
 }
-// Blockade: a pillow, a fat rounded block with a button sunk in each side and a face on the front.
+// Animal props: one material per colour; a blob is a ball of radius r squashed to (sx, sy, sz) of it,
+// baked into its geometry so its outline stays even. A decal (an eye, a spot, a muzzle, a plate: anything
+// sunk into a body) gets no outline of its own, since its hull would show as a dark crescent beside it;
+// `decal` marks one. A thin real part, like the fish's body or fins, keeps its outline.
+const ANIMAL_MATS = new Map<number, THREE.MeshStandardMaterial>();
+function fur(c: number): THREE.MeshStandardMaterial {
+  let m = ANIMAL_MATS.get(c);
+  if (!m) ANIMAL_MATS.set(c, (m = new THREE.MeshStandardMaterial({ color: c, roughness: ENV.bodyRoughness })));
+  return m;
+}
+function blob(r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sy = 1, sz = 1): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20).scale(r * sx, r * sy, r * sz), mat);
+  m.position.set(x, y, z);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+const decal = (m: THREE.Mesh): THREE.Mesh => { m.userData.noShadow = true; return m; };
+const eye = (r: number, x: number, y: number, z: number, sx = 1, sy = 1.2, sz = 0.5): THREE.Mesh => decal(blob(r, x, y, z, fur(ANIMALS.eye), sx, sy, sz));
+// A flat disc of radius r (stretched sx, sy) lying across local z, 0.05 thick: put its centre 0.02
+// under a surface and it stands PAINT proud, like paint.
+const flat = (r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sy = 1): THREE.Mesh => decal(blob(r, x, y, z, mat, sx, sy, 0.025 / r));
+// The same lying flat on a top face (across local y).
+function flatTop(r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sz = 1): THREE.Mesh {
+  const m = flat(r, x, y, z, mat, sx, sz);
+  m.rotation.x = Math.PI / 2;
+  return m;
+}
+// Blockade: a bunny, a block in off-white fur rounded BUNNY.r with a tall ear on each top corner (pink
+// inside) and, on its front, two eyes, a pink nose and two teeth lying on the face like paint.
 function softBlockade(g: THREE.Group) {
-  const st = STRUCT!, sm = softMats(), W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D;
-  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 8, 0.5), sm.tint);
+  const C = ANIMALS.bunny, W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D, E = BUNNY.ear, coat = fur(C.fur);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 8, BUNNY.r), coat);
   body.position.y = H / 2;
   body.castShadow = body.receiveShadow = true;
   g.add(body);
-  if (faced()) for (const [x, z, yaw] of [[0, D / 2, 0], [0, -D / 2, Math.PI], [W / 2, 0, Math.PI / 2], [-W / 2, 0, -Math.PI / 2]] as const) {
-    const f = faceDecal(1.1);
-    f.position.set(x + Math.sin(yaw) * 0.006, H / 2, z + Math.cos(yaw) * 0.006);
-    f.rotation.y = yaw;
-    g.add(f);
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Mesh(new RoundedBoxGeometry(E.w, E.h, E.d, 6, E.r), coat);
+    ear.position.set(s * E.x, H + E.h / 2, 0);
+    ear.castShadow = ear.receiveShadow = true;
+    const inner = decal(new THREE.Mesh(new RoundedBoxGeometry(E.w * 0.5, E.h * 0.68, 0.02, 4, 0.08), fur(C.ear)));
+    inner.position.set(s * E.x, H + E.h * 0.54, E.d / 2 - 0.01 + PAINT);
+    g.add(ear, inner);
   }
-  const button = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 10), st.glow);
-  button.position.y = H - 0.08;
-  g.add(button);
+  const face = new THREE.Group();
+  face.position.z = D / 2;
+  face.add(eye(0.09, -0.42, H * 0.66, -0.015), eye(0.09, 0.42, H * 0.66, -0.015), decal(blob(0.07, 0, H * 0.48, -0.005, fur(C.nose), 1.2, 0.8, 0.5)));
+  const tooth = new THREE.BoxGeometry(0.11, 0.16, 0.02);
+  for (const s of [-1, 1]) {
+    const t = decal(new THREE.Mesh(tooth, fur(C.tooth)));
+    t.position.set(s * 0.065, H * 0.48 - 0.13, -0.005);
+    face.add(t);
+  }
+  g.add(face);
 }
-// Barrier: a cloud, three flattened puffs on two candy-stick legs, with a face on the middle puff.
+// Barrier: a fish on the pod's one stick: a salmon body with a fan tail at local -x, a fin on its back
+// and one each side, an eye each side and cream lips at its nose (local +x), all inside the pod.
 function softBarrier(g: THREE.Group) {
-  const st = STRUCT!, sm = softMats(), W = BARRIER_W, D = BARRIER_D, y0 = BARRIER_LEG;
-  const puffs: [number, number, number][] = [[0, 0.62, 0.78], [-0.7, 0.54, 0.7], [0.7, 0.54, 0.7]];
-  // The puffs in the pillow's tint, the stick and a button on top in the pillar's light colour.
-  for (const [x, r, cy] of puffs) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 36, 20), sm.tint);
-    m.scale.z = (D / 2) / r;
-    m.position.set(x, cy, 0);
+  const F = ANIMALS.fish, fin = fur(F.fin), cy = 0.78;
+  g.add(blob(1, 0.15, cy, 0, fur(F.body), 0.85, 0.5, 0.21));
+  for (const s of [-1, 1]) {
+    const lobe = blob(1, -0.95, cy + s * 0.22, 0, fin, 0.3, 0.17, 0.05);
+    lobe.rotation.z = -s * 0.55;
+    const side = blob(1, 0.1, cy - 0.12, s * 0.22, fin, 0.22, 0.1, 0.03);
+    side.rotation.z = -0.5;
+    g.add(lobe, side, eye(0.08, 0.6, cy + 0.12, s * 0.18, 1, 1.2, 0.6));
+  }
+  g.add(blob(1, 0.05, cy + 0.42, 0, fin, 0.38, 0.2, 0.05), blob(0.1, 0.98, cy - 0.06, 0, fur(F.lip), 0.6, 0.8, 1));
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.2, 20), fin);
+  stick.position.y = (BARRIER_LEG + 0.2) / 2;
+  stick.castShadow = true;
+  g.add(stick);
+}
+// Pillar: a giraffe, a neck in yellow hide with orange spots carrying a ball head with a cream muzzle,
+// two eyes, two round ears and two knob horns, every ball solid as drawn (GIRAFFE). Returns its pose:
+// the neck stretched `e` up (giraffeStretch), the spots spread along it and the head lifted with it.
+function softGiraffe(g: THREE.Group): (e: number) => void {
+  const A = ANIMALS.giraffe, G = GIRAFFE, hide = fur(A.hide), R = PILLAR_R;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(R, R, G.neck, 48), hide);
+  neck.position.y = G.neck / 2;
+  neck.castShadow = neck.receiveShadow = true;
+  g.add(neck);
+  // Spots: flat discs sunk into the neck in staggered rows round it.
+  const spots: THREE.Object3D[] = [];
+  for (let row = 0; row < 4; row++) for (let k = 0; k < 5; k++) {
+    const a = ((k + (row % 2) * 0.5) / 5) * Math.PI * 2, r = 0.13 + ((row + k) % 3) * 0.02;
+    const spot = decal(blob(r, Math.sin(a) * (R - 0.02), 0.35 + row * 0.42, Math.cos(a) * (R - 0.02), fur(A.spot), 1, 1.15, 0.03 / r));
+    spot.rotation.y = a;
+    spot.userData.y = spot.position.y;
+    spots.push(spot);
+    g.add(spot);
+  }
+  const head = new THREE.Group();
+  head.add(blob(G.head, 0, G.headY, 0, hide), blob(G.muzzle.r, 0, G.headY + G.muzzle.y, G.muzzle.z, fur(A.muzzle)));
+  for (const s of [-1, 1]) {
+    head.add(blob(G.ear.r, s * G.ear.x, G.headY + G.ear.y, G.ear.z, hide), blob(G.horn.r, s * G.horn.x, G.headY + G.horn.y, G.horn.z, fur(A.horn)));
+    head.add(eye(0.09, s * 0.3, G.headY + 0.12, 0.5, 1, 1.2, 0.6), eye(0.035, s * 0.1, G.headY + G.muzzle.y + 0.02, G.muzzle.z + G.muzzle.r - 0.02, 1, 1, 0.5));
+  }
+  g.add(head);
+  return (e) => {
+    const k = (G.neck + e) / G.neck;
+    neck.scale.y = k;
+    neck.position.y = (G.neck * k) / 2;
+    for (const spot of spots) spot.position.y = (spot.userData.y as number) * k;
+    head.position.y = e;
+  };
+}
+// Barrel: an owl, the pill in tan with a cream face and belly wrapped round its front (curved panels,
+// since a flat disc sinks into the pill's curve), a dark wing down each side, two big eyes and an
+// orange beak, and a tuft ball sunk into each side of its cap (solid, carried with the pill).
+function softPill(g: THREE.Group, r: number, h: number) {
+  const A = ANIMALS.owl;
+  const cap = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.98, Math.max(0.01, h - 2 * r), 8, 32), fur(A.feather));
+  cap.castShadow = cap.receiveShadow = true;
+  g.add(cap);
+  // A curved panel round the front, `half` radians each way from +z, from y0 to y1.
+  const panel = (half: number, y0: number, y1: number, mat: THREE.Material) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT, r + PAINT, y1 - y0, 24, 1, true, -half, 2 * half), mat);
+    m.position.y = (y0 + y1) / 2;
+    g.add(m);
+  };
+  panel(0.8, h * 0.08, h * 0.34, fur(A.belly));
+  panel(0.55, -h * 0.4, h * 0.02, fur(A.belly));
+  // A flat disc on the pill's side at angle `a` round from +z, standing `poke` proud at its middle.
+  const on = (a: number, y: number, rr: number, mat: THREE.Material, sx: number, sy: number, poke = 0.012) => {
+    const m = flat(rr, Math.sin(a) * (r - 0.025 + poke), y, Math.cos(a) * (r - 0.025 + poke), mat, sx, sy);
+    m.rotation.y = a;
+    return m;
+  };
+  for (const s of [-1, 1]) g.add(on(s * Math.PI / 2, 0.02, 0.1, fur(A.wing), 1.1, 2.6), on(s * 0.42, h * 0.21, 0.1, fur(ANIMALS.eye), 1, 1.1, 0.035));
+  g.add(on(0, h * 0.09, 0.06, fur(A.beak), 0.8, 1.2, 0.04));
+  for (const b of pieceBalls({ type: "barrel", x: 0, y: 0, z: 0, r, h, rot: 0 } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(A.feather)));
+  g.add(pushMark(h / 2 + 0.45));
+}
+// Cube: a chick, the cube in pale yellow with a wing on each side, an orange beak and two eyes on
+// its front with a blush dot under each. Hanging from a gate or pushed about alike.
+function softSugar(g: THREE.Group, C: number) {
+  const A = ANIMALS.chick;
+  const m = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 8, C * 0.3), fur(A.down));
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  for (const s of [-1, 1]) {
+    const wing = flat(C * 0.16, s * (C / 2 - 0.02), -C * 0.05, -C * 0.05, fur(A.wing), 1, 1.5);
+    wing.rotation.y = Math.PI / 2;
+    g.add(wing, eye(C * 0.07, s * C * 0.2, C * 0.12, C / 2 - 0.015), flat(C * 0.05, s * C * 0.3, -C * 0.03, C / 2 - 0.02, fur(A.blush), 1, 0.7));
+  }
+  g.add(blob(C * 0.09, 0, -C * 0.02, C / 2 - 0.01, fur(A.beak), 0.9, 0.6, 0.6), pushMark(C / 2 + 0.35));
+}
+
+// Plank: a butterfly on both faces of the panel: two orange wings a side with a lemon spot on the upper
+// and an ink dot on the lower, an ink body down the middle with a head and two antennae.
+function softButterfly(panel: THREE.Group, w: number, h: number): void {
+  const A = ANIMALS.butterfly, ink = fur(ANIMALS.eye);
+  for (const side of [1, -1]) {
+    const z = side * (PLANK_T / 2 - 0.02), at = (m: THREE.Mesh) => { m.position.z = z; panel.add(m); };
+    for (const s of [-1, 1]) {
+      at(flat(1, s * w * 0.26, h * 0.14, 0, fur(A.wing), w * 0.24, h * 0.27));
+      at(flat(1, s * w * 0.22, -h * 0.2, 0, fur(A.wing), w * 0.19, h * 0.2));
+      at(flat(h * 0.06, s * w * 0.28, h * 0.17, 0, fur(A.spot)));
+      at(flat(h * 0.03, s * w * 0.24, -h * 0.22, 0, ink));
+      const feeler = new THREE.Mesh(new THREE.BoxGeometry(0.03, h * 0.14, 0.05), ink);
+      feeler.position.set(s * w * 0.06, h * 0.47, z);
+      feeler.rotation.z = -s * 0.5;
+      panel.add(feeler);
+    }
+    at(flat(1, 0, -h * 0.02, 0, ink, w * 0.05, h * 0.4));
+    at(flat(w * 0.07, 0, h * 0.4, 0, ink));
+  }
+}
+// Board: a flounder lying on the floor, seen from above: two eyes together near its +z end, a mouth
+// at the tip, dark spots down its back and a darker fin along each long edge.
+function softFlounder(board: THREE.Group, w: number, d: number, t: number): void {
+  const A = ANIMALS.flounder, y = t / 2 - 0.02, ink = fur(ANIMALS.eye), spot = fur(A.spot);
+  for (const s of [-1, 1]) {
+    board.add(flatTop(0.09, s * 0.2, y, d / 2 - 0.9, ink, 1, 1.2));
+    board.add(flatTop(1, s * (w / 2 - 0.16), y, 0, spot, 0.1, Math.max(0.3, d / 2 - 0.7)));
+  }
+  board.add(flatTop(1, 0, y, d / 2 - 0.42, ink, 0.14, 0.03));
+  for (const [u, v, r] of [[-0.3, -0.05, 0.16], [0.3, -0.25, 0.13], [-0.1, -0.5, 0.18], [0.3, -0.75, 0.11], [-0.25, -0.9, 0.09], [0.05, 0.3, 0.12]] as const) board.add(flatTop(r, u * (w / 2 - 0.5), y, v * (d / 2 - 0.5), spot));
+}
+// Seesaw: a crocodile, seen from above: two eyes and two nostrils toward its +z end, a row of dark
+// scutes down its back and a row of white teeth along each edge beside its jaw.
+function softCrocodile(board: THREE.Group, w: number, d: number, t: number): void {
+  const A = ANIMALS.crocodile, y = t / 2 - 0.02, ink = fur(ANIMALS.eye), scute = fur(A.scute), tooth = fur(A.tooth);
+  for (const s of [-1, 1]) {
+    board.add(flatTop(0.11, s * 0.45, y, d / 2 - 0.9, ink, 1, 1.1), flatTop(0.04, s * 0.14, y, d / 2 - 0.25, ink));
+    for (let z = d / 2 - 1.5; z < d / 2 - 0.3; z += 0.3) board.add(flatTop(0.06, s * (w / 2 - 0.12), y, z, tooth, 0.7, 1));
+  }
+  for (let z = d / 2 - 1.6; z > -d / 2 + 0.3; z -= 0.45) board.add(flatTop(0.1, 0, y, z, scute, 1, 0.8), flatTop(0.07, -0.4, y, z - 0.2, scute, 1, 0.8), flatTop(0.07, 0.4, y, z - 0.2, scute, 1, 0.8));
+}
+// Column: a penguin, a navy cylinder rounded at the top with a cream belly down its front, a darker
+// flipper down each side, two eyes near the top and an orange beak (solid as drawn).
+function softPenguin(g: THREE.Group, h: number): void {
+  const A = ANIMALS.penguin, R = COLUMN_R, coat = fur(A.coat), dome = Math.min(0.25, h * 0.2);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h - dome, 48), coat);
+  body.position.y = (h - dome) / 2;
+  body.castShadow = body.receiveShadow = true;
+  g.add(body, blob(R, 0, h - dome, 0, coat, 1, dome / R, 1));
+  const bh = Math.max(0.2, h - 1.3), belly = new THREE.Mesh(new THREE.CylinderGeometry(R + PAINT, R + PAINT, bh, 32, 1, true, -0.95, 1.9), fur(A.belly));
+  belly.position.y = 0.35 + bh / 2;
+  g.add(belly);
+  for (const s of [-1, 1]) {
+    const flipper = flat(0.14, s * (R - 0.015), h * 0.5, 0.05, fur(A.flipper), 1, Math.max(1, (h * 0.3) / 0.14));
+    flipper.rotation.y = s * Math.PI / 2;
+    g.add(flipper, eye(0.1, s * 0.22, h - 0.28, 0.77, 1, 1.2, 0.5));
+  }
+  for (const b of pieceBalls({ type: "column", x: 0, y: 0, z: 0, h } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(A.beak)));
+}
+// Support: a whale in place of the pillars (whaleParts, solid as drawn): the body and flukes as rounded
+// boxes in blue, a face on its head end (local +x: two eyes and a blush dot each side), a cream
+// belly and a flipper on its outward side, and its spout a column of water, bulging in waves up its
+// height inside its collider with two white streaks, to a white splash under the platform, droplets
+// round it and rising beside it.
+function softWhale(g: THREE.Group, p: Piece & { type: "support" }): void {
+  const A = ANIMALS.whale, skin = fur(A.skin), parts = whaleParts(p), body = parts.boxes[0]!, zf = body.z + body.d / 2, xf = body.x + body.w / 2;
+  for (const b of parts.boxes) {
+    const m = new THREE.Mesh(new RoundedBoxGeometry(b.w, b.h, b.d, 6, b.r ?? 0), skin);
+    m.position.set(b.x, b.y, b.z);
     m.castShadow = m.receiveShadow = true;
     g.add(m);
   }
-  if (faced()) { const f = faceDecal(0.8); f.position.set(0, 0.8, D / 2 - 0.02); g.add(f); }
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 20), st.glow);
-  stick.position.y = 0.45;
-  stick.castShadow = true;
-  const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.glow);
-  button.position.y = BARRIER_H - 0.03;
-  g.add(stick, button);
-  void W; void y0;
-}
-// Barrel: a pill capsule, white below and tinted above, with a light ring round its middle.
-function softPill(g: THREE.Group, r: number, h: number) {
-  const st = STRUCT!, sm = softMats();
-  const cap = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.98, Math.max(0.01, h - 2 * r), 8, 32), [st.body, sm.tint]);
-  const geo = cap.geometry, pos = geo.getAttribute("position");
-  geo.clearGroups();
-  // Split the capsule's triangles into two material groups by height.
-  const idx = geo.getIndex()!, lower: number[] = [], upper: number[] = [];
-  for (let i = 0; i < idx.count; i += 3) {
-    const y = (pos.getY(idx.getX(i)) + pos.getY(idx.getX(i + 1)) + pos.getY(idx.getX(i + 2))) / 3;
-    (y < 0 ? lower : upper).push(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+  const [spout, splash] = parts.cylinders as [Cylinder, Cylinder], sy = spout.y0 ?? 0;
+  const prof: [number, number][] = [[0, sy]];
+  for (let k = 0; k <= 32; k++) { const t = k / 32, y = sy + t * spout.h; prof.push([spout.r - 0.045 + 0.04 * Math.sin((y * Math.PI * 2) / 0.8 + 1) * Math.min(1, 6 * t * (1 - t) + 0.2), y]); }
+  prof.push([0, sy + spout.h]);
+  const wave = revolveMesh(prof, 32), geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(wave.positions, 3));
+  geo.setIndex(wave.indices);
+  geo.computeVertexNormals();
+  const column = new THREE.Mesh(geo, fur(A.water));
+  column.position.set(spout.x ?? 0, 0, spout.z ?? 0);
+  column.castShadow = true;
+  g.add(column);
+  for (const a of [0.7, -2.2]) {
+    const streak = flat(0.05, Math.sin(a) * (spout.r - 0.065), sy + spout.h * (a > 0 ? 0.55 : 0.4), (spout.z ?? 0) + Math.cos(a) * (spout.r - 0.065), fur(A.splash), 1, Math.max(1, (spout.h * 0.3) / 0.05));
+    streak.rotation.y = a;
+    g.add(streak);
   }
-  geo.setIndex([...lower, ...upper]);
-  geo.addGroup(0, lower.length, 0);
-  geo.addGroup(lower.length, upper.length, 1);
-  cap.castShadow = cap.receiveShadow = true;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.98, 0.035, 10, 48), st.glow);
-  ring.rotation.x = Math.PI / 2;
-  g.add(cap, ring);
-  if (faced()) { const f = faceDecal(r * 1.3); f.position.set(0, -h * 0.12, r + 0.004); g.add(f); }
-}
-// Cube: a sugar cube, a soft rounded block with a pip in the glow colour on each face.
-function softSugar(g: THREE.Group, C: number) {
-  const st = STRUCT!, sm = softMats();
-  const m = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 8, C * 0.3), st.body);
-  m.castShadow = m.receiveShadow = true;
-  g.add(m);
-  const pip = new THREE.SphereGeometry(C * 0.1, 16, 10);
-  for (const [x, y, z] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
-    const d = new THREE.Mesh(pip, y ? st.plankGlow : sm.glaze);
-    d.position.set(x * C * 0.46, y * C * 0.46, z * C * 0.46);
-    g.add(d);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(splash.r, splash.r * 0.8, splash.h, 32), fur(A.splash));
+  top.position.set(splash.x ?? 0, (splash.y0 ?? 0) + splash.h / 2, splash.z ?? 0);
+  top.castShadow = true;
+  g.add(top);
+  for (const b of parts.balls) g.add(blob(b.r, b.x, b.y, b.z, fur(A.splash)));
+  g.add(flat(1, -0.1, body.y - body.h * 0.22, zf - 0.02, fur(A.belly), body.w * 0.4, body.h * 0.26));
+  const fin = flat(0.2, body.w * 0.12, body.y - body.h * 0.12, zf - 0.02, fur(A.fin), 1.6, 0.8);
+  fin.rotation.z = -0.4;
+  g.add(fin);
+  // The face, on the head end.
+  for (const s of [-1, 1]) {
+    const e = blob(0.1, xf - 0.015, body.y + 0.2, body.z + s * 0.26, fur(ANIMALS.eye), 0.5, 1.2, 1);
+    e.userData.noShadow = true;
+    const blush = flat(0.06, xf - 0.02, body.y + 0.02, body.z + s * 0.45, fur(ANIMALS.chick.blush), 1.2, 1);
+    blush.rotation.y = Math.PI / 2;
+    g.add(e, blush);
   }
 }
 
+// A pushable animal's marker: a small green dome hovering over it, so a player knows it moves.
+function pushMark(y: number): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), PUSH_MAT);
+  m.position.y = y;
+  return m;
+}
+const PUSH_MAT = new THREE.MeshStandardMaterial({ color: ANIMALS.push, emissive: ANIMALS.push, emissiveIntensity: 0.35, roughness: 0.5 });
+
+// Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until
 // none stands more than PAINT proud, so they read as paint and the body's collider is all there is.
 function paint(face: THREE.Object3D, axis: "y" | "z"): void {
@@ -1605,6 +1966,22 @@ export interface SceneEnv {
 // Distance haze: squared-exponential, so what is near stays clear and only the far reaches fade
 // (in play, a tenth hazed 45 out and over a third 90 out). The editor's is lighter, to see across its whole grid.
 export const FOG_PLAY = 0.0075, FOG_EDITOR = 0.0018;
+// Shadow look, patched into three's shaders (docs/platforms.md "Shadows"): a fixed 4x4 PCF instead of
+// three's per-pixel noisy one, and no shadow test on faces turned from the sun.
+function patchChunk(name: "shadowmap_pars_fragment" | "lights_fragment_begin", from: RegExp, to: string) {
+  const src = THREE.ShaderChunk[name];
+  if (!from.test(src)) throw new Error(`three's ${name} changed; redo the shadow patch`);
+  THREE.ShaderChunk[name] = src.replace(from, to);
+}
+patchChunk("shadowmap_pars_fragment", /float phi = interleavedGradientNoise[\s\S]*?\) \* 0\.2;/,
+  `shadow = 0.0;
+				for ( int sy = 0; sy < 4; sy ++ ) for ( int sx = 0; sx < 4; sx ++ ) {
+					shadow += texture( shadowMap, vec3( shadowCoord.xy + ( vec2( sx, sy ) - 1.5 ) * radius, shadowCoord.z ) );
+				}
+				shadow /= 16.0;`);
+patchChunk("lights_fragment_begin", /\( directLight\.visible && receiveShadow \) \? getShadow\( directionalShadowMap/,
+  "( directLight.visible && receiveShadow && dot( geometryNormal, directLight.direction ) > 0.0 ) ? getShadow( directionalShadowMap");
+
 // The sky light and the shadow-casting sun, shared by play, the editor and the thumbnails; point the
 // sun's shadow at a level with fitSun.
 export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
@@ -1645,6 +2022,7 @@ export function createScene(fog = FOG_PLAY * ENV.fog): SceneEnv {
     (sky.material as THREE.ShaderMaterial).uniforms.time!.value = t;
     ocean.position.set(camera.position.x, OCEAN_Y, camera.position.z);
     (ocean.material as THREE.ShaderMaterial).uniforms.time!.value = t;
+    PORTAL_TIME.value = t;
   };
   const setDetail = (full: boolean) => {
     (sky.material as THREE.ShaderMaterial).uniforms.detail!.value = full ? 1 : 0;
@@ -2031,6 +2409,10 @@ export interface Built {
   bridges: Map<number, THREE.Group[]>;
   // The moving part of each knock-down plank, seesaw and stool, local to the piece group, posed from its body.
   planks: Map<number, THREE.Group>;
+  // Each pangolin's pose: bends it to `a` unrolled (pangolinLine).
+  pangolins: Map<number, (a: number) => void>;
+  // Each giraffe's pose: its neck stretched `e` up (giraffeStretch).
+  giraffes: Map<number, (e: number) => void>;
   // Each moving platform's piece group, placed by its schedule every frame in play.
   movers: Map<number, THREE.Group>;
   // Every treadmill rod, local to its piece group, with its z and radius (turnBelts).
@@ -2047,7 +2429,7 @@ export function posePlank(piece: THREE.Group, plank: THREE.Group, t: { x: number
 }
 
 // Points the sun's shadow at the whole level, so every piece casts its shadow however far it is
-// from the camera: the shadow box is the level's bounds (the goal's beam aside) plus room for
+// from the camera: the shadow box is the level's bounds (shader effects aside) plus room for
 // moving platforms to travel. Level pieces stay put, so this is done once per build.
 // The shadow's depth offset in world units. bias is a share of the shadow camera's depth, so it is set
 // from this whenever that depth changes: a fixed share grows with the level and lifts contact shadows off the floor.
@@ -2077,6 +2459,8 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
   const crates = new Map<number, THREE.Group>();
   const bridges = new Map<number, THREE.Group[]>();
   const planks = new Map<number, THREE.Group>();
+  const pangolins = new Map<number, (a: number) => void>();
+  const giraffes = new Map<number, (e: number) => void>();
   const movers = new Map<number, THREE.Group>();
   const beltRodMeshes: Built["beltRods"] = [];
   let goal: Built["goal"] = null;
@@ -2091,7 +2475,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (reuse && was !== undefined) {
       const g = reuse.pieceGroups[was]!;
       g.userData.pieceIndex = index;
-      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
+      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.pangolins, pangolins], [reuse.giraffes, giraffes], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
         if (from.has(was)) to.set(index, from.get(was));
       }
       for (const r of reuse.beltRods) { let o: THREE.Object3D | null = r.mesh; while (o && o !== g) o = o.parent; if (o) beltRodMeshes.push(r); }
@@ -2112,7 +2496,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g);
     if (p.type === "barrier") buildBarrier(g);
-    if (p.type === "pillar") buildPillar(g);
+    if (p.type === "pillar") { const pose = buildPillar(g); if (pose) giraffes.set(index, pose); }
     if (p.type === "bumper") buildBumper(g);
     if (p.type === "magnet") buildMagnet(g);
     if (p.type === "column") buildColumn(g, p.h);
@@ -2123,6 +2507,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p, editor));
     if (p.type === "board") planks.set(index, buildBoard(g, p));
+    if (p.type === "pangolin") { const pose = buildPangolin(g, p, editor); pose(pangolinRest(p)); pangolins.set(index, pose); }
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
     if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
@@ -2197,7 +2582,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     pieceGroups.push(g);
   });
 
-  // Everything solid casts and takes shadows; glows, the beam, holograms and editor guides don't.
+  // Everything solid casts and takes shadows; glows, the portal, holograms and editor guides don't.
   group.traverse((o) => {
     if (!(o instanceof THREE.Mesh) || o.userData.noShadow) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -2209,7 +2594,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
   for (const g of reuse?.pieceGroups ?? []) {
     if (!kept.has(g)) g.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
   }
-  return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, beltRods: beltRodMeshes, goal };
+  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, giraffes, movers, beltRods: beltRodMeshes, goal };
 }
 
 // Cel shading: every standard material becomes a toon material with the same maps and glow, lit
@@ -2247,13 +2632,14 @@ export function stylize(root: THREE.Object3D): void {
       // Cel-lit bodies take no shadows: on a curved body the shadow map's terminator breaks the flat
       // bands into jagged steps. Floors, planks and blocks (anything wearing the floor texture) keep
       // them, so drop shadows stay.
-      const floorLike = mats.some((m) => m instanceof THREE.MeshStandardMaterial && m.map !== null && m.map === MAT!.platform.map);
+      const floorLike = mats.some((m) => m instanceof THREE.MeshStandardMaterial && m.map !== null && (m.map === MAT!.platform.map || m.map === MAT!.block.map));
       if (!floorLike) o.receiveShadow = false;
       o.material = Array.isArray(o.material) ? o.material.map(toonOf) : toonOf(o.material);
     }
     if (ENV.outline > 0 && solid && !o.userData.noShadow) {
       OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor);
-      const geo = o.geometry.clone();
+      // A live mesh is bent every frame, so its outline shares its geometry.
+      const geo = o.userData.live ? o.geometry : o.geometry.clone();
       geo.clearGroups();
       const hull = new THREE.Mesh(geo, OUTLINE_MAT);
       hull.userData.outline = true;

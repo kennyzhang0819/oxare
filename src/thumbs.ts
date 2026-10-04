@@ -28,7 +28,6 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
     const built = buildLevel({ id: "thumb", name: "thumb", pieces: [piece] }, !["bean", "stool", "sliding kicker"].includes(type));
     scene.add(built.group);
     const box = new THREE.Box3().setFromObject(built.group);
-    if (type === "goal") box.max.y = Math.min(box.max.y, 2.5); // frame the disc, not the whole beam
     if (type === "magnet") { const r = Math.max(...magnetProfile().flat().map((v) => v[0])); box.min.x = box.min.z = -r; box.max.x = box.max.z = r; } // frame the body, not its aura
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(0.8, box.getSize(new THREE.Vector3()).length() / 2);
@@ -106,7 +105,7 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   } else {
     const i = FEATURED.reduce((found, type) => found >= 0 ? found : level.pieces.findIndex((p) => p.type === type), -1);
     const box = new THREE.Box3().setFromObject(i >= 0 ? built.pieceGroups[i]! : built.group);
-    box.max.y = Math.min(box.max.y, box.min.y + 6); // a goal's light beam would otherwise set the framing
+    box.max.y = Math.min(box.max.y, box.min.y + 6); // a tall piece would otherwise set the framing
     center = box.getCenter(new THREE.Vector3());
     radius = Math.max(3.5, box.getSize(new THREE.Vector3()).length() / 2);
   }

@@ -32,6 +32,11 @@ export const TUNING = {
   magnetFalloff: 2,
   // Treadmill: how fast its rods' tops run, and so how fast a ball left on it rides along.
   beltSpeed: 3,
+  // Pangolin: units per second it unrolls at, on average; it eases in and out, so its top speed is about 1.5 times this.
+  unrollSpeed: 3.5,
+  // Giraffe: how far its neck stretches up when the ball bumps it, and the seconds until it is back down.
+  giraffeGrow: 1.2,
+  giraffeTime: 1.6,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -59,6 +64,9 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   magnetHold: [0, 0.9, 0.05],
   magnetFalloff: [1, 4, 0.25],
   beltSpeed: [0, 25, 0.5],
+  unrollSpeed: [0.5, 12, 0.25],
+  giraffeGrow: [0, 1.9, 0.1],
+  giraffeTime: [0.4, 5, 0.1],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

@@ -22,6 +22,30 @@ export const BARRIER_W = 2.5, BARRIER_H = 1.4, BARRIER_D = 0.5;
 export const BARRIER_LEG = 0.16, BARRIER_R = 0.2, BARRIER_LEG_R = 0.12, BARRIER_LEG_X = BARRIER_W / 2 - 0.85;
 // Corner rounding of a block and a blockade, drawn and solid alike.
 export const BLOCK_R = 0.3, BLOCKADE_R = 0.18;
+// The soft look's props are animals (scene.ts), and what stands out of the lab prop's solid is laid
+// out here so the physics builds it too. The blockade is a bunny, rounded BUNNY.r with a tall
+// rounded-box ear on each top corner. The barrier is a fish on one stick. The pillar is a giraffe: a neck GIRAFFE.neck tall carrying a ball head with a
+// muzzle, two round ears and two knob horns, in place of the lab pillar's collar and dome (pieceBalls).
+// A fence is a snake with its head on the surface at its first end (snakeHead).
+export const softProps = (): boolean => ENV.props === "soft";
+export const BUNNY = { r: 0.3, ear: { w: 0.42, h: 0.9, d: 0.32, x: 0.55, r: 0.14 } };
+// The kicker is a turtle: a head out of its high wall (local -z), TURTLE.head.y of its height up, and
+// a foot at each side corner. The bumper a ladybug: a head at +z. The magnet an octopus: OCTOPUS.arm.n
+// arm stubs round its foot. All balls, in pieceBalls. The jump pad is a frog, but the ball crosses a
+// pad anywhere, so its eyes are flat on its top, FROG.eye.r round and FROG.eye.in from its +z corners.
+export const TURTLE = { head: { r: 0.26, out: 0.12, y: 0.45 }, foot: { r: 0.14, y: 0.12 } };
+export const FROG = { eye: { r: 0.2, in: 0.4 } };
+export const LADYBUG = { head: { r: 0.3, y: 0.3, z: 0.95 } };
+export const OCTOPUS = { arm: { r: 0.2, at: 0.95, y: 0.15, n: 8 } };
+// The movables' parts that stand out of their bodies, relative to the body's centre and carried with
+// it: the pig's (stool's) ears on top, the cow's (crate's) ears out of its sides and horns on top, the
+// owl's (barrel's) tufts sunk into its cap. The
+// penguin's (column's) beak stands out of its front near the top.
+export const PIG = { ear: { r: 0.14, in: 0.3, up: 0.06 } };
+export const COW = { ear: { r: 0.15, out: 0.02, down: 0.18, back: 0.35 }, horn: { r: 0.09, x: 0.3, up: 0.1, back: 0.45 } };
+export const OWL = { tuft: { r: 0.1, x: 0.24, up: -0.08 } };
+export const PENGUIN = { beak: { r: 0.12, down: 0.45 } };
+export const GIRAFFE = { head: 0.6, headY: PILLAR_H - 0.6, neck: PILLAR_H - 0.6, muzzle: { r: 0.3, y: -0.22, z: 0.42 }, ear: { r: 0.14, x: 0.6, y: 0.22, z: -0.05 }, horn: { r: 0.1, x: 0.24, y: 0.58, z: -0.05 } };
 export const CRATE_W = 2, CRATE_H = 1.2, CRATE_D = 2;
 // Cube: the gate's cube as a pushable prop of its own, the ball's size on a side, rounded by propRound.
 export const CUBE_S = 2 * BALL_RADIUS;
@@ -81,8 +105,9 @@ export function jumpHull(p: Piece & { type: "jump" }, round?: number): { corners
   const top = (r * (JUMP_RUN - len)) / JUMP_H, toe = (JUMP_RUN * (JUMP_H + KICKER_SINK) - r * (len + JUMP_RUN)) / JUMP_H;
   return { corners: [...ring(toe, r - KICKER_SINK), ...ring(top, JUMP_H - r)], r };
 }
-// The goal beam: touching it anywhere up to this height wins.
-export const GOAL_BEAM_H = 20;
+// The goal portal takes the ball once its centre is within GOAL_PULL of the disc's centre and no
+// more than GOAL_REACH above the disc's top, so a ball hopping over the rim still counts.
+export const GOAL_PULL = 0.75, GOAL_REACH = 1;
 // Every goal pad is this radius; a level's own `r` is ignored.
 export const GOAL_R = 1;
 // The start pad: a low disc like a nest, its centre carved into a shallow bowl the ball spawns in.
@@ -226,6 +251,74 @@ export function boardLift(p: Piece & { type: "board" }): number {
 }
 // A seesaw's start angle, held inside its range.
 export const seesawTilt = (p: Piece & { type: "seesaw" }): number => { const [lo, hi] = seesawRange(p); return Math.max(lo, Math.min(hi, p.tilt)); };
+// Pangolin: a body `w` wide and `d` long. It waits with its head lying flat at local +z and the rest
+// curled up behind it, until something touches it; then it unrolls toward local -z like a carpet and
+// stays down, a bridge across the gap. Laid out, its belly is on y, its snout at z = d/2 and its tail
+// tip at -d/2; both ends thin to a ramp. The body's line is its belly, s along it from the snout; the
+// coil is a spiral with the back inside, PANGOLIN_COIL between wraps and PANGOLIN_CORE across its
+// innermost one, so the head's top just clears the wrap above it (docs/animals.md).
+export type Pangolin = Piece & { type: "pangolin" };
+export const PANGOLIN_T = 0.25, PANGOLIN_COIL = 0.28, PANGOLIN_CORE = 0.3, PANGOLIN_SEG = 0.25, PANGOLIN_MIN_D = 4;
+// Each end's ramp is long enough that a ball at full speed stays on it over the crest (speed squared
+// times the crest's bend under gravity), rather than being thrown, and thins almost to an edge, since
+// even a small step at the tip kicks a fast ball up.
+export const pangolinEnds = (p: Pangolin) => ({ head: Math.min(2.4, p.d * 0.3), tail: Math.min(2.4, p.d * 0.3) });
+// How much lies flat while it waits: the head, out from under the coil.
+export const pangolinRest = (p: Pangolin): number => Math.min(2.3, p.d * 0.3);
+// Width and thickness at s: full in the middle, easing down to a thin point at the snout and tail tip.
+// Both are concave in s, so the laid-out body is convex.
+export function pangolinSize(p: Pangolin, s: number): { w: number; t: number } {
+  const e = pangolinEnds(p), ease = (u: number) => (u >= 1 ? 1 : u <= 0 ? 0 : 1 - (1 - u) ** 2);
+  const f = Math.min(ease(s / e.head), ease((p.d - s) / e.tail));
+  return { w: p.w * (0.3 + 0.7 * f), t: PANGOLIN_T * (0.03 + 0.97 * f) };
+}
+// Thickness's rate of change along s, for laying paint on the sloping ends.
+export const pangolinSlope = (p: Pangolin, s: number): number => (pangolinSize(p, s + 1e-3).t - pangolinSize(p, s - 1e-3).t) / 2e-3;
+// Cross-section at s: a rounded rectangle across x and up its thickness t, as [x, t, nx, nt] round it.
+export function pangolinRing(p: Pangolin, s: number): [number, number, number, number][] {
+  const { w, t } = pangolinSize(p, s), r = Math.min(0.1, 0.45 * t), K = 3, out: [number, number, number, number][] = [];
+  const corners: [number, number, number][] = [[w / 2 - r, r, -Math.PI / 2], [w / 2 - r, t - r, 0], [-(w / 2 - r), t - r, Math.PI / 2], [-(w / 2 - r), r, Math.PI]];
+  for (const [cx, ct, a0] of corners) for (let k = 0; k <= K; k++) {
+    const a = a0 + (k / K) * (Math.PI / 2);
+    out.push([cx + r * Math.cos(a), ct + r * Math.sin(a), Math.cos(a), Math.sin(a)]);
+  }
+  return out;
+}
+// Where the physics cuts the body into slices: PANGOLIN_SEG apart or a little less, tail tip to snout.
+export function pangolinCuts(p: Pangolin): number[] {
+  const n = Math.max(1, Math.ceil(p.d / PANGOLIN_SEG - 1e-9));
+  return Array.from({ length: n + 1 }, (_, k) => (k * p.d) / n);
+}
+// How far a giraffe's neck is stretched `elapsed` seconds after the ball bumped it: up fast, held, then
+// eased back down, back to rest after `time`. `grow` must stay under GIRAFFE.neck (the sim's two necks overlap).
+export function giraffeStretch(elapsed: number, grow: number, time: number): number {
+  const u = elapsed / time;
+  if (!(u > 0 && u < 1)) return 0;
+  if (u < 0.2) return grow * Math.sin((Math.PI / 2) * (u / 0.2));
+  if (u < 0.5) return grow;
+  return (grow * (1 + Math.cos(Math.PI * ((u - 0.5) / 0.5)))) / 2;
+}
+// How much of it lies unrolled `elapsed` seconds after it was touched, at `speed` on average: eased in
+// and out, so it sets off and lands without a jolt.
+export function pangolinUnrolled(p: Pangolin, elapsed: number, speed: number): number {
+  const a0 = pangolinRest(p), u = Math.max(0, Math.min(1, (elapsed * speed) / (p.d - a0)));
+  return a0 + ((p.d - a0) * (1 - Math.cos(Math.PI * u))) / 2;
+}
+// The belly line with `a` unrolled, at each s in `ss` (ascending): its point (z, y) and the angle `phi`
+// it has turned up through. Laid out up to a, then the coil: its bend at s depends only on how far s is
+// from the snout, so the coil rolls along as one shape, shedding its outer wrap.
+export function pangolinLine(p: Pangolin, a: number, ss: readonly number[]): { z: number; y: number; phi: number }[] {
+  const L = p.d, C = PANGOLIN_COIL, rad = (s: number) => Math.sqrt(PANGOLIN_CORE ** 2 + (C * Math.max(0, L - s)) / Math.PI);
+  const turn = (s: number) => ((2 * Math.PI) / C) * (rad(0) - rad(s)), ta = turn(a);
+  let z = L / 2 - a, y = 0, at = a;
+  return ss.map((s) => {
+    if (s <= a) return { z: L / 2 - s, y: 0, phi: 0 };
+    const n = Math.max(1, Math.ceil((s - at) / 0.01)), h = (s - at) / n;
+    for (let k = 0; k < n; k++) { const f = turn(at + (k + 0.5) * h) - ta; z -= Math.cos(f) * h; y += Math.sin(f) * h; }
+    at = s;
+    return { z, y, phi: turn(s) - ta };
+  });
+}
 // Support: three pillars standing against a platform's side wall, carrying a platform `h` layers
 // above. The piece origin is on the lower platform's edge at its top surface; the pillars stand
 // just outside that edge on local +z, from the lower platform's side wall up to the upper one's
@@ -365,6 +458,29 @@ export function pillarEar(s: { ym: number; ph: number }, side: number): V3[] {
   const outline: [number, number][] = [[xi, -eh - 0.11 + r], [xo, -eh + 0.03 + r], [xo, eh - 0.03 - r], [xi, eh + 0.11 - r]];
   return outline.flatMap(([x, y]): V3[] => [[side * x, s.ym + y, z], [side * x, s.ym + y, -z]]);
 }
+// The soft support is a whale in place of the three pillars: its body (a rounded box, head toward
+// local +x, flukes past its tail) floats beside the lower platform's edge with its wall side against
+// the wall and its back WHALE.back above the platform top (high enough that a ball at the edge meets
+// its side square on, not its rounded top edge), and its spout, a column of water, rises
+// from its back to a splash pressed under the upper platform, droplets round it. Laid out unturned;
+// pieceBoxes, pieceCylinders and pieceBalls turn it over for `roll` 180.
+export const WHALE = { back: 0.9, h: 1.5, d: 1.5, r: 0.4, spout: 0.32, splash: { r: 0.65, h: 0.25 }, drop: { r: 0.11, at: 0.8, n: 5 } };
+export function whaleParts(p: Piece & { type: "support" }): { boxes: Box[]; cylinders: Cylinder[]; balls: Ball[] } {
+  const T = PLATFORM_THICKNESS, y1 = p.h * LAYER_H - T, W = WHALE, z = W.d / 2, bw = Math.max(2.4, Math.min(4, p.w - 1));
+  const boxes: Box[] = [
+    { kind: "block", x: 0, y: W.back - W.h / 2, z, w: bw, h: W.h, d: W.d, r: W.r },
+    { kind: "block", x: -(bw / 2 + 0.2), y: W.back - W.h / 2 + 0.15, z, w: 0.6, h: 0.14, d: W.d - 0.1, r: 0.07 },
+  ];
+  const top = Math.max(W.back + 0.2, y1 - W.splash.h), cylinders: Cylinder[] = [
+    { r: W.spout, h: Math.max(0.05, top - (W.back - 0.1)), x: 0, z, y0: W.back - 0.1 },
+    { r: W.splash.r, h: W.splash.h, x: 0, z, y0: top },
+  ];
+  const balls = Array.from({ length: W.drop.n }, (_, k): Ball => { const a = ((k + 0.5) / W.drop.n) * Math.PI * 2; return { r: W.drop.r, x: Math.sin(a) * W.drop.at, y: top - 0.1, z: z + Math.cos(a) * W.drop.at }; });
+  // Droplets rising beside a tall spout.
+  const spout = cylinders[0]!;
+  if (spout.h > 1.2) for (let k = 0; k < 3; k++) balls.push({ r: 0.08, x: (k % 2 ? -1 : 1) * (W.spout + 0.1), y: (spout.y0 ?? 0) + spout.h * (0.25 + 0.25 * k), z: z + 0.12 * (k - 1) });
+  return { boxes, cylinders, balls };
+}
 export function supportEarHulls(p: Piece & { type: "support" }): V3[][] {
   const T = PLATFORM_THICKNESS, over = supportOver(p);
   return supportPillars(p).flatMap((c) => pillarStretches(c.y0, c.y1).flatMap((s) => [-1, 1].map((side) => pillarEar(s, side).map(([x, y, z]): V3 => over ? [-(x + c.x), -T - y, z + c.z] : [x + c.x, y, z + c.z]))));
@@ -458,6 +574,16 @@ export const TUBE_SKIN_SIDES = 20, TUBE_WALL_SIDES = 20;
 // inside it and it coats the end. RING_R is the radius to the ring's axis; RING_SIDES facets round the
 // rail and RING_SEGMENTS round the ring, drawn and solid alike.
 export const RING_T = 0.08, RING_R = TUBE_R + RING_T, RING_SIDES = 16, RING_SEGMENTS = 48;
+// A soft ring is a snake biting its tail: its head, SNAKE_HEAD.r round, sits on the ring's top (the way
+// round the ring nearest straight up, or local +x for a ring lying flat), out past the ring's centre
+// line by just enough that its inner edge is the ring's, so it never narrows the opening, looking
+// along the ring.
+export function ringHead(m: { c: V3; d: V3 }): { c: V3; d: V3 } {
+  const l = Math.hypot(...m.d) || 1, d: V3 = [m.d[0] / l, m.d[1] / l, m.d[2] / l];
+  const want: V3 = Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], k = dot(want, d);
+  const u0 = sub(want, [d[0] * k, d[1] * k, d[2] * k]), ul = Math.hypot(...u0) || 1, u: V3 = [u0[0] / ul, u0[1] / ul, u0[2] / ul];
+  return { c: add(m.c, u, RING_R - RING_T + SNAKE_HEAD.r), d: [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]] };
+}
 // Each mouth ring's centre and axis (the tube's direction there), from the tube's end rings.
 export function mouthRings(rings: TubeRing[]): { c: V3; d: V3 }[] {
   if (rings.length < 2) return [];
@@ -905,6 +1031,7 @@ export type Piece =
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean; base?: number })
   | (At & { type: "seesaw"; w: number; d: number; h: number; rot: number; tilt: number; freeze?: boolean; dips?: "+z" | "-z" })
   | (At & { type: "board"; w: number; d: number; rot: number; tilt: number; roll?: number; freeze?: boolean })
+  | (At & { type: "pangolin"; w: number; d: number; rot: number })
   | (At & { type: "support"; w: number; h: number; rot: number; roll?: number; reach?: number })
   | (At & { type: "gate"; w: number; d: number; h: number; rot: number })
   | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number; roll?: number; tilt?: number; track?: number; offset?: number; top?: number })
@@ -930,7 +1057,7 @@ export type Piece =
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "goal", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "gate", "kicker", "jump", "hole", "blockade", "barrier", "pillar", "column", "bumper", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "goal", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "long kicker", base: "kicker", make: (x, y, z) => ({ type: "kicker", x, y, z, w: KICKER_W, d: KICKER_D, h: 1.5, flat: 6, rot: 0 }) },
@@ -1162,6 +1289,20 @@ export function fenceRings(p: { path: TubeNode[]; smooth?: true }): TubeRing[] {
   return tubeRings({ path }, 0).map((q) => ({ ...q, c: add(q.c, foot) }));
 }
 
+// A soft fence is a snake: its head, SNAKE_HEAD.r round, rests on the surface (sunk SNAKE_HEAD.sink)
+// at the fence's first end, its centre SNAKE_HEAD.out back along the fence's own line past the rail's
+// drop, facing `d`, away from the fence. In the piece's frame like fenceRings.
+export const SNAKE_HEAD = { r: 0.2, out: 0.1, sink: 0.03 };
+export function snakeHead(p: FencePiece): { c: V3; d: V3 } | null {
+  const top = tubeNodes(p, FENCE_RAIL_Y), first = top[0], mid = p.path[0]?.mid;
+  const next: V3 | undefined = !p.smooth && mid ? [mid.x, 0, mid.z] : top[1];
+  if (!first || !next) return null;
+  const f = Math.hypot(next[0] - first[0], next[2] - first[2]);
+  if (f < 1e-6) return null;
+  const d: V3 = [(first[0] - next[0]) / f, 0, (first[2] - next[2]) / f];
+  return { c: [first[0] + d[0] * SNAKE_HEAD.out, first[1] - FENCE_RAIL_Y + SNAKE_HEAD.r - SNAKE_HEAD.sink, first[2] + d[2] * SNAKE_HEAD.out], d };
+}
+
 // A fence piece along the whole of one side of platform `p` (a key from fenceSides).
 export const platformFence = (p: Platform, key: string): Piece[] => legacyFences(p, { [key]: true });
 
@@ -1289,12 +1430,12 @@ export function respawnY(level: Level): number {
   }
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
 }
-// The worlds levels are grouped into, a tab each in the level select; a level without `world` is in the first.
-// `tag` prefixes a level's number in the menus: C1, C2 in Classic, N1, N2 in Neo, W1, W2 in Workshop (community levels).
-export const WORLDS = [{ id: "classic", name: "Classic", tag: "C" }, { id: "neo", name: "Neo", tag: "N" }, { id: "workshop", name: "Workshop", tag: "W" }] as const;
+// The worlds levels are grouped into, a tab each in the level select; a level without `world` is in Archive.
+// `tag` prefixes a level's number in the menus: B1, B2 in Basics, E1 in Expert, W1 in Workshop (community levels), A1 in Archive.
+export const WORLDS = [{ id: "basics", name: "Basics", tag: "B" }, { id: "expert", name: "Expert", tag: "E" }, { id: "workshop", name: "Workshop", tag: "W" }, { id: "archive", name: "Archive", tag: "A" }] as const;
 export type World = (typeof WORLDS)[number]["id"];
-export const worldOf = (level: Level): World => level.world ?? "classic";
-// A level's label in its world's list: the world's tag and its number there, C3 or N1.
+export const worldOf = (level: Level): World => level.world ?? "archive";
+// A level's label in its world's list: the world's tag and its number there, B3 or E1.
 export const levelCode = (level: Level, n: number): string => `${WORLDS.find((w) => w.id === worldOf(level))!.tag}${n}`;// `hidden` keeps a level out of the player's list (a playground); without it a level is public.
 export interface Level { id: string; name: string; hidden?: true; world?: World; thumb?: { x: number; y: number; z: number; r: number; yaw?: number }; pieces: Piece[] }
 
@@ -1311,9 +1452,13 @@ export function pieceBoxes(p: Piece): Box[] {
   const T = PLATFORM_THICKNESS;
   if (p.type === "slab") return [{ kind: "platform", x: 0, y: -T / 2, z: 0, w: p.w, h: T, d: p.d }];
   if (p.type === "block") return [{ kind: "block", x: 0, y: p.h / 2, z: 0, w: p.w, h: p.h, d: p.d, r: Math.min(BLOCK_R, p.w / 2, p.h / 2, p.d / 2) }];
-  if (p.type === "blockade") return [{ kind: "block", x: 0, y: BLOCKADE_H / 2, z: 0, w: BLOCKADE_W, h: BLOCKADE_H, d: BLOCKADE_D, r: BLOCKADE_R }];
+  if (p.type === "blockade") return [
+    { kind: "block", x: 0, y: BLOCKADE_H / 2, z: 0, w: BLOCKADE_W, h: BLOCKADE_H, d: BLOCKADE_D, r: softProps() ? BUNNY.r : BLOCKADE_R },
+    ...(softProps() ? [-1, 1].map((s): Box => ({ kind: "block", x: s * BUNNY.ear.x, y: BLOCKADE_H + BUNNY.ear.h / 2, z: 0, w: BUNNY.ear.w, h: BUNNY.ear.h, d: BUNNY.ear.d, r: BUNNY.ear.r })) : []),
+  ];
   if (p.type === "barrier") { const h = BARRIER_H - BARRIER_LEG; return [{ kind: "block", x: 0, y: BARRIER_LEG + h / 2, z: 0, w: BARRIER_W, h, d: BARRIER_D, r: BARRIER_R }]; }
   // Rolled 180 a support turns over about its platform's mid-thickness (see supportPillars).
+  if (p.type === "support" && softProps()) return whaleParts(p).boxes.map((b) => (supportOver(p) ? { ...b, x: -b.x, y: -PLATFORM_THICKNESS - b.y } : b));
   if (p.type === "support") return supportPillars(p).map((c) => {
     const mid = (c.y0 + c.y1) / 2;
     return { kind: "block", x: c.x, y: supportOver(p) ? -PLATFORM_THICKNESS - mid : mid, z: c.z, w: SUPPORT_W, h: c.y1 - c.y0, d: SUPPORT_D };
@@ -1332,9 +1477,10 @@ export function stoolSlide(p: Piece & { type: "stool" }): { lo: number; hi: numb
 
 // Upright cylinders standing on the piece's y.
 export function pieceCylinders(p: Piece): Cylinder[] {
-  if (p.type === "barrier") return [BARRIER_LEG_X, -BARRIER_LEG_X].map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 }));
+  if (p.type === "barrier") return (softProps() ? [0] : [BARRIER_LEG_X, -BARRIER_LEG_X]).map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 }));
   if (p.type === "column") return [{ r: COLUMN_R, h: p.h }];
-  if (p.type === "pillar") return [
+  if (p.type === "support" && softProps()) return whaleParts(p).cylinders.map((c) => (supportOver(p) ? { ...c, x: -(c.x ?? 0), y0: -PLATFORM_THICKNESS - ((c.y0 ?? 0) + c.h) } : c));
+  if (p.type === "pillar") return softProps() ? [{ r: PILLAR_R, h: GIRAFFE.neck }] : [
     { r: PILLAR_R, h: PILLAR_H - PILLAR_CAP },
     { r: PILLAR_R + PILLAR_COLLAR.r, h: PILLAR_COLLAR.h, y0: PILLAR_H - PILLAR_CAP },
     { r: PILLAR_R + PILLAR_RING.r, h: PILLAR_RING.h },
@@ -1342,6 +1488,38 @@ export function pieceCylinders(p: Piece): Cylinder[] {
   if (p.type === "spinner") return [{ r: SPINNER_HUB_R, h: SPINNER_HEIGHT + 0.05 }];
   if (p.type === "goal") return [{ r: p.r, h: GOAL_DISC_H }];
   return [];
+}
+
+// Balls standing out of a piece at local (x, y, z): the giraffe's head, muzzle, ears and horns, the
+// turtle's head and feet, the ladybug's head and the octopus's arms.
+export interface Ball { r: number; x: number; y: number; z: number }
+export function pieceBalls(p: Piece): Ball[] {
+  if (!softProps()) return [];
+  if (p.type === "kicker") {
+    const T = TURTLE, f = p.flat ?? 0, front = (p.d + f) / 2, back = -front, [ha, hb] = kickerSpan(p, T.head.y);
+    const feet = (z: number): Ball[] => { const [a, b] = kickerSpan(p, T.foot.y / p.h); return [{ r: T.foot.r, x: a - 0.02, y: T.foot.y, z }, { r: T.foot.r, x: b + 0.02, y: T.foot.y, z }]; };
+    return [{ r: T.head.r, x: (ha + hb) / 2, y: p.h * T.head.y, z: back - T.head.out }, ...feet(front - 0.35 * p.d), ...feet(back + 0.3)];
+  }
+  if (p.type === "bumper") return [{ r: LADYBUG.head.r, x: 0, y: LADYBUG.head.y, z: LADYBUG.head.z }];
+  if (p.type === "stool") return [-1, 1].map((s): Ball => ({ r: PIG.ear.r, x: s * (p.w / 2 - PIG.ear.in), y: p.h / 2 + PIG.ear.up, z: 0 }));
+  if (p.type === "crate") return [-1, 1].flatMap((s): Ball[] => [
+    { r: COW.ear.r, x: s * (p.w / 2 + COW.ear.out), y: p.h / 2 - COW.ear.down, z: p.d / 2 - COW.ear.back },
+    { r: COW.horn.r, x: s * COW.horn.x, y: p.h / 2 + COW.horn.up, z: p.d / 2 - COW.horn.back },
+  ]);
+  if (p.type === "barrel") return [-1, 1].map((s): Ball => ({ r: OWL.tuft.r, x: s * OWL.tuft.x, y: p.h / 2 + OWL.tuft.up, z: 0 }));
+  if (p.type === "column") return [{ r: PENGUIN.beak.r, x: 0, y: p.h - PENGUIN.beak.down, z: COLUMN_R + 0.02 }];
+  if (p.type === "support") return whaleParts(p).balls.map((b) => (supportOver(p) ? { ...b, x: -b.x, y: -PLATFORM_THICKNESS - b.y } : b));
+  if (p.type === "magnet") return Array.from({ length: OCTOPUS.arm.n }, (_, k): Ball => { const a = ((k + 0.5) / OCTOPUS.arm.n) * Math.PI * 2; return { r: OCTOPUS.arm.r, x: Math.sin(a) * OCTOPUS.arm.at, y: OCTOPUS.arm.y, z: Math.cos(a) * OCTOPUS.arm.at }; });
+  if (p.type !== "pillar") return [];
+  const G = GIRAFFE;
+  return [
+    { r: G.head, x: 0, y: G.headY, z: 0 },
+    { r: G.muzzle.r, x: 0, y: G.headY + G.muzzle.y, z: G.muzzle.z },
+    ...[-1, 1].flatMap((s) => [
+      { r: G.ear.r, x: s * G.ear.x, y: G.headY + G.ear.y, z: G.ear.z },
+      { r: G.horn.r, x: s * G.horn.x, y: G.headY + G.horn.y, z: G.horn.z },
+    ]),
+  ];
 }
 
 export function pieceSectors(p: Piece): Sector[] {
@@ -1357,6 +1535,7 @@ export function rotXZ(x: number, z: number, deg: number): { x: number; z: number
 export type { XZ } from "./poly.ts";
 import type { XZ } from "./poly.ts";
 import { railsLoop } from "./geometry.ts";
+import { ENV } from "./palette.ts";
 import earcut from "earcut";
 
 // A hole's outline in world XZ.
@@ -1601,6 +1780,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
     case "seesaw": return { type, x, y, z, w: 4, d: 8, h: SEESAW_PIVOT_H, rot: 0, tilt: 10 };
     case "board": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 0 };
+    case "pangolin": return { type, x, y, z, w: 2.5, d: 8, rot: 0 };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
     case "gate": return { type, x, y, z, w: LANE_WIDTH, d: GATE_D, h: GATE_H, rot: 0 };
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
@@ -1775,7 +1955,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && !CURVE_SWEEPS.includes(curveSweep(p))) out.push(`piece ${i}: curve sweep must be ${CURVE_SWEEPS.join(", ")}`);
     if (p.type === "curve" && curveSweep(p) === 270 && p.inner < CURVE_34_MIN_INNER) out.push(`piece ${i}: a 3/4 curve's inner must be at least ${CURVE_34_MIN_INNER}, or its two ends cross`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
-    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "support" || p.type === "gate") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
+    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "pangolin" || p.type === "support" || p.type === "gate") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
@@ -1801,6 +1981,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "plank" && (p.base ?? 0) < 0) out.push(`piece ${i}: plank base can't be negative`);
     if (p.type === "seesaw" && seesawPivot(p) < SEESAW_T) out.push(`piece ${i}: seesaw h must be at least ${SEESAW_T}`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
+    if (p.type === "pangolin" && (p.d < PANGOLIN_MIN_D || p.w < 1)) out.push(`piece ${i}: pangolin d must be at least ${PANGOLIN_MIN_D} and w at least 1`);
   });
   for (const [i, j] of platformOverlaps(level)) out.push(`platforms ${i} and ${j} overlap`);
   return out;
@@ -1900,6 +2081,7 @@ export function validateLevel(raw: unknown): Level {
         ...(typeof p.aYaw === "number" ? { aYaw: p.aYaw } : {}), ...(typeof p.bYaw === "number" ? { bYaw: p.bYaw } : {}) };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}), ...(p.base ? { base: num(p.base, "base") } : {}) };
       case "board": return { type: "board", ...at, w: num(p.w ?? 4, "w"), d: num(p.d ?? 8, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
+      case "pangolin": return { type: "pangolin", ...at, w: num(p.w ?? 2.5, "w"), d: num(p.d ?? 8, "d"), rot: num(p.rot ?? 0, "rot") };
       case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), h: num(p.h ?? SEESAW_PIVOT_H, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}), ...(p.dips === "+z" || p.dips === "-z" ? { dips: p.dips } : {}) };
       // Older levels have moving platforms as their own "mover" piece: a slab with its schedule inline.
       case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0, move: parseMove(p, i) };
@@ -1941,7 +2123,7 @@ export function validateLevel(raw: unknown): Level {
   const thumb = t ? { x: num(t.x, "thumb.x"), y: num(t.y, "thumb.y"), z: num(t.z, "thumb.z"), r: num(t.r, "thumb.r"), ...(t.yaw ? { yaw: num(t.yaw, "thumb.yaw") } : {}) } : undefined;
   if (r.world !== undefined && !WORLDS.some((w) => w.id === r.world)) throw new Error(`level ${String(r.id)}: unknown world ${String(r.world)}`);
   const world = r.world as World | undefined;
-  const level: Level = { id: r.id, name: r.name, ...(r.hidden === true ? { hidden: true as const } : {}), ...(world && world !== "classic" ? { world } : {}), ...(thumb ? { thumb } : {}), pieces };
+  const level: Level = { id: r.id, name: r.name, ...(r.hidden === true ? { hidden: true as const } : {}), ...(world && world !== "archive" ? { world } : {}), ...(thumb ? { thumb } : {}), pieces };
   const problems = levelProblems(level);
   if (problems.length) throw new Error(`level ${level.id}: ${problems.join("; ")}`);
   return level;

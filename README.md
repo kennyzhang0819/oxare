@@ -1,8 +1,8 @@
-# Oxare
+# Zoosky
 
 ![Rolling through a level](docs/images/gameplay.webp)
 
-Oxare is my personal reimagination of the classic iOS 3D puzzle platformer game: Aerox. Oxare is an anagram of the name. I loved how simple this game looks yet how deeply addictive and fun the puzzle solving process is. Unfortunately, the game stopped receiving new updates and the original 40 levels were not enough content for me. Thus, I rebuilt the game to the best of my ability on a new engine 10+ years later. Hope this is fun for someone.
+Zoosky is my personal reimagination of the classic iOS 3D puzzle platformer game: Aerox. It began as Oxare, an anagram of the name, and became Zoosky once the levels filled with animals floating among the clouds. I loved how simple this game looks yet how deeply addictive and fun the puzzle solving process is. Unfortunately, the game stopped receiving new updates and the original 40 levels were not enough content for me. Thus, I rebuilt the game to the best of my ability on a new engine 10+ years later. Hope this is fun for someone.
 
 ## Features
 
@@ -17,6 +17,8 @@ In order of building:
 ## Run it yourself
 
 ```
+git clone https://github.com/kennyzhang0819/zoosky.git
+cd zoosky
 npm install
 npm run dev      # http://localhost:5173
 npm run check    # typecheck + headless physics check of every level

@@ -1,8 +1,13 @@
 import { validateLevel, type Level } from "../level.ts";
 
-const mods = import.meta.glob("./*.json", { eager: true, import: "default" }) as Record<string, unknown>;
+import ORDER from "./order.txt?raw";
 
-export const LEVELS: Level[] = Object.keys(mods).sort().map((k) => validateLevel(mods[k]));
+const mods = import.meta.glob("./*.json", { eager: true, import: "default" }) as Record<string, unknown>;
+// order.txt lists level ids in play order; a level missing from it comes after, in file-name order.
+const order = ORDER.split(/\s+/).filter(Boolean);
+const rank = (l: Level) => { const k = order.indexOf(l.id); return k < 0 ? order.length : k; };
+
+export const LEVELS: Level[] = Object.keys(mods).sort().map((k) => validateLevel(mods[k])).sort((a, b) => rank(a) - rank(b));
 
 // In dev, swaps the list for the level files as they are on disk now, so the menu and editor
 // never start from an older copy. A deployed build keeps the bundled list.

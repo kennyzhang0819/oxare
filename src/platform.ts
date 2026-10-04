@@ -3,7 +3,8 @@ import { cutRegion, edgeGaps, type XZ } from "./poly.ts";
 
 // A drawn platform's mesh as plain arrays, free of three so the physics can take a moving or tilted
 // platform's collider from the very same vertices. Groups are [start, count, material].
-export interface PlatformMesh { positions: number[]; uv: Float32Array; indices: number[]; groups: [number, number, number][] }
+// `seams` pairs the two copies of each wall ring's closing vertex, which must share one normal.
+export interface PlatformMesh { positions: number[]; uv: Float32Array; indices: number[]; groups: [number, number, number][]; seams: [number, number][] }
 
 // Lays the straight strip (x along its length L, z across it) out along a curve: `at(u, z)` is where the
 // point u = x + L/2 along it lands. Long edges also break at each `knots` u, where the curve kinks.
@@ -26,7 +27,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   const shaped = !!outline;
   const region = cuts.length || shaped ? cutRegion(rect, cuts) : [[rect]];
 
-  const pos: number[] = [], uvKind: number[] = [], perim: number[] = [], out: number[] = [], idx: number[] = [];
+  const pos: number[] = [], uvKind: number[] = [], perim: number[] = [], out: number[] = [], idx: number[] = [], seams: [number, number][] = [];
   const P = (i: number, k: number) => pos[i * 3 + k] ?? 0;
   const tri = (a: number, c: number, d: number, hx: number, hy: number, hz: number) => {
     const ux = P(c, 0) - P(a, 0), uy = P(c, 1) - P(a, 1), uz = P(c, 2) - P(a, 2);
@@ -94,8 +95,8 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
     return base;
   };
   const addPoint = (x: number, y: number, z: number) => { pos.push(x, y, z); uvKind.push(0); perim.push(0); out.push(0, 0); return pos.length / 3 - 1; };
-  const strip = (ra: number, rb: number, N: number, up: number) => {
-    for (let i = 0; i < N; i++) {
+  const strip = (ra: number, rb: number, N: number, up: number, wrap = true) => {
+    for (let i = 0; i < (wrap ? N : N - 1); i++) {
       const j = (i + 1) % N;
       quad(ra + i, ra + j, rb + j, rb + i, out[(ra + i) * 2]!, up, out[(ra + i) * 2 + 1]!);
     }
@@ -192,7 +193,11 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
   const wallsFrom = idx.length;
   for (const { loop, sc, fc } of parts.flat()) {
     const r = ringAt(loop, 0, sz, sc, fc);
-    strip(addRing(r, y1 - by, 1), addRing(r, y0 + by, 1), r.pts.length, 0);
+    // Closed on a copy of its first point: wrapping back to it would squeeze the whole perimeter's u into one quad.
+    r.pts.push(r.pts[0]!); r.out.push(r.out[0]!);
+    const N = r.pts.length, a = addRing(r, y1 - by, 1), b = addRing(r, y0 + by, 1);
+    strip(a, b, N, 0, false);
+    seams.push([a, a + N - 1], [b, b + N - 1]);
   }
   const wallsTo = idx.length;
 
@@ -229,7 +234,7 @@ export function platformMesh(L: number, W: number, thick: number, bevel: { inset
     else { uv[i * 2] = (perim[i] ?? 0) / tile; uv[i * 2 + 1] = (F(1) - (lift[i] ?? 0) - y0) / thick; }
   }
   return {
-    positions: pos, uv, indices: idx,
+    positions: pos, uv, indices: idx, seams,
     groups: [[0, topLipTo, 2], [topLipTo, topBorderTo - topLipTo, 3], [topBorderTo, botLipFrom - topBorderTo, 0], [botLipFrom, botLipTo - botLipFrom, 2],
       [botLipTo, botBorderTo - botLipTo, 3], [botBorderTo, wallsFrom - botBorderTo, 0], [wallsFrom, wallsTo - wallsFrom, 1]],
   };

@@ -8,10 +8,11 @@ import { levelThumbSrc, saveThumb } from "./thumbs.ts";
 import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
-// Worlds players can't open yet: shown with a lock. The admin panel opens every world.
+// Worlds players can't open yet: shown with a lock. Admin-only worlds have no tab for players.
 const LOCKED: World[] = [];
+const ADMIN_ONLY: World[] = ["archive"];
 // The world tab open, kept while the menu is rebuilt.
-let tab: World = "classic";
+let tab: World = "basics";
 // The level select: back, world tabs and tools in a bar along the top with the view switch and pager
 // under them, and one page of levels scrolling below. Only the page shown is built, pictures included.
 const VIEW_KEY = "balling.levelView";
@@ -28,13 +29,14 @@ interface Browse { admin: boolean; start: HTMLElement[]; end: HTMLElement[]; lev
 const levelSelect = (b: Browse) => {
   const tabs = h("div", { class: "world-tabs", role: "tablist" }), tools = h("div", { class: "level-tools" }), scroll = h("div", { class: "level-scroll" });
   const locked = (w: World) => !b.admin && LOCKED.includes(w);
-  if (locked(tab)) tab = "classic";
+  const worlds = WORLDS.filter((w) => b.admin || !ADMIN_ONLY.includes(w.id));
+  if (locked(tab) || !worlds.some((w) => w.id === tab)) tab = "basics";
   let shown = b.levels(tab);
   const pages = () => Math.max(1, Math.ceil(shown.length / PAGE_SIZE[view]));
   const go = (page: number) => { first = Math.max(0, Math.min(pages() - 1, page)) * PAGE_SIZE[view]; render(); scroll.scrollTop = 0; };
   const render = () => {
     shown = b.levels(tab);
-    tabs.replaceChildren(...WORLDS.map((w) => h("button", {
+    tabs.replaceChildren(...worlds.map((w) => h("button", {
       class: w.id === tab ? "world-tab active" : "world-tab", role: "tab", "aria-selected": String(w.id === tab), disabled: locked(w.id), title: locked(w.id) ? `${w.name}: locked` : w.name,
       onclick: () => { if (w.id !== tab) { tab = w.id; first = 0; render(); scroll.scrollTop = 0; } },
     }, locked(w.id) ? h("span", { class: "lock", innerHTML: LOCK_ICON }) : null, w.name)));
@@ -67,9 +69,9 @@ const levelSelect = (b: Browse) => {
 const LOCK_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="2.5" y="7" width="11" height="8" rx="2" fill="currentColor"/></svg>';
 // The title in the menu buttons' frosted fill and border, the border thicker along the top. The two
 // fills are masked apart so they never overlap and stack their transparency.
-// The viewBox fits Orbitron Black at size 100; it needs changing with the font or the word.
-const TITLE_WORD = '<text x="0" y="86" font-family="Orbitron" font-weight="900" font-size="100" letter-spacing="10">OXARE</text>';
-const TITLE_SVG = `<svg viewBox="-6 6 456 86" aria-hidden="true">
+// The viewBox fits Fredoka Bold at size 100; it needs changing with the font or the word.
+const TITLE_WORD = '<text x="0" y="86" font-family="Fredoka" font-weight="700" font-size="100" letter-spacing="6">ZOOSKY</text>';
+const TITLE_SVG = `<svg viewBox="-5 6 422 88" aria-hidden="true">
   <defs><symbol id="title-word" overflow="visible">${TITLE_WORD}</symbol></defs>
   <mask id="title-fill" maskUnits="userSpaceOnUse" x="-50" y="-50" width="560" height="200"><use href="#title-word" fill="#fff"/></mask>
   <mask id="title-ring" maskUnits="userSpaceOnUse" x="-50" y="-50" width="560" height="200">
@@ -112,7 +114,7 @@ export class Menu implements Mode {
     };
     addEventListener("keydown", this.onKey);
     if (!opts.admin) {
-      const slot = h("h1", { class: "menu-title", "aria-label": "Oxare", innerHTML: TITLE_SVG });
+      const slot = h("h1", { class: "menu-title", "aria-label": "Zoosky", innerHTML: TITLE_SVG });
       // Home and options sit under the title; the level selector stands alone.
       const body = h("div", { class: "menu-body" });
       ctx.overlay.append(h("div", { class: "menu" }, slot, body));
@@ -149,10 +151,10 @@ export class Menu implements Mode {
       home();
       return;
     }
-    const card = (level: Level, label: string, sub: string, play: () => void, v: View) => {
+    const card = (level: Level, label: string, sub: string, play: () => void, v: View, n: number, count: number) => {
       const more = h("div", { class: "more-menu", hidden: true },
         h("button", { onclick: () => void duplicateLevel(level) }, "Duplicate"),        h("button", { onclick: () => void rewrite(level, (l) => { if (l.hidden) delete l.hidden; else l.hidden = true; }, "Changing visibility") }, level.hidden ? "Make public" : "Make hidden"),
-        ...WORLDS.filter((w) => w.id !== worldOf(level)).map((w) => h("button", { onclick: () => void rewrite(level, (l) => { if (w.id === "classic") delete l.world; else l.world = w.id; }, "Moving the level") }, `Move to ${w.name}`)),
+        ...WORLDS.filter((w) => w.id !== worldOf(level)).map((w) => h("button", { onclick: () => void rewrite(level, (l) => { if (w.id === "archive") delete l.world; else l.world = w.id; }, "Moving the level") }, `Move to ${w.name}`)),
         h("button", { class: "delete", onclick: () => void deleteLevel(level) }, "Delete"),
       );
       return h("div", { class: `${v === "grid" ? "level-card" : "level-row"}${level.hidden ? " hidden-level" : ""}` },
@@ -160,6 +162,10 @@ export class Menu implements Mode {
         h("span", { class: "name" }, label),
         h("span", { class: "best" }, sub),
         h("div", { class: "actions" },
+          ...(v === "list" ? [
+            h("button", { class: "move", title: "Move up", disabled: n === 1, onclick: () => void moveLevel(level, -1) }, "↑"),
+            h("button", { class: "move", title: "Move down", disabled: n === count, onclick: () => void moveLevel(level, 1) }, "↓"),
+          ] : []),
           h("button", { class: "edit", onclick: () => opts.onEdit(cloneLevel(level)) }, "Edit"),
           h("button", { class: "more", title: "More", onclick: () => { const open = more.hidden; this.closeMore(); more.hidden = !open; } }, "⋯"),
           more,
@@ -193,6 +199,22 @@ export class Menu implements Mode {
         opts.onChanged();
       } catch (err) {
         alert(`${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    // Swaps the level with its neighbour in the same world and writes the whole order to src/levels/order.txt.
+    const moveLevel = async (level: Level, by: -1 | 1) => {
+      if (!import.meta.env.DEV) { alert("Reordering levels only works in local dev (npm run dev)."); return; }
+      const ids = LEVELS.map((l) => l.id), same = LEVELS.filter((l) => worldOf(l) === worldOf(level)).map((l) => l.id);
+      const other = same[same.indexOf(level.id) + by];
+      if (!other) return;
+      const a = ids.indexOf(level.id), b = ids.indexOf(other);
+      [ids[a], ids[b]] = [other, level.id];
+      try {
+        const res = await fetch("/__level/order", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) });
+        if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`);
+        opts.onChanged();
+      } catch (err) {
+        alert(`Reordering failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
     // Re-renders and saves every level's menu picture (after a change to how pieces look).
@@ -238,11 +260,14 @@ export class Menu implements Mode {
       admin: true,
       start: [h("button", { class: "menu-btn small", title: "Back to the player's levels (Ctrl+Shift+S)", onclick: () => opts.onToggleAdmin() }, "Back")],
       end: [
-        h("button", { class: "menu-btn small primary", title: "Start a blank level in the editor", onclick: () => opts.onEdit({ ...blankLevel(), ...(tab !== "classic" ? { world: tab } : {}) }) }, "+ New level"),
+        h("button", { class: "menu-btn small primary", title: "Start a blank level in the editor", onclick: () => opts.onEdit({ ...blankLevel(), ...(tab !== "archive" ? { world: tab } : {}) }) }, "+ New level"),
         h("button", { class: "menu-btn small", title: "Re-render and save every level's menu picture", onclick: (e: Event) => void rebuildThumbs(e.currentTarget as HTMLButtonElement) }, "Rebuild thumbs"),
       ],
       levels: (w) => LEVELS.flatMap((l, i) => (worldOf(l) === w ? [i] : [])),
-      item: (i, n, v) => { const l = LEVELS[i]!; return card(l, `${levelCode(l, n)}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i), v); },
+      item: (i, n, v) => {
+        const l = LEVELS[i]!, count = LEVELS.filter((x) => worldOf(x) === worldOf(l)).length;
+        return card(l, `${levelCode(l, n)}. ${l.name}`, l.hidden ? `${l.id}.json · hidden` : `${l.id}.json`, () => opts.onPlay(i), v, n, count);
+      },
     });
     this.turnPage = select.turn;
     ctx.overlay.append(h("div", { class: "menu" }, select.el));

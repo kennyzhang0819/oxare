@@ -3,8 +3,12 @@ import { defineConfig, type Plugin } from "vite";
 
 // Dev-only: the editor's Save button POSTs a level here and it replaces src/levels/<id>.json;
 // the admin panel's Delete POSTs {id} to /__level/delete, which removes that file; GET
-// /__level/all returns every level as it is on disk right now, in file order. /__thumb/save writes a
+// /__level/all returns every level as it is on disk right now, in play order; /__level/order POSTs
+// {ids} and rewrites src/levels/order.txt with them. /__thumb/save writes a
 // level's menu picture to public/thumbs/<id>.png and its key to public/thumbs/index.json.
+const ORDER = "src/levels/order.txt";
+const levelOrder = (): string[] => (existsSync(ORDER) ? readFileSync(ORDER, "utf8").split(/\s+/).filter(Boolean) : []);
+const writeLevelOrder = (ids: string[]) => writeFileSync(ORDER, `${ids.join("\n")}\n`);
 const THUMBS = "public/thumbs", THUMB_INDEX = `${THUMBS}/index.json`;
 const thumbIndex = (): Record<string, string> => (existsSync(THUMB_INDEX) ? (JSON.parse(readFileSync(THUMB_INDEX, "utf8")) as Record<string, string>) : {});
 const writeThumbIndex = (index: Record<string, string>) =>
@@ -60,10 +64,28 @@ function levelSaver(): Plugin {
         });
       });
       server.middlewares.use("/__level/all", (_req, res) => {
-        const files = readdirSync("src/levels").filter((f) => f.endsWith(".json")).sort();
+        const order = levelOrder(), rank = (f: string) => { const k = order.indexOf(f.slice(0, -".json".length)); return k < 0 ? order.length : k; };
+        const files = readdirSync("src/levels").filter((f) => f.endsWith(".json")).sort().sort((a, b) => rank(a) - rank(b));
         res.setHeader("content-type", "application/json");
         res.setHeader("cache-control", "no-store");
         res.end(`[${files.map((f) => readFileSync(`src/levels/${f}`, "utf8")).join(",")}]`);
+      });
+      server.middlewares.use("/__level/order", (req, res) => {
+        if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
+        let body = "";
+        req.on("data", (c: Buffer) => { body += c; });
+        req.on("end", () => {
+          try {
+            const { ids } = JSON.parse(body) as { ids: string[] };
+            if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string" && /^[a-z0-9-]+$/.test(id))) throw new Error("ids must be level ids");
+            writeLevelOrder(ids);
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ file: ORDER }));
+          } catch (err) {
+            res.statusCode = 400;
+            res.end(String(err instanceof Error ? err.message : err));
+          }
+        });
       });
       server.middlewares.use("/__level/delete", (req, res) => {
         if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
@@ -79,6 +101,8 @@ function levelSaver(): Plugin {
             const index = thumbIndex();
             if (existsSync(`${THUMBS}/${id}.png`)) unlinkSync(`${THUMBS}/${id}.png`);
             if (id in index) { delete index[id]; writeThumbIndex(index); }
+            const order = levelOrder();
+            if (order.includes(id)) writeLevelOrder(order.filter((x) => x !== id));
             res.setHeader("content-type", "application/json");
             res.end(JSON.stringify({ file }));
           } catch (err) {

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { BARRIER_W, beanAt, beanDist, beanTrack, rotXZ, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -950,6 +950,61 @@ for (const [name, lines, end, mid] of [
   else if (fallen.y > 0.6 || fallen.z > -14) { failed = true; console.error(`FAIL plank: did not fall (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
   else console.log(`ok plank: stood frozen until touched, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
+}
+// A pangolin lies with its head out and the rest curled until the ball touches it, then unrolls across
+// the gap; laid out it is one smooth surface, so a second run over it rolls flat on its back.
+{
+  const level = testLevel({ id: "pangolin", name: "pangolin", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "pangolin", x: 0, y: 0, z: -10.5, w: 2.5, d: 8, rot: 0 },
+    { type: "slab", x: 0, y: 0, z: -19, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "goal", x: 0, y: 0, z: -22, r: 2 },
+  ] });
+  const sim = await createSim(level), pg = sim.pangolins[0]!;
+  for (let i = 0; i < 120 * 2; i++) sim.step(0, 0, -1);
+  const waited = pg.at === null;
+  let p = sim.ball.translation();
+  for (let i = 0; i < 120 * 12 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
+  const crossed = p.z <= -18 && Math.abs(p.y - BALL_RADIUS) < 0.1, touched = pg.at;
+  for (let i = 0; i < 120 * 3; i++) sim.step(0, 0, -1);
+  sim.respawn();
+  p = sim.ball.translation();
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 120 * 12 && p.z > -18; i++) {
+    sim.step(1, 0, -1); p = sim.ball.translation();
+    if (p.z < -9 && p.z > -12) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); }
+  }
+  sim.free();
+  const top = BALL_RADIUS + PANGOLIN_T;
+  if (!waited || touched === null) { failed = true; console.error(`FAIL pangolin: did not wait for a touch (waited ${waited}, touched at ${touched})`); }
+  else if (!crossed) { failed = true; console.error(`FAIL pangolin: ball did not cross on it (z ${p.z.toFixed(2)} y ${p.y.toFixed(2)})`); }
+  else if (Math.abs(lo - top) > 0.02 || Math.abs(hi - top) > 0.02) { failed = true; console.error(`FAIL pangolin: laid out, the ball rolled over the gap at y ${lo.toFixed(3)} to ${hi.toFixed(3)} (want ${top.toFixed(3)})`); }
+  else console.log(`ok pangolin: waited, touched at ${touched.toFixed(2)}s, unrolled under the ball; laid out it rolls flat over the gap (y ${lo.toFixed(3)} to ${hi.toFixed(3)})`);
+}
+// A giraffe's solid neck stretches up giraffeGrow when the ball bumps it and comes back down; a ball still
+// leaning on it does not set it off again.
+{
+  const level = testLevel({ id: "giraffe", name: "giraffe", pieces: [
+    { type: "start", x: 0, y: 0, z: -2 },
+    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
+    { type: "pillar", x: 0, y: 0, z: -6 },
+    { type: "goal", x: 0, y: 0, z: -8.5, r: 1 },
+  ] });
+  const sim = await createSim(level), gf = sim.giraffes[0];
+  const top = () => { const hit = sim.world.castRay(new RAPIER_RT.Ray({ x: 0, y: 10, z: -6 }, { x: 0, y: -1, z: 0 }), 20, true); return hit ? 10 - hit.timeOfImpact : -Infinity; };
+  sim.step(0, 0, -1);
+  const rest = top();
+  for (let i = 0; i < 120 * 4 && gf && gf.at === null; i++) sim.step(1, 0, -1);
+  const at = gf?.at ?? null;
+  let peak = -Infinity;
+  for (let i = 0; i < (TUNING.giraffeTime + 1) / STEP; i++) { sim.step(1, 0, -1); peak = Math.max(peak, top()); }
+  const end = top(), again = gf?.at !== at;
+  sim.free();
+  if (!gf || at === null) { failed = true; console.error(`FAIL giraffe: the ball's bump did not set it off`); }
+  else if (Math.abs(peak - rest - TUNING.giraffeGrow) > 0.02 || Math.abs(end - rest) > 0.001) { failed = true; console.error(`FAIL giraffe: head from ${rest.toFixed(3)} up to ${peak.toFixed(3)}, back to ${end.toFixed(3)} (want up ${TUNING.giraffeGrow})`); }
+  else if (again) { failed = true; console.error(`FAIL giraffe: the leaning ball set it off again`); }
+  else console.log(`ok giraffe: bumped at ${at.toFixed(2)}s, head from ${rest.toFixed(2)} up to ${peak.toFixed(2)} and back down, not set off again by the leaning ball`);
 }
 // A point on a body, from its local frame to world.
 function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {

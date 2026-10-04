@@ -24,7 +24,7 @@ export function blankLevel(): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Misc", ["start", "goal", "support", "column"]],
 ];
@@ -46,6 +46,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
   board: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 5], ["roll", 5]],
+  pangolin: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
   gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
@@ -440,7 +441,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
@@ -1382,7 +1383,7 @@ export class Editor implements Mode {
     else { this.dropAt = null; this.ghost.visible = false; }
   }
 
-  // The first upward-facing solid surface under the cursor (the goal beam and other glow is see-through).
+  // The first upward-facing solid surface under the cursor (glows and the goal's portal face are see-through).
   private aimDrop(clientX: number, clientY: number) {
     this.castFrom(clientX, clientY);
     this.dropAt = null;

@@ -10,6 +10,8 @@ Every platform edge has the same profile, top and bottom, so a platform looks th
 - a thin grey border line just inside the lip
 - the wall between the two lips, carrying the cyan edge strip
 
+The wall's texture runs along the perimeter (u is the distance walked round the loop), so the wall ring ends on a copy of its first vertex at the full perimeter. Wrapping straight back to the first vertex would squeeze every repeat into one quad and leave a comb of stripes along one edge. The two copies share one normal (`seams`), so the join shows no crease.
+
 Seen from above, outside corners are rounded. Inside corners (a hole's corners, or the corner of a notch) are rounded too, the other way.
 
 ## Curves
@@ -71,3 +73,12 @@ A slab with `curl` is in the welded floor too, laid as half-unit strips along it
 
 A glass slab's physics floor is a plain slab's, holes and all. Only the drawn mesh changes: the groups that carry the tiled top and underside are moved onto a second mesh with the glass material, which casts no shadow, while the rim, lips and walls stay on the slab's mesh with its shadow.
 
+
+## Shadows
+
+The sun's shadow map covers the whole level (`fitSun`), and `scene.ts` patches two of three's shader chunks:
+
+- Three draws the faces that point away from the light into the shadow map, so a closed solid's shadow depth is its far side, for example a slab's underside. Under the cel ramp those faces still get some sun, so they used to test against their own depth and showed acne (moiré rings and stripes on undersides and lips), plus blots from props above. Faces turned from the sun now skip the shadow test. Physically they are already in their own shadow, and the ramp gives them their darker band.
+- Three's PCF rotates five taps by per-pixel noise, which made dithered edges that crawl as the camera moves. It is replaced by a fixed 4x4 grid of hardware-filtered taps, `shadow.radius` texels apart, which gives a smooth penumbra about five shadow texels wide.
+
+If a three upgrade changes either chunk, the patch throws at startup instead of silently dropping out.

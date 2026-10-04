@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { BALL_RADIUS, GOAL_BEAM_H, moverAt, moverShift, type Level } from "./level.ts";
+import { BALL_RADIUS, GOAL_DISC_H, GOAL_PULL, GOAL_REACH, giraffeStretch, moverAt, moverShift, pangolinUnrolled, type Level } from "./level.ts";
 import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
@@ -11,6 +11,8 @@ import { clear, fmtTime, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 const PROGRESS_KEY = "balling.progress";
+// Seconds the goal portal takes to swallow the ball before the level-complete card.
+const SINK_TIME = 0.9;
 type Progress = Record<string, { best: number }>;
 export function loadProgress(): Progress {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
@@ -40,7 +42,13 @@ export class Game implements Mode {
   private time = 0;
   private falls = 0;
   private done = false;
+  // Set once the ball enters the goal portal: where it went in and how long it has been sinking.
+  private sink: { from: THREE.Vector3; to: THREE.Vector3; t: number; ended: boolean } | null = null;
   private frames = 0;
+  // How far each pangolin was last drawn unrolled, by piece index.
+  private unrolled = new Map<number, number>();
+  // How far each giraffe's neck was last drawn stretched, by piece index.
+  private stretched = new Map<number, number>();
   ready: Promise<void>;
   private drawn!: () => void;
   private hud: HTMLElement;
@@ -144,6 +152,7 @@ export class Game implements Mode {
     this.shown.set(p.x, p.y, p.z).lerp(this.prevPos, 1 - alpha);
     this.ball.mesh.position.copy(this.shown);
     this.ball.mesh.quaternion.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
+    if (this.sink) this.sinkBall(dt);
     turnBelts(this.built, sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
@@ -177,13 +186,25 @@ export class Game implements Mode {
       const panel = this.built.planks.get(pl.index), piece = this.built.pieceGroups[pl.index];
       if (panel && piece) posePlank(piece, panel, pl.body.translation(), pl.body.rotation());
     }
+    for (const pg of sim.pangolins) {
+      const pose = this.built.pangolins.get(pg.index);
+      const a = pangolinUnrolled(pg.piece, pg.at === null ? 0 : sim.time - STEP * (1 - alpha) - pg.at, TUNING.unrollSpeed);
+      if (pose && a !== this.unrolled.get(pg.index)) { this.unrolled.set(pg.index, a); pose(a); }
+    }
+    for (const gf of sim.giraffes) {
+      const pose = this.built.giraffes.get(gf.index);
+      const e = gf.at === null ? 0 : giraffeStretch(sim.time - STEP * (1 - alpha) - gf.at, TUNING.giraffeGrow, TUNING.giraffeTime);
+      if (pose && e !== (this.stretched.get(gf.index) ?? 0)) { this.stretched.set(gf.index, e); pose(e); }
+    }
     if (!this.done) {
       if (p.y < sim.respawnY) this.fall();
       const goal = this.built.goal;
       if (goal) {
         const gp = this.level.pieces[goal.index]!;
-        // Touching the beam anywhere along its height wins, airborne included.
-        if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < gp.r * 0.7 + BALL_RADIUS && p.y > gp.y - BALL_RADIUS && p.y < gp.y + GOAL_BEAM_H) this.finish();
+        if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < GOAL_PULL && p.y > gp.y && p.y < gp.y + GOAL_DISC_H + GOAL_REACH) {
+          this.done = true;
+          this.sink = { from: this.shown.clone(), to: new THREE.Vector3(gp.x, gp.y + GOAL_DISC_H, gp.z), t: 0, ended: false };
+        }
       }
     }
     this.updateCamera();
@@ -236,6 +257,22 @@ export class Game implements Mode {
     if (!document.pointerLockElement) return;
     this.released = true;
     document.exitPointerLock();
+  }
+
+  // The portal swallows the ball: it spirals in, quickening, shrinking to nothing at the centre.
+  private sinkBall(dt: number) {
+    const s = this.sink!, m = this.ball.mesh;
+    s.t += dt;
+    const k = Math.min(1, s.t / SINK_TIME), e = k * k;
+    const dx = s.from.x - s.to.x, dz = s.from.z - s.to.z;
+    const a = Math.atan2(dz, dx) - e * Math.PI * 3, rad = Math.hypot(dx, dz) * (1 - e), size = 1 - e;
+    m.position.set(s.to.x + Math.cos(a) * rad, s.to.y + BALL_RADIUS * size + (s.from.y - s.to.y - BALL_RADIUS) * (1 - k) * (1 - k), s.to.z + Math.sin(a) * rad);
+    m.rotateY(e * 12);
+    m.scale.setScalar(Math.max(1e-3, size));
+    if (k < 1 || s.ended) return;
+    s.ended = true;
+    m.visible = false;
+    this.finish();
   }
 
   private finish() {
