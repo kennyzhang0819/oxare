@@ -255,7 +255,7 @@ function buildBridge(g: THREE.Group, p: Bridge): THREE.Group[] {
     m.castShadow = true;
     return m;
   };
-  const frameGeo = rimFrame(W - 0.08, chain.planks[0]!.len - 0.08, ENV.props === "soft" ? Math.min(0.3, W * 0.12) : STRIP, LIP);
+  const frameGeo = rimFrame(W - 0.08, chain.planks[0]!.len - 0.08, STRIP, LIP);
   frameGeo.rotateX(-Math.PI / 2);
   const out: THREE.Group[] = [];
   for (const pl of chain.planks) {
@@ -629,26 +629,11 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   body.castShadow = body.receiveShadow = true;
   g.add(body);
   if (soft) {
-    // A fat rounded tongue in the thrust colour down the slope, standing a little proud, with a
-    // row of round white dots along it.
-    const along = Math.hypot(p.d, p.h), [a0, b0] = kickerSpan(p, 0.5), tw = Math.max(0.3, (b0 - a0) * 0.62), tl = along * 0.74;
-    const tongue = new THREE.Group();
-    tongue.position.set((a0 + b0) / 2, p.h / 2, f / 2);
-    tongue.rotation.x = Math.atan2(p.h, p.d);
-    tongue.add(cushion(tw, tl, 0.05, stripMat));
-    const n = Math.max(2, Math.round(tl / 0.55)), dot = new THREE.CircleGeometry(Math.min(0.09, tw * 0.14), 20).rotateX(-Math.PI / 2);
-    for (let i = 0; i < n; i++) {
-      const d = new THREE.Mesh(dot, st.body);
-      d.position.set(0, 0.052, -tl / 2 + (i + 0.5) * (tl / n));
-      tongue.add(d);
-    }
-    g.add(tongue);
-    if (f > 0.5) {
-      const deck = new THREE.Group();
-      deck.position.set((a0 + b0) / 2, p.h, -p.d / 2);
-      deck.add(cushion(tw, f * 0.8, 0.05, stripMat));
-      g.add(deck);
-    }
+    // Like the pillow: the plain wedge and one round button in the thrust colour at the top of the slope.
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), stripMat);
+    const [a0, b0] = kickerSpan(p, 0.85);
+    button.position.set((a0 + b0) / 2, p.h * 0.85 + 0.02, f / 2 - p.d * 0.35);
+    g.add(button);
     return sliding ? g : undefined;
   }
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
@@ -1237,16 +1222,14 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   deck.position.y = H;
   g.add(deck);
   if (soft) {
-    // The launch pad as a domed button: a squashed sphere in the thrust colour with a white dot on top.
-    const pad = new THREE.Mesh(new THREE.SphereGeometry(s * 0.62, 40, 20), KICKER_ORANGE);
-    pad.scale.y = 0.12;
-    pad.castShadow = true;
-    const mid = new THREE.Mesh(new THREE.CircleGeometry(s * 0.26, 32).rotateX(-Math.PI / 2), st.body);
-    mid.position.y = s * 0.62 * 0.12 + 0.003;
-    deck.add(pad, mid);
-    const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.035, 8, 48).rotateX(Math.PI / 2);
+    // The plain pad with a round button, and the three hovering rings as solid light rings like the
+    // pillar's, so they take the toon shading and the outline.
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), KICKER_ORANGE);
+    button.position.y = 0.02;
+    deck.add(button);
+    const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.05, 10, 48).rotateX(Math.PI / 2);
     for (let k = 1; k <= 3; k++) {
-      const ring = new THREE.Mesh(ringGeo, JUMP_HOLO);
+      const ring = new THREE.Mesh(ringGeo, st.glow);
       ring.position.y = (k * JUMP_REACH) / 3;
       deck.add(ring);
     }
@@ -1562,16 +1545,6 @@ function softSugar(g: THREE.Group, C: number) {
     d.position.set(x * C * 0.46, y * C * 0.46, z * C * 0.46);
     g.add(d);
   }
-}
-
-// A fat rounded pad lying in the xz plane, `w` by `d`, `t` thick, in `mat`: an extruded rounded
-// rectangle with a bevel all round, so its edge is soft.
-function cushion(w: number, d: number, t: number, mat: THREE.Material): THREE.Mesh {
-  const r = Math.min(w, d) * 0.35, shape = roundRect(new THREE.Shape(), w - 2 * t, d - 2 * t, Math.max(0.01, r - t));
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.001, bevelEnabled: true, bevelThickness: t, bevelSize: t, bevelSegments: 4, curveSegments: 10 }).rotateX(-Math.PI / 2);
-  const m = new THREE.Mesh(geo, mat);
-  m.castShadow = m.receiveShadow = true;
-  return m;
 }
 
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { ENV } from "./palette.ts";
 import "@fontsource/orbitron/700.css";
 import "@fontsource/orbitron/900.css";
 import "@fontsource/chakra-petch/400.css";
@@ -26,7 +25,7 @@ const overlay = document.getElementById("overlay") as HTMLElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = ENV.toon ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 const ctx: Ctx = { renderer, canvas, overlay };
 
 loadTuning();

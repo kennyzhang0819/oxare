@@ -1,7 +1,6 @@
 // Dev-only still-image harness: builds src/showcase.json in the real scene and exposes window.shoot
 // for a headless browser to frame a camera and read the canvas. Not part of the game.
 import * as THREE from "three";
-import { ENV } from "./palette.ts";
 import type { Level } from "./level.ts";
 import { buildLevel, createScene, fitSun, initMaterials, makeBall } from "./scene.ts";
 import showcase from "./showcase.json";
@@ -10,7 +9,7 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = ENV.toon ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 initMaterials(renderer);
 const env = createScene();
 const built = buildLevel(showcase as Level, false);
