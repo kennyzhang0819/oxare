@@ -4,7 +4,7 @@ import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { BALL_RADIUS, BEAN_LIFT, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, faceTexture, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
-import { BUMPER, EFFECTS, ENV, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { BOARD, BUMPER, EFFECTS, ENV, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE, shade } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
@@ -985,9 +985,20 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
   if (ENV.props === "soft") {
     // The plain capsule in the tint and one round button in the hazard colour on top of its middle.
     // beanAt lays the capsule's axis flat by turning local y to +x, which leaves local -x pointing up.
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), softMats().glaze);
-    button.position.x = -(p.r - 0.03);
-    bean.add(button);
+    if (zoo()) {
+      // A dachshund: the capsule is the body (local +y forward, -x up); floppy ears and a nose at the front, a tail behind.
+      const r = p.r, hy = p.len / 2, sm = softMats();
+      for (const s of [-1, 1]) { const ear = part(new THREE.SphereGeometry(0.2, 12, 8), sm.glaze, 0.1, hy - 0.42, s * (r + 0.04), bean); ear.scale.set(1.3, 0.6, 0.35); }
+      // Sideways is local z here, so the eyes are placed by hand rather than with eyes().
+      for (const s of [-1, 1]) part(new THREE.SphereGeometry(0.05, 12, 8), zooMats().eye, -0.35, hy - 0.21, s * 0.21, bean);
+      part(new THREE.SphereGeometry(0.07, 12, 8), zooMats().eye, -0.1, hy, 0, bean);
+      const tail = part(new THREE.CylinderGeometry(0.03, 0.045, 0.35, 8), sm.tint, -0.39, -hy - 0.02, 0, bean);
+      tail.rotation.z = (143 * Math.PI) / 180;
+    } else {
+      const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), softMats().glaze);
+      button.position.x = -(p.r - 0.03);
+      bean.add(button);
+    }
   }
   g.add(bean);
   const at = beanAt(p, track, 0);
@@ -1045,9 +1056,25 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   if (ENV.props === "soft") {
     // Like the pillow: the plain block in the tint and one round button, in the movables' colour, on top.
     body.material = softMats().tint;
-    const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.plankGlow);
-    button.position.y = h / 2 - 0.03;
-    block.add(button);
+    if (zoo()) {
+      // A pig: a snout with two nostrils on a pushed face, eyes above it, floppy ears on top, a curly tail behind.
+      const pig = new THREE.Group();
+      pig.rotation.y = alongZ ? -Math.PI / 2 : 0;
+      const fx = (alongZ ? d : w) / 2;
+      const snout = part(new THREE.CylinderGeometry(0.15, 0.15, 0.1, 20).rotateZ(Math.PI / 2), softMats().glaze, fx + 0.04, 0, 0, pig);
+      void snout;
+      for (const s of [-1, 1]) part(new THREE.SphereGeometry(0.03, 8, 6), zooMats().eye, fx + 0.1, 0.01, s * 0.06, pig);
+      const eg = new THREE.SphereGeometry(0.05, 12, 8);
+      for (const s of [-1, 1]) part(eg, zooMats().eye, fx - 0.02, h * 0.25, s * 0.22, pig);
+      for (const s of [-1, 1]) { const ear = part(new THREE.SphereGeometry(0.16, 12, 8), softMats().glaze, fx - 0.3, h / 2 + 0.04, s * 0.32, pig); ear.scale.set(1.1, 0.4, 0.7); ear.rotation.x = s * 0.5; }
+      const tail = part(new THREE.TorusGeometry(0.09, 0.025, 8, 20, Math.PI * 1.5), softMats().glaze, -fx - 0.04, 0.1, 0, pig);
+      tail.rotation.y = Math.PI / 2;
+      block.add(pig);
+    } else {
+      const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.plankGlow);
+      button.position.y = h / 2 - 0.03;
+      block.add(button);
+    }
     g.add(block);
     return block;
   }
@@ -1388,6 +1415,46 @@ function bead(r: number, h: number, y: number, mat: THREE.Material): THREE.Mesh 
   m.castShadow = m.receiveShadow = true;
   return m;
 }
+// Zoo parts: small decorations in a few shared materials. All of it sits outside or on the body and
+// none of it collides.
+let ZOO: { eye: THREE.MeshStandardMaterial; beak: THREE.MeshStandardMaterial; ear: THREE.MeshStandardMaterial; wool: THREE.MeshStandardMaterial } | null = null;
+function zooMats() {
+  ZOO ??= {
+    eye: new THREE.MeshStandardMaterial({ color: ENV.outlineColor, roughness: 0.5 }),
+    beak: new THREE.MeshStandardMaterial({ color: KICKER.light, roughness: 0.5 }),
+    ear: new THREE.MeshStandardMaterial({ color: BOARD.trace, roughness: 0.6 }),
+    wool: new THREE.MeshStandardMaterial({ color: shade(PILLAR.pale, 0.55), roughness: 0.7 }),
+  };
+  return ZOO;
+}
+const zoo = (): boolean => ENV.props === "soft" && ENV.animals;
+function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, into: THREE.Object3D): THREE.Mesh {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  into.add(m);
+  return m;
+}
+// Two bead eyes `apart` either side of (x, y, z), looking along +z of `into`.
+function eyes(into: THREE.Object3D, x: number, y: number, z: number, apart: number, r = 0.05) {
+  const geo = new THREE.SphereGeometry(r, 12, 8);
+  for (const s of [-1, 1]) part(geo, zooMats().eye, x + s * apart, y, z, into);
+}
+// A cone pointing along +z (a beak) or +y (an ear tuft), base at the position.
+function cone(r: number, h: number, mat: THREE.Material, into: THREE.Object3D, x: number, y: number, z: number, forward = true): THREE.Mesh {
+  const geo = new THREE.ConeGeometry(r, h, 16).translate(0, h / 2, 0);
+  if (forward) geo.rotateX(Math.PI / 2);
+  return part(geo, mat, x, y, z, into);
+}
+// Whiskers: three thin rods fanning out from each side of (x, y, z) on a +z face.
+function whiskers(into: THREE.Object3D, x: number, y: number, z: number, len: number) {
+  const geo = new THREE.CylinderGeometry(0.012, 0.012, len, 6).rotateZ(Math.PI / 2);
+  for (const s of [-1, 1]) for (const a of [-0.25, 0, 0.25]) {
+    const w = part(geo, STRUCT!.body, x + s * (0.12 + len / 2), y + a * 0.3, z, into);
+    w.rotation.z = s * a;
+  }
+}
+
 // Pillar and column: a stack of fat beads, alternating tints, a light ring in each waist and a
 // small knob on top; a pillar's top bead wears a face.
 function softBeads(g: THREE.Group, R: number, H: number, face: boolean) {
@@ -1404,6 +1471,15 @@ function softBeads(g: THREE.Group, R: number, H: number, face: boolean) {
   }
   const top = bead(knob, knob * 1.6, H - knob * 0.8, st.glow);
   g.add(top);
+  if (face && zoo()) {
+    // An owl: ear tufts on the top bead, two big round eyes and a beak on its front, wings on the bead below.
+    const yt = bh * (n - 0.5), z = Math.sqrt(R * R - 0.22 * 0.22);
+    for (const s of [-1, 1]) cone(0.1, 0.3, sm.tint, g, s * 0.32, H - 0.12, -0.05, false).rotation.z = -s * 0.45;
+    for (const s of [-1, 1]) { part(new THREE.SphereGeometry(0.13, 16, 10), st.body, s * 0.22, yt + 0.04, z - 0.04, g); part(new THREE.SphereGeometry(0.065, 12, 8), zooMats().eye, s * 0.22, yt + 0.04, z + 0.07, g); }
+    cone(0.07, 0.18, zooMats().beak, g, 0, yt - 0.14, R - 0.05);
+    const wing = new THREE.SphereGeometry(0.3, 16, 10);
+    for (const s of [-1, 1]) { const w = part(wing, sm.tint, s * (R - 0.05), bh * (n - 1.5), 0, g); w.scale.set(0.35, 1, 0.6); }
+  }
   if (face && faced()) {
     const f = faceDecal(R * 1.1);
     f.position.set(0, bh * (n - 0.5), R + 0.006);
@@ -1432,10 +1508,30 @@ function softBumper(g: THREE.Group) {
   cherry.castShadow = true;
   g.add(body, band, cherry);
   if (faced()) { const f = faceDecal(0.7); f.position.set(0, 0.64, R * 0.925); f.rotation.x = -0.42; g.add(f); }
+  if (zoo()) {
+    // A chick: a beak and eyes on the front of the dome, a wing each side, the cherry its tuft.
+    cone(0.1, 0.22, zooMats().beak, g, 0, 0.55, 0.9);
+    eyes(g, 0, 0.72, 0.82, 0.2, 0.055);
+    const wing = new THREE.SphereGeometry(0.34, 16, 10);
+    for (const s of [-1, 1]) { const w = part(wing, sm.tint, s * 0.88, 0.45, -0.1, g); w.scale.set(0.3, 0.6, 1); w.rotation.z = -s * 0.3; }
+  }
 }
 // Magnet: a donut, glazed in the hazard colour on top with sprinkles, sitting flat.
 function softMagnet(g: THREE.Group) {
   const st = STRUCT!, sm = softMats(), Rm = 0.6, r = 0.39;
+  if (zoo()) {
+    // A curled snake: the ring in the tint, a head rising at one side with eyes and a tongue, the tail's tip at the other.
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), sm.tint);
+    coil.rotation.x = Math.PI / 2; coil.position.y = r; coil.castShadow = coil.receiveShadow = true;
+    g.add(coil);
+    const head = part(new THREE.SphereGeometry(0.3, 20, 14), sm.tint, 0.62, 0.75, 0, g);
+    head.scale.set(1, 0.85, 1.15);
+    eyes(head, 0, 0.1, 0.24, 0.13, 0.05);
+    const tongue = part(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 6).rotateX(Math.PI / 2), sm.glaze, 0, -0.05, 0.38, head);
+    void tongue;
+    cone(0.13, 0.35, sm.tint, g, -0.62, 0.45, 0.25).rotation.y = -0.5;
+    return;
+  }
   const dough = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), st.body);
   dough.rotation.x = Math.PI / 2;
   dough.position.y = r;
@@ -1462,7 +1558,7 @@ function softMagnet(g: THREE.Group) {
 }
 // Crate: a mochi, a box rounded nearly to a blob, with the cute face texture on every side.
 function softCrate(g: THREE.Group, w: number, h: number, d: number) {
-  const st = STRUCT!, r = Math.min(w, h, d) * 0.42;
+  const st = STRUCT!, sm = softMats(), r = Math.min(w, h, d) * 0.42;
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 8, r), st.body);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
@@ -1472,6 +1568,17 @@ function softCrate(g: THREE.Group, w: number, h: number, d: number) {
     f.position.set(x + Math.sin(yaw) * 0.006, 0, z + Math.cos(yaw) * 0.006);
     f.rotation.y = yaw;
     g.add(f);
+  }
+  if (zoo()) {
+    // A bear: round ears on top, a muzzle with a nose and eyes on the front, a stub tail behind.
+    const ear = new THREE.SphereGeometry(Math.min(0.24, w * 0.14), 16, 12);
+    for (const s of [-1, 1]) { part(ear, sm.tint, s * w * 0.34, h / 2 + 0.02, -d * 0.1, g); part(new THREE.SphereGeometry(Math.min(0.12, w * 0.07), 12, 8), zooMats().ear, s * w * 0.34, h / 2 + 0.03, -d * 0.1 + 0.12, g); }
+    const muzzle = part(new THREE.SphereGeometry(0.2, 16, 12), st.body, 0, -h * 0.08, d / 2 - 0.06, g);
+    muzzle.scale.set(1.2, 0.8, 0.7);
+    part(new THREE.SphereGeometry(0.07, 12, 8), zooMats().eye, 0, -h * 0.03, d / 2 + 0.07, g);
+    eyes(g, 0, h * 0.15, d / 2 - 0.02, 0.24, 0.055);
+    part(new THREE.SphereGeometry(0.11, 12, 8), st.body, 0, -h * 0.15, -d / 2 - 0.02, g);
+    return;
   }
   // A glowing dot on the top face's corners, where the lab crate's brackets were.
   const dot = new THREE.SphereGeometry(0.09, 14, 10);
@@ -1494,6 +1601,16 @@ function softBlockade(g: THREE.Group) {
     f.rotation.y = yaw;
     g.add(f);
   }
+  if (zoo()) {
+    // A cat loaf: pointed ears, eyes, a nose and whiskers on the front, a tail curled on the floor behind.
+    for (const s of [-1, 1]) { cone(0.2, 0.34, sm.tint, g, s * 0.58, H - 0.08, 0.4, false); cone(0.1, 0.2, zooMats().ear, g, s * 0.58, H - 0.06, 0.48, false); }
+    eyes(g, 0, H * 0.66, D / 2 - 0.01, 0.3, 0.06);
+    part(new THREE.SphereGeometry(0.05, 12, 8), sm.glaze, 0, H * 0.53, D / 2 + 0.02, g);
+    whiskers(g, 0, H * 0.5, D / 2 + 0.02, 0.45);
+    const tail = part(new THREE.TorusGeometry(0.42, 0.07, 10, 32, Math.PI), sm.tint, -0.45, 0.08, -D / 2 - 0.25, g);
+    tail.rotation.x = Math.PI / 2; tail.rotation.z = 0.6;
+    return;
+  }
   const button = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 10), st.glow);
   button.position.y = H - 0.08;
   g.add(button);
@@ -1514,9 +1631,18 @@ function softBarrier(g: THREE.Group) {
   const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 20), st.glow);
   stick.position.y = 0.45;
   stick.castShadow = true;
+  g.add(stick);
+  if (zoo()) {
+    // A sheep: the cloud is the fleece; a dark head pokes out at the front right with pale eyes and two ears.
+    const head = part(new THREE.SphereGeometry(0.26, 18, 12), zooMats().wool, 0.95, 0.5, 0.3, g);
+    head.scale.set(1, 0.9, 1.1);
+    eyes(head, 0, 0.08, 0.22, 0.1, 0.05);
+    for (const s of [-1, 1]) { const ear = part(new THREE.SphereGeometry(0.12, 12, 8), zooMats().wool, s * 0.28, 0.1, -0.05, head); ear.scale.set(1.2, 0.5, 0.5); ear.rotation.z = s * 0.4; }
+    return;
+  }
   const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), st.glow);
   button.position.y = BARRIER_H - 0.03;
-  g.add(stick, button);
+  g.add(button);
   void W; void y0;
 }
 // Barrel: a pill capsule, white below and tinted above, with a light ring round its middle.
@@ -1539,6 +1665,15 @@ function softPill(g: THREE.Group, r: number, h: number) {
   ring.rotation.x = Math.PI / 2;
   g.add(cap, ring);
   if (faced()) { const f = faceDecal(r * 1.3); f.position.set(0, -h * 0.12, r + 0.004); g.add(f); }
+  if (zoo()) {
+    // A penguin: eyes and a beak on the upper (tinted) half, a flipper each side, orange feet at the base.
+    eyes(g, 0, h * 0.25, r * 0.93, r * 0.3, 0.045);
+    cone(0.07, 0.16, zooMats().beak, g, 0, h * 0.16, r * 0.98);
+    const flipper = new THREE.SphereGeometry(0.3, 14, 10);
+    for (const s of [-1, 1]) { const f = part(flipper, sm.tint, s * (r + 0.02), -h * 0.05, 0, g); f.scale.set(0.2, 0.95, 0.45); f.rotation.z = -s * 0.25; }
+    const foot = new THREE.SphereGeometry(0.11, 12, 8);
+    for (const s of [-1, 1]) { const f = part(foot, zooMats().beak, s * 0.14, -h / 2 + 0.02, 0.16, g); f.scale.set(1, 0.3, 1.4); }
+  }
 }
 // Cube: a sugar cube, a soft rounded block with a pip in the glow colour on each face.
 function softSugar(g: THREE.Group, C: number) {
@@ -1546,6 +1681,15 @@ function softSugar(g: THREE.Group, C: number) {
   const m = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 8, C * 0.3), st.body);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
+  if (zoo()) {
+    // A bunny: two long ears on top, eyes and a nose on the front, a cotton tail behind.
+    const ear = new THREE.CapsuleGeometry(0.075, 0.3, 4, 12), inner = new THREE.CapsuleGeometry(0.035, 0.2, 4, 10);
+    for (const s of [-1, 1]) { part(ear, st.body, s * 0.15, C / 2 + 0.22, -0.08, g).rotation.z = -s * 0.2; part(inner, zooMats().ear, s * 0.15, C / 2 + 0.22, -0.01, g).rotation.z = -s * 0.2; }
+    eyes(g, 0, 0.1, C / 2 - 0.01, 0.16, 0.045);
+    part(new THREE.SphereGeometry(0.04, 10, 8), sm.glaze, 0, -0.04, C / 2 + 0.01, g);
+    part(new THREE.SphereGeometry(0.1, 12, 8), st.body, 0, -0.12, -C / 2 - 0.02, g);
+    return;
+  }
   const pip = new THREE.SphereGeometry(C * 0.1, 16, 10);
   for (const [x, y, z] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
     const d = new THREE.Mesh(pip, y ? st.plankGlow : sm.glaze);

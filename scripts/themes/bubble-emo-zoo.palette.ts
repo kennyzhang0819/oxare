@@ -48,7 +48,7 @@ export const ENV = {
   style: "cute" as "lab" | "ice" | "cute",
   props: "soft",
   faces: false,
-  animals: false,
+  animals: true,
   floes: false,
   tileTints: [0xd0dff0, 0xd6e5f4, 0xd9dcf2, 0xd3e9ee],
   rain: 0,
