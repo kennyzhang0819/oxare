@@ -1595,11 +1595,11 @@ function makeSky(): THREE.Mesh {
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: {
       top: { value: new THREE.Color(SKY_TOP) }, bottom: { value: new THREE.Color(SKY_HORIZON) }, cloud: { value: new THREE.Color(ENV.cloud) }, cloudShade: { value: new THREE.Color(ENV.cloudShade) },
-      time: { value: 0 }, cloudY: { value: CLOUD_Y }, cloudTop: { value: CLOUD_TOP }, sunDir: { value: SUN_DIR }, detail: { value: 1 }, cover: { value: ENV.cloudCover },
+      time: { value: 0 }, cloudY: { value: CLOUD_Y }, cloudTop: { value: CLOUD_TOP }, sunDir: { value: SUN_DIR }, detail: { value: 1 }, cover: { value: ENV.cloudCover }, toon: { value: ENV.toon ? 1 : 0 },
     },
     // Pinned to the far plane: anything in the scene draws in front, and covered pixels skip the march.
     vertexShader: `varying vec3 vP; void main(){ vP = position; vec4 c = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = c.xyww; }`,
-    fragmentShader: `uniform vec3 top, bottom, sunDir, cloud, cloudShade; uniform float time, cloudY, cloudTop, detail, cover; varying vec3 vP;
+    fragmentShader: `uniform vec3 top, bottom, sunDir, cloud, cloudShade; uniform float time, cloudY, cloudTop, detail, cover, toon; varying vec3 vP;
       ${NOISE_GLSL}
       // Soft top and bottom so the ray march never crosses a hard edge (hard edges show as bands).
       float shape(float cover, float h) {
@@ -1642,8 +1642,9 @@ function makeSky(): THREE.Mesh {
                 float hs = (ps.y - cloudY) / (cloudTop - cloudY);
                 float shade = exp(-cs * shape(cs, hs) * 2.4);
                 float h = (p.y - cloudY) / (cloudTop - cloudY);
-                vec3 light = mix(cloudShade, cloud, shade) * (0.86 + 0.14 * h);
-                float a = 1.0 - exp(-den * dt * 0.14);
+                // Cel clouds: two flat tones and a hard edge, so they read as drawn puffs.
+                vec3 light = toon > 0.5 ? mix(cloudShade, cloud, step(0.5, shade)) : mix(cloudShade, cloud, shade) * (0.86 + 0.14 * h);
+                float a = toon > 0.5 ? step(0.14, den) * 0.45 : 1.0 - exp(-den * dt * 0.14);
                 acc += trans * a * light;
                 trans *= 1.0 - a;
                 if (trans < 0.03) break;
@@ -1747,7 +1748,7 @@ function makeOcean(): THREE.Mesh {
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       time: { value: 0 }, sunDir: { value: SUN_DIR },
       deep: { value: new THREE.Color(ENV.seaDeep) }, shallow: { value: new THREE.Color(ENV.seaShallow) }, sky: { value: new THREE.Color(ENV.seaSky) },
-      grid: { value: new THREE.Color(ENV.seaGrid ?? 0) }, ruled: { value: ENV.seaGrid === null ? 0 : 1 }, cover: { value: ENV.cloudCover },
+      grid: { value: new THREE.Color(ENV.seaGrid ?? 0) }, ruled: { value: ENV.seaGrid === null ? 0 : 1 }, cover: { value: ENV.cloudCover }, toon: { value: ENV.toon ? 1 : 0 },
       detail: { value: 1 },
     }]),
     vertexShader: `#include <fog_pars_vertex>
@@ -1760,7 +1761,7 @@ function makeOcean(): THREE.Mesh {
         #include <fog_vertex>
       }`,
     fragmentShader: `#include <fog_pars_fragment>
-      uniform float time, detail, ruled, cover; uniform vec3 sunDir, deep, shallow, sky, grid; varying vec3 vWorld;
+      uniform float time, detail, ruled, cover, toon; uniform vec3 sunDir, deep, shallow, sky, grid; varying vec3 vWorld;
       ${NOISE_GLSL}
       void main(){
         vec2 p = vWorld.xz;
@@ -1787,10 +1788,22 @@ function makeOcean(): THREE.Mesh {
         vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
         vec3 V = normalize(cameraPosition - vWorld);
         float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-        vec3 col = mix(mix(deep, shallow, smoothstep(0.3, 0.7, tone)), sky, fres);
+        vec3 col;
         float spec = pow(max(dot(n, normalize(sunDir + V)), 0.0), 140.0);
-        col += vec3(1.0, 0.99, 0.95) * spec * 0.12;
-        col *= 1.0 - 0.16 * (detail > 0.5 ? cloudCover(p, time) : cloudCoverLow(p, time));
+        float shadow = detail > 0.5 ? cloudCover(p, time) : cloudCoverLow(p, time);
+        if (toon > 0.5) {
+          // Cel sea: two flat bands of water, a flat band of sky at the grazing angle, hard white glints
+          // and hard-edged cloud shadows.
+          float band = step(0.5, tone), ripple = step(0.68, fbm(p * 0.45 + vec2(time * 0.03, -time * 0.02)));
+          col = mix(mix(deep, shallow, band), mix(shallow, sky, 0.5), ripple * 0.25);
+          col = mix(col, sky, step(0.55, fres) * 0.6);
+          col += vec3(1.0) * step(0.25, spec) * 0.35;
+          col *= 1.0 - 0.14 * step(0.5, shadow);
+        } else {
+          col = mix(mix(deep, shallow, smoothstep(0.3, 0.7, tone)), sky, fres);
+          col += vec3(1.0, 0.99, 0.95) * spec * 0.12;
+          col *= 1.0 - 0.16 * shadow;
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
         #include <fog_fragment>
@@ -2024,7 +2037,14 @@ export function stylize(root: THREE.Object3D): void {
     if (!(o instanceof THREE.Mesh) || o.userData.outline) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     const solid = mats.every((m) => m instanceof THREE.MeshStandardMaterial && !m.transparent && !(m instanceof THREE.MeshPhysicalMaterial));
-    if (ENV.toon) o.material = Array.isArray(o.material) ? o.material.map(toonOf) : toonOf(o.material);
+    if (ENV.toon) {
+      // Cel-lit bodies take no shadows: on a curved body the shadow map's terminator breaks the flat
+      // bands into jagged steps. Floors, planks and blocks (anything wearing the floor texture) keep
+      // them, so drop shadows stay.
+      const floorLike = mats.some((m) => m instanceof THREE.MeshStandardMaterial && m.map !== null && m.map === MAT!.platform.map);
+      if (!floorLike) o.receiveShadow = false;
+      o.material = Array.isArray(o.material) ? o.material.map(toonOf) : toonOf(o.material);
+    }
     if (ENV.outline > 0 && solid && !o.userData.noShadow) {
       OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor);
       const geo = o.geometry.clone();
