@@ -774,6 +774,18 @@ function cutePillar(ctx: Ctx, PW: number, PH: number) {
   for (let k = 0; k < 6; k++) heart(ctx, (k + 0.5) * (PW / 6), 106, 13, css(PILLAR.slate));
 }
 
+// A kawaii face on a clear background, for a decal on a soft prop.
+export function faceTexture(): THREE.Texture {
+  const S = 256;
+  const [c, ctx] = canvas2x(S, S);
+  ctx.clearRect(0, 0, S, S);
+  kawaii(ctx, S / 2, S / 2, 92, css(BOARD.chip), css(BOARD.trace), css(BOARD.pad));
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 // Goal base: dark disc with light spokes and a hub.
 function goalDisc(): THREE.Texture {
   const S = 256;

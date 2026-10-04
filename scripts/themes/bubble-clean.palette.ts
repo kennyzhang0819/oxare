@@ -1,16 +1,16 @@
 // Every colour a level is drawn in, as 0xRRGGBB; docs/colors.md shows them. The level is drawn in
 // the few colours just below and nothing else: each piece's group only says which of them it wears.
-export const WHITE = 0xcfc9b8;
+export const WHITE = 0xfdfeff;
 // Reserved: only the goal disc, the platforms' side strip and the magnet.
-export const BLACK = 0x2f3a2a;
-export const LIGHT_GREY = 0xb6ad98, DARK_GREY = 0x6b5a45;
+export const BLACK = 0x4f8ad9;
+export const LIGHT_GREY = 0xe3f0ff, DARK_GREY = 0x86b1ea;
 // Accent strips and glows.
-export const CYAN = 0xffc94a, GREEN = 0x7fd14a, ORANGE = 0xe9683a;
-export const RED = 0xd63a3a, DARK_RED = 0x5c1f1f;
-export const TUBE_GLASS = 0xbfe7c9;
+export const CYAN = 0xffe566, GREEN = 0x74e6bb, ORANGE = 0xffa24a;
+export const RED = 0xff6b6b, DARK_RED = 0xd14a4a;
+export const TUBE_GLASS = 0xcfeaff;
 
 // Floor tiles: the white in TILE_SHADES fixed shades, each a step darker; every tile takes one.
-export const TILE_SHADES = 5, TILE_STEP = 0.035;
+export const TILE_SHADES = 5, TILE_STEP = 0.006;
 
 export const PROPS = { white: WHITE, grey: DARK_GREY, tread: DARK_GREY, hinge: DARK_GREY, cyan: CYAN, green: GREEN };
 // Supports, columns and gates take the pillar's colours.
@@ -37,45 +37,45 @@ export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY
 // Effects, not pieces, keep their own colours: the jump pad's rising squares, the magnet's aura and
 // the ball. (The goal's beam is drawn in its own shader.)
 export const EFFECTS = {
-  jumpHolo: 0xffc94a,
-  magnetAura: 0xd63a3a,
-  ball: { light: 0x7fc29a, mid: 0x2f7a4e, dark: 0x133a26, bevel: 0x7fc29a, groove: 0x0a2416, dash: 0xffc94a, chrome: false },
+  jumpHolo: 0xffe566,
+  magnetAura: 0xff6b6b,
+  ball: { light: 0xd8e8ff, mid: 0xd8e8ff, dark: 0xd8e8ff, bevel: 0xd8e8ff, groove: 0xd8e8ff, dash: 0xd8e8ff, chrome: true },
 };
 
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
 // numbers scene.ts and textures.ts read, so a look is one file.
 export const ENV = {
-  style: "lab" as "lab" | "ice" | "cute",
-  props: "lab",
+  style: "cute" as "lab" | "ice" | "cute",
+  props: "soft",
   floes: false,
-  tileTints: null as number | null,
+  tileTints: [0xe8f3ff, 0xeefaff, 0xf3f0ff, 0xe9fff5],
   rain: 0,
-  bubbles: 0,
-  cloudCover: 0,
+  bubbles: 420,
+  cloudCover: 0.14,
   fog: 1,
-  floorRoughness: 0.85,
-  toon: false,
+  floorRoughness: 0.8,
+  toon: true,
   outline: 0,
-  outlineColor: 0x000000,
-  skyTop: 0x6fa3d8,
-  skyHorizon: 0xf4e6cf,
+  outlineColor: 0x2c4a7a,
+  skyTop: 0x4aa3ff,
+  skyHorizon: 0xeaf6ff,
   cloud: 0xffffff,
-  cloudShade: 0xb9c3d4,
-  seaDeep: 0xe8edf2,
-  seaShallow: 0xf6f8fa,
-  seaSky: 0xf4e6cf,
+  cloudShade: 0xb9d3ee,
+  seaDeep: 0x3f93e8,
+  seaShallow: 0x6fb6f2,
+  seaSky: 0xeaf6ff,
   seaGrid: null as number | null,
-  hemiSky: 0xd7e6ff,
-  hemiGround: 0x5f6b3a,
-  hemi: 0.8,
-  sun: 0xffe6c0,
+  hemiSky: 0xffffff,
+  hemiGround: 0xbfdcff,
+  hemi: 1.0,
+  sun: 0xfff8ee,
   sunPower: 2.0,
-  glow: 0.7,
+  glow: 1.0,
   lightMetal: 0,
   lightRoughness: 0.5,
-  bodyRoughness: 0.9,
+  bodyRoughness: 0.5,
   tileWide: 2,
-  tileGrout: 0x6f8a4a,
+  tileGrout: null as number | null,
 };
 
 // As a CSS colour, for canvas textures.
@@ -85,4 +85,6 @@ export const shade = (c: number, k: number): number =>
   [16, 8, 0].reduce((out, s) => out | (Math.max(0, Math.min(255, Math.round(((c >> s) & 255) * k))) << s), 0);
 
 // Theme overrides.
-Object.assign(BOARD, { edge: DARK_GREY, board: DARK_GREY, trace: LIGHT_GREY, pad: CYAN, hole: 0x4a3b2c, chip: 0x4a3b2c, chipTop: LIGHT_GREY });
+Object.assign(BOARD, { edge: LIGHT_GREY, board: WHITE, trace: 0xffb3a7, pad: 0xffffff, hole: 0x2c4a7a, chip: 0x2c4a7a, chipTop: 0xffffff });
+Object.assign(CRATE, { body: WHITE, cross: LIGHT_GREY, screen: 0x2c4a7a, shine: 0xffffff, light: GREEN });
+Object.assign(PILLAR, { white: WHITE, slate: DARK_GREY, pale: 0xcfe4ff });

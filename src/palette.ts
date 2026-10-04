@@ -68,6 +68,9 @@ export const ENV = {
   rain: 0, bubbles: 0, cloudCover: 0, fog: 1, floorRoughness: 0.85,
   // Cel shading (stepped light) and an ink outline this wide round every solid, in this colour.
   toon: false, outline: 0, outlineColor: 0x000000,
+  // Which bodies the props are built as: the lab's cylinders, pucks and crates, or soft shapes
+  // (beads, puddings, donuts, mochi, pillows, clouds, pills) inside the same colliders.
+  props: "lab" as "lab" | "soft",
 };
 
 // As a CSS colour, for canvas textures.

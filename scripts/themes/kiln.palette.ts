@@ -46,6 +46,7 @@ export const EFFECTS = {
 // numbers scene.ts and textures.ts read, so a look is one file.
 export const ENV = {
   style: "lab" as "lab" | "ice" | "cute",
+  props: "lab",
   floes: false,
   tileTints: null as number | null,
   rain: 0,

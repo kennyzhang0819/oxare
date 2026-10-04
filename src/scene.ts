@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { BALL_RADIUS, BEAN_LIFT, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, GOAL_BEAM_H, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
+import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, faceTexture, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { BUMPER, EFFECTS, ENV, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh } from "./platform.ts";
@@ -94,6 +94,7 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
 }
 
 function buildBlockade(g: THREE.Group) {
+  if (ENV.props === "soft") return softBlockade(g);
   const st = STRUCT!;
   const W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D;
   const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, BLOCKADE_R), st.body);
@@ -127,6 +128,7 @@ function buildHoleMarker(g: THREE.Group, p: Piece & { type: "hole" }) {
 // instrument panel on each long face and a louvred grille on each end. The pod fills the
 // collider exactly. Every detail is a box standing proud of the body, never a plane lying on it.
 function buildBarrier(g: THREE.Group) {
+  if (ENV.props === "soft") return softBarrier(g);
   const st = STRUCT!, R = BARRIER_R;
   const W = BARRIER_W, D = BARRIER_D, H = BARRIER_H - BARRIER_LEG, y0 = BARRIER_LEG;
   const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, R), st.body);
@@ -188,6 +190,7 @@ function buildStartPad(g: THREE.Group) {
 // rim and the flat top carrying a round circuit board, laid flat from above to fill it.
 const BUMPER_RUBBER = new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.45 });
 function buildBumper(g: THREE.Group) {
+  if (ENV.props === "soft") return softBumper(g);
   const st = STRUCT!, bands = bumperProfile(), dish = bands[3]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
   for (const band of bands) {
     const m = revolveMesh(band, 48), base = pos.length / 3;
@@ -213,6 +216,7 @@ const MAGNET_GROOVE = new THREE.MeshStandardMaterial({ color: MAGNET.groove, rou
 const MAGNET_UPPER = new THREE.MeshStandardMaterial({ color: MAGNET.upper, roughness: 0.35, metalness: 0.4 });
 let AURA_MAT: THREE.MeshBasicMaterial | null = null;
 function buildMagnet(g: THREE.Group) {
+  if (ENV.props === "soft") { softMagnet(g); addAura(g); return; }
   const st = STRUCT!, bands = magnetProfile(), dish = bands[bands.length - 1]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
   for (const band of bands) {
     const m = revolveMesh(band, 48), base = pos.length / 3;
@@ -226,6 +230,9 @@ function buildMagnet(g: THREE.Group) {
   geo.setIndex(idx);
   geo.computeVertexNormals();
   g.add(new THREE.Mesh(geo, [MAGNET_GLOW, MAGNET_LOWER, MAGNET_GROOVE, MAGNET_UPPER, MAGNET_GLOW, st.body, st.bumperTop]));
+  addAura(g);
+}
+function addAura(g: THREE.Group) {
   AURA_MAT ??= new THREE.MeshBasicMaterial({ map: magnetAuraTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const aura = new THREE.Mesh(new THREE.PlaneGeometry(2 * MAGNET_REACH, 2 * MAGNET_REACH).rotateX(-Math.PI / 2), AURA_MAT);
   aura.position.y = PAINT;
@@ -331,6 +338,7 @@ const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5
 // cyan band just inside each, and every 4 layers up a pale band between two cyan lines. The strips
 // and bands are painted on, no more than PAINT proud.
 function buildColumn(g: THREE.Group, h: number) {
+  if (ENV.props === "soft") return softBeads(g, COLUMN_R, h, false);
   const st = STRUCT!, R = COLUMN_R;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 48), [st.body, SLATE, SLATE]);
   body.position.y = h / 2;
@@ -502,6 +510,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
 // rounded box wearing the ribbed octagon face on every side (the top face its white, solid-bordered
 // one on a plate over it), and on every face a pale rim with a green lit line just inside it.
 function buildCube(g: THREE.Group, C: number): void {
+  if (ENV.props === "soft") return softSugar(g, C);
   const st = STRUCT!;
   const body = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 3, propRound(C, C, C)), st.cubeFace);
   body.castShadow = body.receiveShadow = true;
@@ -789,6 +798,7 @@ function buildHoop(g: THREE.Group) {
 // panels round its side, each in a dark frame. Rings and panels are painted on, PAINT proud at most.
 // Like a crate, the group is centred on the physics body and placed by it each frame.
 function buildBarrel(g: THREE.Group, r: number, h: number) {
+  if (ENV.props === "soft") return softPill(g, r, h);
   const st = STRUCT!, rr = propRound(2 * r, h, 2 * r);
   const m = revolveMesh(barrelProfile(r, h), 48), geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
@@ -847,6 +857,7 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
 
 // Pushable crate: one textured cube, placed by the physics body each frame.
 function buildCrate(g: THREE.Group, w: number, h: number, d: number) {
+  if (ENV.props === "soft") return softCrate(g, w, h, d);
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 6, crateRound(w, h, d)), STRUCT!.crate);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
@@ -1165,6 +1176,7 @@ function buildGoal(g: THREE.Group, r: number) {
 }
 
 function buildPillar(g: THREE.Group) {
+  if (ENV.props === "soft") return softBeads(g, PILLAR_R, PILLAR_H, true);
   const st = STRUCT!;
   const R = PILLAR_R, H = PILLAR_H, capH = PILLAR_CAP, C = PILLAR_COLLAR, RG = PILLAR_RING;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H - capH, 64), st.pillar);
@@ -1180,6 +1192,202 @@ function buildPillar(g: THREE.Group) {
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(R + RG.r, R + RG.r, RG.h, 64), st.glow);
   ring.position.y = RG.h / 2;
   g.add(body, collar, dome, ring);
+}
+
+// Soft props: the same colliders, different bodies. Everything here stays inside the lab prop's
+// footprint so the physics is untouched; where a soft body is thinner (a bead's waist, a donut's
+// hole) the collider is simply a little bigger than what is drawn.
+let FACE_MAT: THREE.MeshStandardMaterial | null = null;
+let SOFT: { tint: THREE.MeshStandardMaterial; glaze: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial } | null = null;
+function softMats() {
+  SOFT ??= {
+    tint: new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: ENV.bodyRoughness }),
+    glaze: new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.35 }),
+    eyes: new THREE.MeshStandardMaterial({ color: PLATFORM.block, roughness: 0.5 }),
+  };
+  return SOFT;
+}
+// A face decal `size` across on a plane facing +z, PAINT off the surface it is put on.
+// Faces belong to the cute style only; elsewhere the soft props stay plain.
+const faced = (): boolean => ENV.style === "cute";
+function faceDecal(size: number): THREE.Mesh {
+  FACE_MAT ??= new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, roughness: 0.6 });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), FACE_MAT);
+  m.userData.noShadow = true;
+  return m;
+}
+// A sphere squashed to `h` tall and `r` wide, centre at y.
+function bead(r: number, h: number, y: number, mat: THREE.Material): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 40, 24), mat);
+  m.scale.y = h / (2 * r);
+  m.position.y = y;
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+// Pillar and column: a stack of fat beads, alternating tints, a light ring in each waist and a
+// small knob on top; a pillar's top bead wears a face.
+function softBeads(g: THREE.Group, R: number, H: number, face: boolean) {
+  const st = STRUCT!, sm = softMats();
+  const knob = R * 0.42, n = Math.max(2, Math.round((H - knob) / (R * 1.3))), bh = (H - knob) / n;
+  for (let i = 0; i < n; i++) {
+    g.add(bead(R, bh + 0.02, bh * (i + 0.5), i % 2 ? sm.tint : st.body));
+    if (i > 0) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(R * 0.78, R * 0.07, 10, 48), st.glow);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = bh * i;
+      g.add(ring);
+    }
+  }
+  const top = bead(knob, knob * 1.6, H - knob * 0.8, st.glow);
+  g.add(top);
+  if (face && faced()) {
+    const f = faceDecal(R * 1.1);
+    f.position.set(0, bh * (n - 0.5), R + 0.006);
+    g.add(f);
+  }
+}
+// Bumper: a pudding, a smooth squashed dome with a band of jam round its middle, a cherry on top
+// and a face on its front.
+function softBumper(g: THREE.Group) {
+  const st = STRUCT!, sm = softMats(), R = 1, H = 1;
+  const prof: [number, number][] = [];
+  for (let k = 0; k <= 18; k++) { const t = k / 18, y = t * H, u = (y - 0.42) / 0.6; prof.push([Math.max(0.001, R * 0.985 * Math.sqrt(Math.max(0, 1 - u * u))), y]); }
+  prof[0] = [R * 0.72, 0];
+  prof[prof.length - 1] = [0.001, H];
+  const m = revolveMesh(prof, 56), geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
+  geo.setIndex(m.indices);
+  geo.computeVertexNormals();
+  const body = new THREE.Mesh(geo, st.body);
+  body.castShadow = body.receiveShadow = true;
+  const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.085, 12, 64), sm.glaze);
+  band.rotation.x = Math.PI / 2;
+  band.position.y = 0.42;
+  const cherry = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), sm.glaze);
+  cherry.position.y = H - 0.11;
+  cherry.castShadow = true;
+  g.add(body, band, cherry);
+  if (faced()) { const f = faceDecal(0.7); f.position.set(0, 0.64, R * 0.925); f.rotation.x = -0.42; g.add(f); }
+}
+// Magnet: a donut, glazed in the hazard colour on top with sprinkles, sitting flat.
+function softMagnet(g: THREE.Group) {
+  const st = STRUCT!, sm = softMats(), Rm = 0.6, r = 0.39;
+  const dough = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), st.body);
+  dough.rotation.x = Math.PI / 2;
+  dough.position.y = r;
+  dough.castShadow = dough.receiveShadow = true;
+  const glaze = new THREE.Mesh(new THREE.TorusGeometry(Rm, r + 0.012, 24, 64, Math.PI * 2), sm.glaze);
+  glaze.rotation.x = Math.PI / 2;
+  glaze.position.y = r;
+  glaze.scale.y = 1;
+  // Only the upper half of the glaze torus shows: clip the lower half by drawing it a hair under the dough.
+  const gg = glaze.geometry.getAttribute("position");
+  for (let i = 0; i < gg.count; i++) if (gg.getZ(i) < 0.02) gg.setZ(i, -0.01);
+  gg.needsUpdate = true;
+  glaze.geometry.computeVertexNormals();
+  g.add(dough, glaze);
+  const colours = [st.glow, STRUCT!.plankGlow, st.body];
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2 + (i % 3) * 0.3, rr = Rm + (((i * 7) % 5) / 5 - 0.5) * r * 1.1;
+    const sp = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.09, 4, 8), colours[i % 3]!);
+    const yy = r + Math.sqrt(Math.max(0, (r + 0.02) ** 2 - (rr - Rm) ** 2));
+    sp.position.set(Math.cos(a) * rr, yy, Math.sin(a) * rr);
+    sp.rotation.set(Math.PI / 2 + (i % 4) * 0.4, 0, a + (i % 5) * 0.5);
+    g.add(sp);
+  }
+}
+// Crate: a mochi, a box rounded nearly to a blob, with the cute face texture on every side.
+function softCrate(g: THREE.Group, w: number, h: number, d: number) {
+  const st = STRUCT!, r = Math.min(w, h, d) * 0.42;
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 8, r), st.body);
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  const size = Math.min(w, d, h) * 0.6;
+  if (faced()) for (const [x, z, yaw] of [[0, d / 2, 0], [0, -d / 2, Math.PI], [w / 2, 0, Math.PI / 2], [-w / 2, 0, -Math.PI / 2]] as const) {
+    const f = faceDecal(size);
+    f.position.set(x + Math.sin(yaw) * 0.006, 0, z + Math.cos(yaw) * 0.006);
+    f.rotation.y = yaw;
+    g.add(f);
+  }
+  // A glowing dot on the top face's corners, where the lab crate's brackets were.
+  const dot = new THREE.SphereGeometry(0.09, 14, 10);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const o = new THREE.Mesh(dot, st.plankGlow);
+    o.position.set(sx * (w / 2 - r * 0.9), h / 2 - 0.03, sz * (d / 2 - r * 0.9));
+    g.add(o);
+  }
+}
+// Blockade: a pillow, a fat rounded block with a button sunk in each side and a face on the front.
+function softBlockade(g: THREE.Group) {
+  const st = STRUCT!, sm = softMats(), W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D;
+  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 8, 0.5), sm.tint);
+  body.position.y = H / 2;
+  body.castShadow = body.receiveShadow = true;
+  g.add(body);
+  if (faced()) for (const [x, z, yaw] of [[0, D / 2, 0], [0, -D / 2, Math.PI], [W / 2, 0, Math.PI / 2], [-W / 2, 0, -Math.PI / 2]] as const) {
+    const f = faceDecal(1.1);
+    f.position.set(x + Math.sin(yaw) * 0.006, H / 2, z + Math.cos(yaw) * 0.006);
+    f.rotation.y = yaw;
+    g.add(f);
+  }
+  const button = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 10), st.glow);
+  button.position.y = H - 0.08;
+  g.add(button);
+}
+// Barrier: a cloud, three flattened puffs on two candy-stick legs, with a face on the middle puff.
+function softBarrier(g: THREE.Group) {
+  const st = STRUCT!, sm = softMats(), W = BARRIER_W, D = BARRIER_D, y0 = BARRIER_LEG;
+  const puffs: [number, number, number][] = [[0, 0.62, 0.78], [-0.7, 0.54, 0.7], [0.7, 0.54, 0.7]];
+  for (const [x, r, cy] of puffs) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 36, 20), st.body);
+    m.scale.z = (D / 2) / r;
+    m.position.set(x, cy, 0);
+    m.castShadow = m.receiveShadow = true;
+    g.add(m);
+  }
+  if (faced()) { const f = faceDecal(0.8); f.position.set(0, 0.8, D / 2 - 0.02); g.add(f); }
+  const legGeo = new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, y0 + 0.5, 20);
+  for (const [k, x] of [BARRIER_LEG_X, -BARRIER_LEG_X].entries()) {
+    const leg = new THREE.Mesh(legGeo, k ? sm.glaze : st.glow);
+    leg.position.set(x, (y0 + 0.5) / 2, 0);
+    leg.castShadow = true;
+    g.add(leg);
+  }
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(W - 0.6, 0.06, D - 0.2), st.body)).position.y = y0 + 0.2;
+}
+// Barrel: a pill capsule, white below and tinted above, with a light ring round its middle.
+function softPill(g: THREE.Group, r: number, h: number) {
+  const st = STRUCT!, sm = softMats();
+  const cap = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.98, Math.max(0.01, h - 2 * r), 8, 32), [st.body, sm.tint]);
+  const geo = cap.geometry, pos = geo.getAttribute("position");
+  geo.clearGroups();
+  // Split the capsule's triangles into two material groups by height.
+  const idx = geo.getIndex()!, lower: number[] = [], upper: number[] = [];
+  for (let i = 0; i < idx.count; i += 3) {
+    const y = (pos.getY(idx.getX(i)) + pos.getY(idx.getX(i + 1)) + pos.getY(idx.getX(i + 2))) / 3;
+    (y < 0 ? lower : upper).push(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+  }
+  geo.setIndex([...lower, ...upper]);
+  geo.addGroup(0, lower.length, 0);
+  geo.addGroup(lower.length, upper.length, 1);
+  cap.castShadow = cap.receiveShadow = true;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.98, 0.035, 10, 48), st.glow);
+  ring.rotation.x = Math.PI / 2;
+  g.add(cap, ring);
+  if (faced()) { const f = faceDecal(r * 1.3); f.position.set(0, -h * 0.12, r + 0.004); g.add(f); }
+}
+// Cube: a sugar cube, a soft rounded block with a pip in the glow colour on each face.
+function softSugar(g: THREE.Group, C: number) {
+  const st = STRUCT!, sm = softMats();
+  const m = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 8, C * 0.3), st.body);
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+  const pip = new THREE.SphereGeometry(C * 0.1, 16, 10);
+  for (const [x, y, z] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
+    const d = new THREE.Mesh(pip, y ? st.plankGlow : sm.glaze);
+    d.position.set(x * C * 0.46, y * C * 0.46, z * C * 0.46);
+    g.add(d);
+  }
 }
 
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until
