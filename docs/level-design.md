@@ -1,6 +1,16 @@
 # Level design
 
-What the classic levels (`01`–`17`, rebuilt from the original game) in Archive and the first Expert level (`n01`) do, measured from their files and from headless runs of the physics, so new levels can follow the same vibe. Update this as more classics are rebuilt: the classics are the reference.
+What the classic levels (`01`–`17`, rebuilt from the original game) in Archive and the first Expert level (`n01`) do, measured from their files and from headless runs of the physics, so new levels can follow the same vibe. Update this as more classics are rebuilt: the classics are the reference for the props, the numbers and the placement, but not for the shape of a level (below).
+
+## The shape of a level
+
+New levels (Basics onward) are not the classics' long lanes. A level is a small environment, a patch of overgrown ruin the player can take in from the start, built up rather than out, and played for finding its apples and bringing them home.
+
+- **Small footprint.** The whole level fits in about 40×40 of grid (B2 is about 40 by 48). There is no long run from start to finish.
+- **Stacked, not spread.** Height is the main axis. Decks sit 4 or 5 up on supports and columns over the ground floor, reached by kickers, jump pads, ramps, rails and tubes, and left by a drop, a hole or a tube. One footprint holds two to four floors, and the same spot seen from above and from below is two different places.
+- **Apples hidden in the space.** Each apple is where finding it is the puzzle: on a deck above the start, under an overhang, past a hole on an upper floor, behind a wall. Getting there is half of it; every apple needs a way back down to the origin.
+- **Short loops from the origin.** The origin sits near the middle where the routes cross, and each apple is a short excursion out and back rather than a stop on one long route.
+- **The classics' numbers still hold.** Kicker and jump pad ranges, gaps, run-ups and placement below are what a stack is built from; the classics' lane lengths and rhythm are not.
 
 ## Units and speeds to design against
 
@@ -36,11 +46,11 @@ What stops a rolling ball and what does not:
 - **One idea per 16-slab.** The default slab is 8×16 and a section is one slab holding one prop, with the rest of the slab as run-up or landing. Two ideas in a row get a 24 or 32 slab. Big arenas (24×24, 24×16, 60×60 floors with columns) are for a single set piece.
 - **Curves are the rest beats.** Every 90° curve is 8/16 (inner/outer) and about 20 units of pure rolling. A C curve (sweep 180) is a hairpin; a 3/4 curve (sweep 270) brings the run back across its own entry line, heading the way the entry's right-hand side pointed, so it loops round a set piece. Levels turn after nearly every obstacle section, so a run is obstacle, turn, obstacle, turn.
 - **Height.** Ramps rise 4 over 24 or 32 (one or two per level), and jump pads or knocked planks climb 4 at a time. Supports stand under a raised slab's near edge wherever a lower platform is next to it; raised slabs with nothing below just float, which is normal.
-- **Goal.** On an 8×8 (or 8×4) slab after a short calm stretch, 2 to 4 units from the last obstacle's landing, never right at a landing.
+- **Apples and the way home.** A level is played for its apples (usually 3) and ends back at the origin. In a classic, rebuilt as a long lane, the apples go where reaching one is the point of a section, the old goal spot being a natural place for the last, and the way home is the lane run backwards. A new level keeps its apples close and stacked instead (see "The shape of a level").
 
 ## Rhythm and length
 
-The classics alternate obstacle sections with calm rolling. Level 01: opener (calm), pillars, blockades, barrier gates, calm, goal. Level 06: jump, jump, plank, calm, arena, jump, jump, calm, curve, crates, beam, jump, kicker, beam, plank, goal. The pattern is one obstacle per slab with the curves and a plain slab or two as breath. A classic lane is 200 to 350 units long, 35 to 90 seconds for a clean adventure run; the opener and the goal stretch are always calm.
+The classics alternate obstacle sections with calm rolling. Level 01: opener (calm), pillars, blockades, barrier gates, calm, goal (now the last apple). Level 06: jump, jump, plank, calm, arena, jump, jump, calm, curve, crates, beam, jump, kicker, beam, plank, goal. The pattern is one obstacle per slab with the curves and a plain slab or two as breath. A classic lane is 200 to 350 units long, 35 to 90 seconds for a clean adventure run; the opener and the goal stretch are always calm. A new level is far smaller: its rhythm is a few short loops out from the origin and back, each with one or two ideas on it, and the calm beats are the origin and the decks between climbs.
 
 Levels sit on a spectrum from adventure to puzzle. An adventure level is flow: kickers, jumps, curves, banked slabs, a few fixed obstacles, nothing to push. A puzzle level makes the ball push things (crates, stools, sliding kickers, knock-down planks, barrels), and every push multiplies the time: lining up behind a prop, pushing it a few units, backing off and going round. Pushable sections take several times longer than the same lane length of flow, so a level with two or three pushes is already much longer than its lane suggests. Most levels sit in the middle or toward the adventure end with few pushables; the extreme puzzle levels (the originals' 18 and 28, not rebuilt yet) have the ball push blocks from far back along the level to open a gate, and run many times longer than an adventure level. Place a level on this spectrum on purpose and size its length to match.
 
@@ -88,7 +98,7 @@ Structures snap to a 2 grid, so most of these are "one grid step from the edge".
 - **Rails:** side end on a higher platform down to a top end on a lower one, 13 to 16 long, or side to side between slabs at one height (05, 10, 11).
 - **Twist and roll:** a slab twisted 30 feeds a slab rolled 30, with a rolled jump pad on it to throw the ball sideways (10, 16, 17).
 - **Moving platforms:** 4×4 pingpong over 4 at speed 1 to 3, in pairs or threes as stepping stones (04, 05, 09, 10, 12); a 6×6 over 10 or 16 as a ferry (12, 16, n01).
-- **Pangolin:** 8 long over a 4 gap with its snout 3.5 in from the near edge, so its coil sits on the platform and its tail tip lands 0.5 onto the far one. The ball touching it stops dead, then follows it across; at the default speed it is down in about 1.6 seconds. Laid out, a ball at full speed rolls over it with under 0.05 of lift.
+- **Pangolin:** 8 long over a 4 gap with its snout 3.5 in from the near edge, so its coil sits on the platform and its tail tip lands 0.5 onto the far one. The ball touching it stops dead, then follows it across; at the default speed it is down in about 1.6 seconds. Laid out, a ball at full speed rolls over it with under 0.05 of lift. Its path can turn and climb: give the corner a bend and keep the climb over the gap, so the laid body never cuts into a platform's top; a ball held to about 3 a second follows it round a 90° corner that rises a layer.
 - **Knock-down plank as a ramp up:** an 8-tall plank standing on a low ledge 6 from a slab 4 higher leans on it at 30° when knocked (14).
 
 ## Expert twists (what `n01` changes)
@@ -99,7 +109,7 @@ Expert levels raise the aim and timing demands on classic parts rather than addi
 
 Structures that only appear when pieces are combined, each measured headlessly. Damping (0.8) caps a free-falling ball near 6.3, so nothing built on stored energy returns the ball to the height it started from; design these for the speeds below, not for textbook physics.
 
-- **Quarter-pipe launch.** A slab 5 deep curled 90 (radius 3.2) ridden at speed 6 or more throws the ball 0.8 to 1.3 above its lip; with forward held it flies over the lip and lands on a slab whose top is at the lip's height (y 3) starting half a unit to one unit behind the pipe's vertical face. Below speed 6 the ball rolls back down. A pipe 8 deep (radius 5.1) is too tall: the ball stalls at the lip and hangs on the face under wall grip.
+- **Quarter-pipe launch.** A slab 5 deep curled 90 (radius 3.2) ridden at speed 6 or more throws the ball 0.8 to 1.3 above its lip; with forward held it flies over the lip and lands on a slab whose top is at the lip's height (y 3) starting half a unit to one unit behind the pipe's vertical face. Below speed 6 the ball rolls back down. A pipe 8 deep (radius 5.1) ridden at full speed with forward held also throws the ball over its lip, about 0.6 above it.
 - **Tube cannon.** A tube that drops 8 straight down from a platform edge, bends through a U and climbs 2 over 2 before its mouth fires the ball out of the upturned mouth at about 5.4 and 37°, whatever speed it rolled in with. It lands about 15 past the mouth on a floor 4 lower, so the catch is a 16-slab from 10 to 26 past the mouth, 4 down.
 - **Domino planks.** Frozen 8-tall planks at a 6 pitch knock each other over: nudge the first, and each tip wakes the next, a plank falling every 2 to 3 seconds under the props' gravity. The last one, 0.5 from the edge, bridges a 6 gap (3 planks bridge 7). The ball then rolls the flat planks as a crossing. Budget about 10 seconds of watching.
 - **Bean kick.** A bean running along a lane toward a platform edge, its last node 1 before the edge, kicks a ball parked at the edge (centre 0.5 to 1 in from the lip) across a gap: at bean speed 6 about 6 past the edge onto a slab 2 lower, at speed 8 about 9, at 10 about 11; at the same height only 4. The ball must be parked still, right at the lip, and the lane must be wide enough to pass the bean on the way there.
@@ -109,7 +119,7 @@ Structures that only appear when pieces are combined, each measured headlessly. 
 
 ## Checklist for a new level
 
-- Opener slab with 12 clear, calm goal stretch, 200 to 350 of lane for an adventure level, longer for a puzzle one.
+- A compact footprint (about 40×40) built up in layers, the origin near the middle with clear floor round it, apples placed (usually 3) in its nooks and on its upper decks, each with a way back down to the origin.
 - One headline prop, two or three things to do with it, kickers, jumps and curves to connect.
 - Kickers 2 in from the edge, jump pads 2 off the edge, barriers at a 3 pitch, structures on the 2 grid, platforms on the 0.5 grid so the floor welds.
 - 10 or more of straight run-up before any shot that needs speed; a landing 2 or more before the next foot.

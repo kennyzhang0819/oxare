@@ -1,11 +1,8 @@
 import { h } from "./ui.ts";
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
-// The touch slider is one setting for the whole app: switched in the settings, it takes effect at once in
-// any attached Input (so from the pause menu too), and is remembered. On by default on a touch screen.
-const TOUCH_KEY = "balling.touchSlider";
-let touchSlider = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-try { const saved = localStorage.getItem(TOUCH_KEY); if (saved !== null) touchSlider = saved === "1"; } catch { /* default */ }
+// The touch slider: on a touch screen, always.
+const touchSlider = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 // Mouse lock, one setting likewise (on unless switched off): a click on the game captures the mouse,
 // which then turns the camera without ever reaching the screen's edge; Esc lets it go.
 const LOCK_KEY = "balling.mouseLock";
@@ -82,14 +79,6 @@ export class Input {
   }
   private steerPtr = 0;
   private throttlePtr = 0;
-
-  static touchSliderEnabled(): boolean { return touchSlider; }
-
-  static setTouchSlider(on: boolean): void {
-    touchSlider = on;
-    try { localStorage.setItem(TOUCH_KEY, on ? "1" : "0"); } catch { /* this session only */ }
-    for (const i of live) { if (i.throttleBar) i.throttleBar.hidden = !on; i.throttlePtr = 0; i.steerPtr = 0; }
-  }
 
   static mouseLockEnabled(): boolean { return mouseLock; }
 

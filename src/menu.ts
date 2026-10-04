@@ -2,10 +2,10 @@ import * as THREE from "three";
 import { cloneLevel, levelCode, WORLDS, worldOf, type Level, type World } from "./level.ts";
 import { LEVELS } from "./levels/index.ts";
 import { blankLevel } from "./editor.ts";
-import { loadProgress, playerSettings } from "./game.ts";
+import { playerSettings } from "./game.ts";
 import { createScene, type SceneEnv } from "./scene.ts";
 import { levelThumbSrc, saveThumb } from "./thumbs.ts";
-import { clear, fmtTime, h } from "./ui.ts";
+import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Worlds players can't open yet: shown with a lock. Admin-only worlds have no tab for players.
@@ -67,21 +67,8 @@ const levelSelect = (b: Browse) => {
   };
 };
 const LOCK_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="2.5" y="7" width="11" height="8" rx="2" fill="currentColor"/></svg>';
-// The title in the menu buttons' frosted fill and border, the border thicker along the top. The two
-// fills are masked apart so they never overlap and stack their transparency.
-// The viewBox fits Fredoka Bold at size 100; it needs changing with the font or the word.
-const TITLE_WORD = '<text x="0" y="86" font-family="Fredoka" font-weight="700" font-size="100" letter-spacing="6">ZOOSKY</text>';
-const TITLE_SVG = `<svg viewBox="-5 6 422 88" aria-hidden="true">
-  <defs><symbol id="title-word" overflow="visible">${TITLE_WORD}</symbol></defs>
-  <mask id="title-fill" maskUnits="userSpaceOnUse" x="-50" y="-50" width="560" height="200"><use href="#title-word" fill="#fff"/></mask>
-  <mask id="title-ring" maskUnits="userSpaceOnUse" x="-50" y="-50" width="560" height="200">
-    <use href="#title-word" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
-    <use href="#title-word" y="-3.5" fill="#fff" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
-    <use href="#title-word" fill="#000"/>
-  </mask>
-  <rect x="-50" y="-50" width="560" height="200" fill="rgba(255,255,255,0.32)" mask="url(#title-fill)"/>
-  <rect x="-50" y="-50" width="560" height="200" fill="rgba(255,255,255,0.75)" mask="url(#title-ring)"/>
-</svg>`;
+// The title is a picture rendered in the game's own look (src/title.ts, /title.html), not text.
+const TITLE_IMG = `<img src="${import.meta.env.BASE_URL}title.png" alt="" draggable="false">`;
 
 // `admin` swaps the player's level list for the admin panel (levels, editors); Ctrl+Shift+S
 // flips between them. It only hides the tools, it is not access control.
@@ -114,7 +101,7 @@ export class Menu implements Mode {
     };
     addEventListener("keydown", this.onKey);
     if (!opts.admin) {
-      const slot = h("h1", { class: "menu-title", "aria-label": "Zoosky", innerHTML: TITLE_SVG });
+      const slot = h("h1", { class: "menu-title", "aria-label": "Rustbloom", innerHTML: TITLE_IMG });
       // Home and options sit under the title; the level selector stands alone.
       const body = h("div", { class: "menu-body" });
       ctx.overlay.append(h("div", { class: "menu" }, slot, body));
@@ -130,7 +117,6 @@ export class Menu implements Mode {
           h("button", { class: "menu-btn", onclick: options }, "Options"),
         ));
       const levels = () => {
-        const progress = loadProgress();
         // Hidden levels are the admin's playgrounds; players see and number only the public ones.
         const select = levelSelect({ admin: false, start: [h("button", { class: "menu-btn small", onclick: home }, "Back")], end: [],
           levels: (w) => LEVELS.flatMap((l, i) => (l.hidden || worldOf(l) !== w ? [] : [i])), item: (i, n, v) => {
@@ -138,7 +124,6 @@ export class Menu implements Mode {
           return h("button", { class: v === "grid" ? "level-card" : "level-row", onclick: () => opts.onPlay(i) },
             h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "", loading: "lazy" }),
             h("span", { class: "name" }, `${levelCode(l, n)}. ${l.name}`),
-            h("span", { class: "best" }, progress[l.id] ? fmtTime(progress[l.id]!.best) : "--:--.--"),
           );
         } });
         show(false, home, select.el);
@@ -153,7 +138,8 @@ export class Menu implements Mode {
     }
     const card = (level: Level, label: string, sub: string, play: () => void, v: View, n: number, count: number) => {
       const more = h("div", { class: "more-menu", hidden: true },
-        h("button", { onclick: () => void duplicateLevel(level) }, "Duplicate"),        h("button", { onclick: () => void rewrite(level, (l) => { if (l.hidden) delete l.hidden; else l.hidden = true; }, "Changing visibility") }, level.hidden ? "Make public" : "Make hidden"),
+        h("button", { onclick: () => void duplicateLevel(level) }, "Duplicate"),
+        h("button", { onclick: () => void rebuildThumb(level) }, "Rebuild thumb"),        h("button", { onclick: () => void rewrite(level, (l) => { if (l.hidden) delete l.hidden; else l.hidden = true; }, "Changing visibility") }, level.hidden ? "Make public" : "Make hidden"),
         ...WORLDS.filter((w) => w.id !== worldOf(level)).map((w) => h("button", { onclick: () => void rewrite(level, (l) => { if (w.id === "archive") delete l.world; else l.world = w.id; }, "Moving the level") }, `Move to ${w.name}`)),
         h("button", { class: "delete", onclick: () => void deleteLevel(level) }, "Delete"),
       );
@@ -231,6 +217,17 @@ export class Menu implements Mode {
         alert(`Saving thumbnails failed: ${err instanceof Error ? err.message : String(err)}`);
         button.disabled = false;
         button.textContent = "Rebuild thumbs";
+      }
+    };
+    // Re-renders and saves just this level's menu picture.
+    const rebuildThumb = async (level: Level) => {
+      this.closeMore();
+      if (!import.meta.env.DEV) { alert("Saving thumbnails only works in local dev (npm run dev)."); return; }
+      try {
+        await saveThumb(ctx.renderer, level);
+        opts.onChanged();
+      } catch (err) {
+        alert(`Saving the thumbnail failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
     // Saves a copy under the next free id, like the editor's Save.

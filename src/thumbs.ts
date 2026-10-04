@@ -1,6 +1,25 @@
 import * as THREE from "three";
 import { PIECE_TYPES, PIECE_VARIANTS, magnetProfile, newPiece, type Level, type Piece, type PieceType } from "./level.ts";
 import { addLights, buildLevel, fitSun } from "./scene.ts";
+import { ENV } from "./palette.ts";
+
+// Behind a picture: the game's mist, its light top fading to its sea-green bottom (or `sky` where
+// a theme has no mist), so a card looks like the level does in play.
+let MIST: THREE.CanvasTexture | null = null;
+function backdrop(sky: number): THREE.Color | THREE.Texture {
+  if (!ENV.mist) return new THREE.Color(sky);
+  if (!MIST) {
+    const c = document.createElement("canvas"), g = c.getContext("2d")!, grad = g.createLinearGradient(0, 0, 0, 64);
+    c.width = 2; c.height = 64;
+    grad.addColorStop(0, `#${ENV.mistTop.toString(16).padStart(6, "0")}`);
+    grad.addColorStop(1, `#${ENV.mistBottom.toString(16).padStart(6, "0")}`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 2, 64);
+    MIST = new THREE.CanvasTexture(c);
+    MIST.colorSpace = THREE.SRGBColorSpace;
+  }
+  return MIST;
+}
 
 const W = 112, H = 84;
 let cache: Map<string, string> | null = null;
@@ -12,7 +31,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
   cache = new Map();
   const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xd6e6f5);
+  scene.background = backdrop(0xd6e6f5);
   const sun = addLights(scene);
   const camera = new THREE.PerspectiveCamera(35, W / H, 0.1, 500);
   const pixels = new Uint8Array(W * H * 4);
@@ -52,7 +71,7 @@ export function pieceThumbs(renderer: THREE.WebGLRenderer): Map<string, string> 
 }
 
 const LW = 360, LH = 225;
-const FEATURED: PieceType[] = ["gate", "tube", "rails", "bean", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve", "goal"];
+const FEATURED: PieceType[] = ["gate", "tube", "rails", "bean", "seesaw", "jump", "ramp", "plank", "bridge", "kicker", "spinner", "crate", "curve"];
 const levelCache = new Map<string, string>();
 
 // Menu card pictures are saved as files in public/thumbs/<id>.png, with index.json naming, for each
@@ -68,7 +87,7 @@ export async function loadThumbIndex(): Promise<void> {
 }
 // What a level's picture depends on: its pieces and framing, not its name or visibility.
 export function thumbKey(level: Level): string {
-  const s = JSON.stringify({ thumb: level.thumb ?? null, pieces: level.pieces });
+  const s = JSON.stringify({ thumb: level.thumb ?? null, ...(level.floor ? { floor: level.floor } : {}), pieces: level.pieces });
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
   return (h >>> 0).toString(16).padStart(8, "0");
@@ -93,7 +112,7 @@ export function levelThumb(renderer: THREE.WebGLRenderer, level: Level): string 
   if (hit) return hit;
   const rt = new THREE.WebGLRenderTarget(LW, LH, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x9cc8f2);
+  scene.background = backdrop(0x9cc8f2);
   const sun = addLights(scene);
   const built = buildLevel(level, false);
   scene.add(built.group);

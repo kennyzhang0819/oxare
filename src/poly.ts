@@ -42,6 +42,23 @@ function distToSegment(v: XZ, a: XZ, b: XZ): number {
   return Math.hypot(a[0] + dx * t - v[0], a[1] + dz * t - v[1]);
 }
 
+// The part of polygon `q` inside the box (Sutherland-Hodgman). A concave `q` that the box cuts in two
+// comes back as one loop joined along the box edge by a zero-width bridge.
+export function clipBox(q: XZ[], x0: number, x1: number, z0: number, z1: number): XZ[] {
+  let out = q;
+  for (const f of [(p: XZ) => p[0] - x0, (p: XZ) => x1 - p[0], (p: XZ) => p[1] - z0, (p: XZ) => z1 - p[1]]) {
+    const inp = out;
+    out = [];
+    for (let i = 0; i < inp.length; i++) {
+      const a = inp[i]!, b = inp[(i + 1) % inp.length]!, fa = f(a), fb = f(b);
+      if (fa >= 0) out.push(a);
+      if ((fa >= 0) !== (fb >= 0)) { const t = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+    }
+    if (!out.length) break;
+  }
+  return out;
+}
+
 export function edgeGaps(loops: XZ[][]): number[][] {
   const edges = loops.flatMap((q) => q.map((a, i) => {
     const b = q[(i + 1) % q.length]!, len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;

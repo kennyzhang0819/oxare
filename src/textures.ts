@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, ENV, GRASS, PILLAR, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
-import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R } from "./level.ts";
+import { BARRIER, BEAN, BLOCKADE, BOARD, CRATE, CUBE, EFFECTS, ENV, FLOOR, GRASS, PILLAR, RUIN, PLATFORM, PROPS, START_PAD, TILE_SHADES, TILE_STEP, TREADMILL, css, shade } from "./palette.ts";
+import { MAGNET_R, MAGNET_REACH, START_PAD_BOWL, START_PAD_R, type FloorKind } from "./level.ts";
 
 export const TILE = 4;
 
@@ -92,6 +92,63 @@ function grassTexture(anisotropy: number): THREE.Texture {
     for (let p = 0; p < 5; p++) { const a = (p / 5) * Math.PI * 2; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 4.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = css(GRASS.pollen); ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
   });
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
+// The floors other than grass (level.ts FLOORS), one repeat (TILE) each, flat fills and circles only, every
+// grid square, so nothing shows which way a platform was turned; each motif is drawn again a repeat over
+// where it is near an edge, so the texture tiles seamlessly.
+export function floorTexture(kind: FloorKind, anisotropy: number): THREE.Texture {
+  if (kind === "grass" || kind === "mixed") return tileTexture(anisotropy);
+  const S = 1024, [c, ctx] = canvas(S, S), rnd = seeded(kind.length * 131 + 7);
+  const wrapped = (x: number, y: number, reach: number, draw: (x: number, y: number) => void) => {
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+      const xx = x + ox, yy = y + oy;
+      if (xx > -reach && xx < S + reach && yy > -reach && yy < S + reach) draw(xx, yy);
+    }
+  };
+  const dot = (x: number, y: number, r: number, col: number) => wrapped(x, y, r, (xx, yy) => { ctx.fillStyle = css(col); ctx.beginPath(); ctx.arc(xx, yy, r, 0, Math.PI * 2); ctx.fill(); });
+  // A blob: a few overlapping circles round (x, y), about r across.
+  const blob = (x: number, y: number, r: number, col: number, n = 5) => {
+    for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, d = rnd() * r * 0.6; dot(x + Math.cos(a) * d, y + Math.sin(a) * d, r * (0.45 + rnd() * 0.35), col); }
+  };
+  const pick = (xs: readonly number[]) => xs[Math.floor(rnd() * xs.length)]!;
+  // Square cells n to a side, each filled by `fill`, with `line` px of `joint` between them.
+  const grid = (n: number, line: number, joint: number, fill: (x: number, y: number, s: number) => void) => {
+    const s = S / n;
+    ctx.fillStyle = css(joint); ctx.fillRect(0, 0, S, S);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) fill(i * s + line / 2, j * s + line / 2, s - line);
+    return s;
+  };
+  if (kind === "metal") {
+    const M = FLOOR.metal, s = grid(4, 8, M.seam, (x, y, w) => { ctx.fillStyle = css(pick(M.plate)); ctx.fillRect(x, y, w, w); });
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) for (const [u, v] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) dot((i + u!) * s, (j + v!) * s, 8, M.rivet);
+    for (let k = 0; k < 7; k++) {
+      const x = rnd() * S, y = rnd() * S, r = 40 + rnd() * 70;
+      blob(x, y, r, M.rust, 6);
+      if (rnd() < 0.7) blob(x, y, r * 0.45, M.rustDark, 3);
+    }
+  } else if (kind === "soil") {
+    const F = FLOOR.soil;
+    ctx.fillStyle = css(F.base); ctx.fillRect(0, 0, S, S);
+    for (let k = 0; k < 6; k++) blob(rnd() * S, rnd() * S, 90 + rnd() * 80, F.dry, 6);
+    for (let k = 0; k < 5; k++) blob(rnd() * S, rnd() * S, 60 + rnd() * 60, F.mud, 6);
+    for (let k = 0; k < 45; k++) dot(rnd() * S, rnd() * S, 5 + rnd() * 8, F.pebble);
+    for (let k = 0; k < 14; k++) {
+      const x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI * 2;
+      for (const s of [-1, 1]) dot(x + Math.cos(a) * 8 * s, y + Math.sin(a) * 8 * s, 8, F.sprout);
+    }
+  } else {
+    const F = FLOOR.stone, s = grid(4, 12, F.joint, (x, y, w) => {
+      ctx.fillStyle = css(pick(F.slab)); ctx.fillRect(x, y, w, w);
+      for (let k = 0; k < 3; k++) { ctx.fillStyle = css(shade(pick(F.slab), 0.94)); ctx.beginPath(); ctx.arc(x + 16 + rnd() * (w - 32), y + 16 + rnd() * (w - 32), 5 + rnd() * 10, 0, Math.PI * 2); ctx.fill(); }
+    });
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) if (rnd() < 0.4) blob(i * s, j * s, 25 + rnd() * 30, F.moss, 4);
+  }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -217,6 +274,7 @@ export interface EdgeMaps { map: THREE.Texture; glow: THREE.Texture }
 // flipped platform looks the same: under each white lip a grey strip, then a cyan light
 // line each side of the dark recess. Holes use the same strip on their inner walls.
 export function edgeTextures(): EdgeMaps {
+  if (ENV.style === "ruin") return ruinEdgeTextures();
   if (ENV.style === "ice") return iceEdgeTextures();
   if (ENV.style === "cute") return cuteEdgeTextures();
   const W = 8, H = 256;
@@ -310,6 +368,77 @@ function cuteEdgeTextures(): EdgeMaps {
   return { map: mk(c), glow: mk(e) };
 }
 
+// Old painted steel, one repeat per METAL_TILE units: plates two units tall, joined by seams with a
+// row of rivets along them and staggered joints between, and a couple of big rust chunks eating
+// through the paint, each with a darker core and streaks running down from it.
+export const METAL_TILE = 4;
+export function metalTexture(anisotropy: number): THREE.Texture {
+  const S = 512, [c, ctx] = canvas(S, S), rnd = seeded(31);
+  ctx.fillStyle = css(RUIN.paint); ctx.fillRect(0, 0, S, S);
+  rustChunks(ctx, S, S, rnd, 2, [S * 0.1, S * 0.9], 1.7);
+  for (const [sy, jx] of [[S * 0.25, 0], [S * 0.75, S / 4]] as const) {
+    ctx.fillStyle = css(RUIN.seam); ctx.fillRect(0, sy - 4, S, 8);
+    for (const x of [jx, jx + S / 2]) ctx.fillRect(x - 3, sy - S / 4, 6, S / 2);
+    rivets(ctx, S, sy, 48, 7);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+// A row of rivets along y across a W-wide canvas: a dark ring with a light head.
+function rivets(ctx: Ctx, W: number, y: number, pitch: number, r: number) {
+  for (let x = pitch / 2; x < W; x += pitch) {
+    ctx.fillStyle = css(RUIN.seam); ctx.beginPath(); ctx.arc(x, y + 1.5, r + 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = css(RUIN.rivet); ctx.beginPath(); ctx.arc(x - 1, y - 0.5, r, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// `n` big rust chunks on a W x H canvas that tiles, their centres between ys[0] and ys[1], `k` scaling
+// their size: each a clump of overlapping round patches in rust, a darker core inside, and a couple of
+// streaks running down from it.
+function rustChunks(ctx: Ctx, W: number, H: number, rnd: () => number, n: number, ys: [number, number], k: number) {
+  const wrapped = (x: number, y: number, draw: (x: number, y: number) => void) => { for (const ox of [-W, 0, W]) for (const oy of [-H, 0, H]) draw(x + ox, y + oy); };
+  for (let i = 0; i < n; i++) {
+    const cx = ((i + 0.2 + rnd() * 0.6) / n) * W, cy = ys[0] + rnd() * (ys[1] - ys[0]), spots: [number, number, number][] = [];
+    for (let q = 0; q < 9; q++) spots.push([cx + (rnd() - 0.5) * 90 * k, cy + (rnd() - 0.5) * 55 * k, (22 + rnd() * 30) * k]);
+    ctx.fillStyle = css(RUIN.rust);
+    for (let q = 0; q < 3; q++) {
+      const x = cx + (rnd() - 0.5) * 60 * k, len = (70 + rnd() * 110) * k, w = (7 + rnd() * 6) * k;
+      wrapped(x, cy, (xx, yy) => { ctx.beginPath(); ctx.moveTo(xx - w, yy); ctx.lineTo(xx + w, yy); ctx.lineTo(xx + w * 0.3, yy + len); ctx.lineTo(xx - w * 0.3, yy + len); ctx.fill(); });
+    }
+    for (const [col, f] of [[RUIN.rust, 1], [RUIN.rustDark, 0.55]] as const) {
+      ctx.fillStyle = css(col);
+      for (const [x, y, r] of spots) wrapped(x, y, (xx, yy) => { ctx.beginPath(); ctx.arc(xx, yy, r * f, 0, Math.PI * 2); ctx.fill(); });
+    }
+  }
+}
+
+// Old steel platform wall (the ruin style), one repeat per TILE along the perimeter: a dark seam just under
+// each lip with a row of rivets inside it, a plate joint every two units, and one big rust chunk.
+// Only v 0.28 to 0.72 shows between the lips.
+function ruinEdgeTextures(): EdgeMaps {
+  const W = 512, H = 256, rnd = seeded(47);
+  const [c, ctx] = canvas(W, H);
+  const [e, ectx] = canvas(W, H);
+  const Y = (v: number) => (1 - v) * H;
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, H);
+  ctx.fillStyle = css(RUIN.paint); ctx.fillRect(0, 0, W, H);
+  rustChunks(ctx, W, H, rnd, 1, [Y(0.58), Y(0.48)], 1);
+  ctx.fillStyle = css(RUIN.seam);
+  for (const v of [0.705, 0.295]) ctx.fillRect(0, Y(v) - 3, W, 6);
+  for (const x of [0, W / 2]) ctx.fillRect(x - 3, Y(0.72), 6, Y(0.28) - Y(0.72));
+  for (const v of [0.66, 0.34]) rivets(ctx, W, Y(v), 32, 5);
+  const mk = (cv: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.LinearFilter;
+    return t;
+  };
+  return { map: mk(c), glow: mk(e) };
+}
+
 export interface StructMaps {
   panel: THREE.Texture; panelGlow: THREE.Texture; pillar: THREE.Texture; crate: THREE.Texture; crateGlow: THREE.Texture;
   padTop: THREE.Texture; padGlow: THREE.Texture; padCentre: THREE.Texture; padSkirt: THREE.Texture;
@@ -335,8 +464,55 @@ function circuitPanel(ctx: Ctx, px: number, py: number, pw: number, ph: number, 
   ctx.save(); ctx.translate(px, py); ctx.scale(K, K);
   if (ENV.style === "ice") drawFrost(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
   else if (ENV.style === "cute") drawKawaii(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
+  else if (ENV.style === "ruin") drawRuinPlate(ctx, 0, 0, pw / K, ph / K, seed, round);
   else drawBoard(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
   ctx.restore();
+}
+
+// The ruin style's panel in place of a circuit board: a dark steel plate, a lighter plate set into it
+// with a rivet in each corner and a row of louvre slots across it, and now and then rust on it.
+function drawRuinPlate(ctx: Ctx, x: number, y: number, w: number, h: number, seed: number, round: boolean) {
+  const rnd = seeded(seed * 7 + 3), m = Math.min(w, h);
+  const shape = (inset: number) => { ctx.beginPath(); if (round) ctx.arc(x + w / 2, y + h / 2, m / 2 - inset, 0, Math.PI * 2); else ctx.roundRect(x + inset, y + inset, w - 2 * inset, h - 2 * inset, m * 0.08); };
+  ctx.fillStyle = css(RUIN.seam); shape(0); ctx.fill();
+  ctx.fillStyle = css(RUIN.paint); shape(m * 0.08); ctx.fill();
+  ctx.save(); shape(m * 0.08); ctx.clip();
+  if (rnd() < 0.6) {
+    const cx = x + w * (0.25 + rnd() * 0.5), cy = y + h * (0.3 + rnd() * 0.4);
+    ctx.fillStyle = css(RUIN.rust);
+    for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.arc(cx + (rnd() - 0.5) * m * 0.4, cy + (rnd() - 0.5) * m * 0.3, m * (0.08 + rnd() * 0.1), 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = css(RUIN.rustDark); ctx.beginPath(); ctx.arc(cx, cy, m * 0.08, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = css(RUIN.seam);
+  const slots = Math.max(2, Math.round(h / (m * 0.22))), sw = round ? m * 0.5 : w * 0.6;
+  for (let k = 0; k < slots; k++) {
+    const sy = y + h * 0.3 + ((k + 0.5) / slots) * h * 0.4;
+    ctx.beginPath(); ctx.roundRect(x + w / 2 - sw / 2, sy - m * 0.025, sw, m * 0.05, m * 0.025); ctx.fill();
+  }
+  ctx.restore();
+  if (!round) for (const [rx, ry] of [[0.14, 0.14], [0.86, 0.14], [0.14, 0.86], [0.86, 0.86]] as const) {
+    const px = x + w * rx, py = y + h * ry;
+    ctx.fillStyle = css(RUIN.seam); ctx.beginPath(); ctx.arc(px, py + 0.4, m * 0.045, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = css(RUIN.rivet); ctx.beginPath(); ctx.arc(px - 0.3, py - 0.2, m * 0.032, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// The ruin style's pillar wrap (u runs once round it): painted steel with a riveted seam band near its
+// head, its middle and its foot, rust running down from a couple of patches.
+function ruinPillar(ctx: Ctx, PW: number, PH: number) {
+  const rnd = seeded(53);
+  ctx.fillStyle = css(RUIN.paint); ctx.fillRect(0, 0, PW, PH);
+  for (let k = 0; k < 2; k++) {
+    const x = (k + 0.2 + rnd() * 0.6) * (PW / 2), y = PH * (0.25 + rnd() * 0.4);
+    ctx.fillStyle = css(RUIN.rust);
+    ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y); ctx.lineTo(x + 3, y + 90); ctx.lineTo(x - 3, y + 90); ctx.fill();
+    for (let q = 0; q < 6; q++) { ctx.beginPath(); ctx.arc(x + (rnd() - 0.5) * 60, y + (rnd() - 0.5) * 30, 12 + rnd() * 16, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = css(RUIN.rustDark); ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const y of [PH * 0.06, PH * 0.5, PH * 0.94]) {
+    ctx.fillStyle = css(RUIN.seam); ctx.fillRect(0, y - 7, PW, 14);
+    for (let x = 16; x < PW; x += 32) { ctx.fillStyle = css(RUIN.rivet); ctx.beginPath(); ctx.arc(x, y - 1, 4, 0, Math.PI * 2); ctx.fill(); }
+  }
 }
 
 // A six-armed snowflake: arms with two pairs of side branches and a small hexagon at the heart.
@@ -968,6 +1144,7 @@ export function structTextures(): StructMaps {
   const period = PW / SLATS;
   if (ENV.style === "ice") icePillar(pctx, PW, PH);
   else if (ENV.style === "cute") cutePillar(pctx, PW, PH);
+  else if (ENV.style === "ruin") ruinPillar(pctx, PW, PH);
   else for (let t = 0; t < 3; t++) {
     const b = t * (BAND + GAP + TIER + GAP), y0 = b + BAND + GAP;
     pctx.fillStyle = css(PROPS.cyan);

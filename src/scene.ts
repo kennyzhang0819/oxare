@@ -1,11 +1,17 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_T, pangolinEnds, pangolinRest, pangolinLine, pangolinRing, pangolinSize, pangolinSlope, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, GOAL_DISC_H, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, BUNNY, GIRAFFE, FROG, LADYBUG, OCTOPUS, ringHead, pieceBalls, whaleParts, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, magnetAuraTexture, structTextures, tileTexture } from "./textures.ts";
-import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece, snakeBody, snakeHeadMesh } from "./rails.ts";
-import { ANIMALS, BUMPER, EFFECTS, ENV, GOAL, KICKER, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
-import { platformMesh } from "./platform.ts";
+import { APPLE, BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltRods, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, bumperProfile, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, BLOCKADE_D, BLOCKADE_H, BLOCKADE_W, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, COLUMN_R, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BELT_TILE, METAL_TILE, TILE, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
+import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
+import { APPLE as APPLE_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, STOOL, TREADMILL, TUBE } from "./palette.ts";
+import { platformMesh, type PlatformJoins } from "./platform.ts";
+import { platformSeams } from "./floor.ts";
+import { DECOR_TIME, buildDecor, buildTree, fadePlantsOn } from "./decor.ts";
+import { INK_FADE, fadeAt } from "./fade.ts";
+import { PATCH_GLSL, PATCH_KINDS, patchSeed } from "./patches.ts";
+import { LAMP, floorOf, gateFrames, isPlatform, pieceCapsules, type Capsule, type FloorKind } from "./level.ts";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { revolveMesh, ringMesh, sweepTube, torusMesh } from "./geometry.ts";
 
 export const EDGE_RADIUS = BLOCK_R;
@@ -23,9 +29,26 @@ const LIP = PLATFORM_LIP;
 // Spacing of stacked paint layers (dark base, slats, light strips), three of them fitting in PAINT.
 const LAYER = PAINT / 3.5;
 // A curve's strip laid round its straight ends and arc, breaking at the arc's ends.
-function curveGeometry(p: Curve): THREE.BufferGeometry {
+function curveGeometry(p: Curve, seams: XZ[][] = []): THREE.BufferGeometry {
   const c = curveStrip(p), rmid = (p.inner + p.outer) / 2;
-  return platformGeometry(c.len, p.outer - p.inner, PLATFORM_THICKNESS, LIP, TILE, { at: (u, z) => c.at(u, rmid + z), knots: c.s > 0 ? [c.s, c.len - c.s] : [] });
+  // A seam point back onto the strip: how far along it, and how far across (the strip is straight across at any u).
+  const strip = (x: number, z: number): XZ => {
+    const l = pieceLocal(p, x, z), u = c.param(l[0], l[1]), a = c.at(u, rmid), b = c.at(u, rmid + 1);
+    return [u - c.len / 2, (l[0] - a[0]) * (b[0] - a[0]) + (l[1] - a[1]) * (b[1] - a[1])];
+  };
+  return platformGeometry(c.len, p.outer - p.inner, PLATFORM_THICKNESS, LIP, TILE, { at: (u, z) => c.at(u, rmid + z), knots: c.s > 0 ? [c.s, c.len - c.s] : [] },
+    undefined, [], undefined, false, undefined, undefined, { joins: seams.map((q) => q.map(([x, z]) => strip(x, z))), uvFrame: tileFrame(p) });
+}
+// A world point in a piece's own frame, before its turn.
+function pieceLocal(p: Piece, x: number, z: number): XZ {
+  const o = rotXZ(x - p.x, z - p.z, -pieceRot(p));
+  return [o.x, o.z];
+}
+// The tile frame for a platform's own (x, z): the level's, turned back by the piece's turn past the nearest
+// quarter turn, so the tiles run straight on across a join and stay square to a platform turned 15.
+function tileFrame(p: Piece): (x: number, z: number) => XZ {
+  const rot = pieceRot(p), off = rot - 90 * Math.round(rot / 90);
+  return (x, z) => { const w = rotXZ(x, z, rot), o = rotXZ(p.x + w.x, p.z + w.z, -off); return [o.x, o.z]; };
 }
 // A glass slab's tiled faces, moved off the slab's geometry onto a see-through pane of their own
 // that casts no shadow; the rim, lips and walls stay on the slab's mesh and keep its shadow.
@@ -59,6 +82,34 @@ function platformGeometry(...args: Parameters<typeof platformMesh>): THREE.Buffe
 }
 let STRUCT: Record<"body" | "top" | "panel" | "pillar" | "glow" | "crate" | "padTop" | "padCentre" | "padSkirt" | "barrierPanel" | "grille" | "plank" | "plankGlow" | "hinge" | "tread" | "stoolTop" | "bumperTop" | "barrelPanel" | "cubeFace" | "cubeTop", THREE.MeshStandardMaterial> | null = null;
 
+// Each floor's top material (FLOORS), made the first time a platform wears it; grass is MAT.platform. The
+// mixed floor is one per level seed (patchSeed): grass's material with the patches (patches.ts) worked out
+// per pixel from the tile frame, each patch sampling its own floor's texture, a darker line where two meet.
+const FLOOR_MATS = new Map<string, THREE.MeshStandardMaterial>();
+let FLOOR_ANISO = 1;
+function floorMat(kind: FloorKind, seed: number): THREE.MeshStandardMaterial {
+  const key = kind === "mixed" ? `mixed-${seed}` : kind;
+  let m = FLOOR_MATS.get(key);
+  if (m) return m;
+  if (kind !== "mixed") m = new THREE.MeshStandardMaterial({ map: floorTexture(kind, FLOOR_ANISO), roughness: kind === "metal" ? 0.7 : ENV.floorRoughness, metalness: kind === "metal" ? 0.1 : 0 });
+  else {
+    const maps = PATCH_KINDS.map(([k]) => floorMat(k, seed).map!);
+    m = new THREE.MeshStandardMaterial({ map: maps[0], roughness: ENV.floorRoughness });
+    m.onBeforeCompile = (shader) => {
+      maps.forEach((t, k) => { shader.uniforms[`patchMap${k}`] = { value: t }; });
+      shader.uniforms.patchSeed = { value: seed };
+      shader.fragmentShader = `uniform float patchSeed;\n${maps.map((_, k) => `uniform sampler2D patchMap${k};`).join("\n")}\n${PATCH_GLSL}\n` + shader.fragmentShader.replace("#include <map_fragment>", `
+        bool patchLine;
+        int patchK = patchKind(vMapUv * ${TILE.toFixed(1)}, uint(patchSeed), patchLine);
+        vec4 patchTexel = ${maps.map((_, k) => `patchK == ${k} ? texture2D(patchMap${k}, vMapUv) : `).join("")}vec4(1.0);
+        diffuseColor *= patchTexel * (patchLine ? 0.72 : 1.0);`);
+    };
+    m.customProgramCacheKey = () => "floor-mixed";
+  }
+  FLOOR_MATS.set(key, m);
+  return m;
+}
+const isFloorMat = (m: THREE.Material): boolean => [...FLOOR_MATS.values()].includes(m as THREE.MeshStandardMaterial);
 export function initMaterials(renderer: THREE.WebGLRenderer): void {
   if (MAT) return;
   const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy()), propTiles = tileTexture(renderer.capabilities.getMaxAnisotropy(), false);
@@ -71,6 +122,15 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     border: new THREE.MeshStandardMaterial({ color: PLATFORM.border, roughness: 0.7 }),
     glass: new THREE.MeshPhysicalMaterial({ color: PLATFORM.glass, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.34, depthWrite: false, clearcoat: 1, clearcoatRoughness: 0.08 }),
   };
+  FLOOR_ANISO = renderer.capabilities.getMaxAnisotropy();
+  FLOOR_MATS.set("grass", MAT.platform);
+  // The ruin style's platforms: steel lips round the steel wall, a darker line inside them.
+  if (ENV.style === "ruin") {
+    MAT.rim = new THREE.MeshStandardMaterial({ color: RUIN.paint, roughness: 0.75 });
+    MAT.border = new THREE.MeshStandardMaterial({ color: RUIN.seam, roughness: 0.8 });
+  }
+  METAL = new THREE.MeshStandardMaterial({ map: metalTexture(renderer.capabilities.getMaxAnisotropy()), roughness: 0.75, metalness: 0.15 });
+  METAL.map!.repeat.set(1 / METAL_TILE, 1 / METAL_TILE);
   const st = structTextures();
   STRUCT = {
     body: new THREE.MeshStandardMaterial({ color: PROPS.white, roughness: ENV.bodyRoughness, metalness: 0.05 }),
@@ -95,10 +155,12 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
     // The kicker's tread and the jump pad's vents: a shade lighter and less metallic than hinge.
     tread: new THREE.MeshStandardMaterial({ color: PROPS.tread, roughness: 0.6, metalness: 0.15 }),
   };
+  // The ruin style's props are the old structure's machines: their bodies in rusting steel.
+  if (ENV.style === "ruin") STRUCT.body = propSteel(METAL.map!);
 }
 
 function buildBlockade(g: THREE.Group) {
-  if (ENV.props === "soft") return softBlockade(g);
+  if (ruin()) { g.add(steel(new RoundedBoxGeometry(BLOCKADE_W, BLOCKADE_H, BLOCKADE_D, 4, BLOCKADE_R).translate(0, BLOCKADE_H / 2, 0))); return; }
   const st = STRUCT!;
   const W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D;
   const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, BLOCKADE_R), st.body);
@@ -127,12 +189,26 @@ function buildHoleMarker(g: THREE.Group, p: Piece & { type: "hole" }) {
   g.add(new THREE.Mesh(plane, HOLE_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), HOLE_LINE));
 }
 
+// Editor only: a clearing (no trees grow there) as a pale orange patch with its outline; in play it draws nothing.
+const CLEARING_MAT = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
+const CLEARING_LINE = new THREE.LineBasicMaterial({ color: 0xff9a3c });
+function buildClearingMarker(g: THREE.Group, p: Piece & { type: "clearing" }) {
+  const plane = new THREE.PlaneGeometry(p.w, p.d).rotateX(-Math.PI / 2).translate(0, 0.04, 0);
+  g.add(new THREE.Mesh(plane, CLEARING_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), CLEARING_LINE));
+}
+
 // Slatted column with a domed cap and a glowing base ring.
 // Barrier: a rounded white pod on two legs with a cyan band along its bottom, a recessed
 // instrument panel on each long face and a louvred grille on each end. The pod fills the
 // collider exactly. Every detail is a box standing proud of the body, never a plane lying on it.
 function buildBarrier(g: THREE.Group) {
-  if (ENV.props === "soft") return softBarrier(g);
+  if (ruin()) {
+    const H = BARRIER_H - BARRIER_LEG, y0 = BARRIER_LEG;
+    g.add(steel(new RoundedBoxGeometry(BARRIER_W, H, BARRIER_D, 4, BARRIER_R).translate(0, y0 + H / 2, 0)));
+    for (const y of [y0 + 0.05, BARRIER_H - 0.05]) g.add(steel(new RoundedBoxGeometry(BARRIER_W + 0.02, 0.1, BARRIER_D + 0.04, 2, 0.04).translate(0, y, 0), SEAM_MAT));
+    for (const x of [BARRIER_LEG_X, -BARRIER_LEG_X]) g.add(steel(new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.1, 16).translate(x, (BARRIER_LEG + 0.1) / 2, 0), SEAM_MAT));
+    return;
+  }
   const st = STRUCT!, R = BARRIER_R;
   const W = BARRIER_W, D = BARRIER_D, H = BARRIER_H - BARRIER_LEG, y0 = BARRIER_LEG;
   const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, R), st.body);
@@ -185,16 +261,45 @@ function buildStartPad(g: THREE.Group) {
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  const pad = new THREE.Mesh(geo, [st.padSkirt, st.padTop, st.padCentre]);
+  const pad = new THREE.Mesh(geo, ruin() ? [st.body, st.body, SEAM_MAT] : [st.padSkirt, st.padTop, st.padCentre]);
   pad.castShadow = pad.receiveShadow = true;
   g.add(pad);
+  // The origin's wormhole across the bowl, just under the rim, so the resting ball sits half in it.
+  const mat = WORMHOLE_MAT.clone();
+  mat.uniforms.time = PORTAL_TIME;
+  const face = new THREE.Mesh(new THREE.CircleGeometry(START_PAD_BOWL - 0.01, 48).rotateX(-Math.PI / 2), mat);
+  face.position.y = START_PAD_H - 0.02;
+  face.userData.noShadow = true;
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(MOTES * 3), 3));
+  moteGeo.setAttribute("seed", new THREE.Float32BufferAttribute(Array.from({ length: MOTES }, (_, i) => (i * 0.618034) % 1), 1));
+  const motes = new THREE.Points(moteGeo, MOTE_MAT);
+  motes.position.y = START_PAD_H;
+  motes.scale.setScalar(START_PAD_BOWL);
+  motes.frustumCulled = false;
+  motes.visible = false;
+  g.add(face, motes);
+  g.userData.origin = (open: number) => { mat.uniforms.open!.value = open; motes.visible = open > 0.6; };
+}
+
+// An apple floating APPLE.float over the spot it is placed on: a round red body, a stem and a leaf.
+// Its group is what the game spins, bobs and takes away.
+const APPLE_MATS = { body: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.body, roughness: 0.45 }), stem: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.stem, roughness: 0.8 }), leaf: new THREE.MeshStandardMaterial({ color: APPLE_COLORS.leaf, roughness: 0.7 }) };
+function buildApple(g: THREE.Group): void {
+  const a = new THREE.Group(), r = APPLE.r;
+  a.position.y = APPLE.float;
+  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16).scale(1, 0.92, 1), APPLE_MATS.body);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.08, r * 0.11, r * 0.62, 6).rotateZ(-0.25).translate(r * 0.06, r * 0.95, 0), APPLE_MATS.stem);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(r * 0.31, 12, 8).scale(1.5, 0.3, 0.75).rotateZ(-0.45).translate(r * 0.4, r * 0.98, 0), APPLE_MATS.leaf);
+  a.add(body, stem, leaf);
+  g.add(a);
+  g.userData.apple = a;
 }
 
 // Bumper: the revolved profile in four bands, a white base, the red rubber band, a white rolled
 // rim and the flat top carrying a round circuit board, laid flat from above to fill it.
 const BUMPER_RUBBER = new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.45 });
 function buildBumper(g: THREE.Group) {
-  if (ENV.props === "soft") return softBumper(g);
   const st = STRUCT!, bands = bumperProfile(), dish = bands[3]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
   for (const band of bands) {
     const m = revolveMesh(band, 48), base = pos.length / 3;
@@ -207,7 +312,7 @@ function buildBumper(g: THREE.Group) {
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, [st.body, BUMPER_RUBBER, st.body, st.bumperTop]);
+  const m = new THREE.Mesh(geo, ruin() ? [st.body, ruinPaint().hazard, st.body, SEAM_MAT] : [st.body, BUMPER_RUBBER, st.body, st.bumperTop]);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
 }
@@ -220,7 +325,6 @@ const MAGNET_GROOVE = new THREE.MeshStandardMaterial({ color: MAGNET.groove, rou
 const MAGNET_UPPER = new THREE.MeshStandardMaterial({ color: MAGNET.upper, roughness: 0.35, metalness: 0.4 });
 let AURA_MAT: THREE.MeshBasicMaterial | null = null;
 function buildMagnet(g: THREE.Group) {
-  if (ENV.props === "soft") { softMagnet(g); addAura(g); return; }
   const st = STRUCT!, bands = magnetProfile(), dish = bands[bands.length - 1]![0]![0], pos: number[] = [], uv: number[] = [], idx: number[] = [], geo = new THREE.BufferGeometry();
   for (const band of bands) {
     const m = revolveMesh(band, 48), base = pos.length / 3;
@@ -233,7 +337,8 @@ function buildMagnet(g: THREE.Group) {
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  g.add(new THREE.Mesh(geo, [MAGNET_GLOW, MAGNET_LOWER, MAGNET_GROOVE, MAGNET_UPPER, MAGNET_GLOW, st.body, st.bumperTop]));
+  const hz = ruinPaint().hazard;
+  g.add(new THREE.Mesh(geo, ruin() ? [hz, st.body, SEAM_MAT, st.body, hz, st.body, SEAM_MAT] : [MAGNET_GLOW, MAGNET_LOWER, MAGNET_GROOVE, MAGNET_UPPER, MAGNET_GLOW, st.body, st.bumperTop]));
   addAura(g);
 }
 function addAura(g: THREE.Group) {
@@ -266,13 +371,14 @@ function buildBridge(g: THREE.Group, p: Bridge): THREE.Group[] {
     const pg = new THREE.Group();
     pg.position.set(0, pl.y, pl.z);
     pg.rotation.x = (pl.tilt * Math.PI) / 180;
-    const body = new THREE.Mesh(roundedBox(W, T, pl.len, 0.04), st.plank);
+    const body = new THREE.Mesh(roundedBox(W, T, pl.len, 0.04), ruin() ? st.body : st.plank);
     body.castShadow = body.receiveShadow = true;
     const rim = new THREE.Mesh(frameGeo, st.plankGlow);
     rim.position.y = T / 2;
     const b = barrel();
     b.position.z = chain.seg / 2;
-    pg.add(body, rim, b);
+    pg.add(body, b);
+    if (!ruin()) pg.add(rim);
     g.add(pg);
     out.push(pg);
   }
@@ -352,7 +458,7 @@ const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5
 // cyan band just inside each, and every 4 layers up a pale band between two cyan lines. The strips
 // and bands are painted on, no more than PAINT proud.
 function buildColumn(g: THREE.Group, h: number) {
-  if (ENV.props === "soft") return softPenguin(g, h);
+  if (ENV.style === "ruin") return metalColumn(g, h);
   const st = STRUCT!, R = COLUMN_R;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 48), [st.body, SLATE, SLATE]);
   body.position.y = h / 2;
@@ -375,11 +481,99 @@ function buildColumn(g: THREE.Group, h: number) {
   for (let m = 4; m <= h - 0.6; m += 4) { band(m - 0.24, m - 0.16, st.glow); band(m - 0.12, m + 0.12, PALE); band(m + 0.16, m + 0.24, st.glow); }
 }
 
+// The ruin style's column and support: the old structure's painted steel flaking to rust (metalTexture),
+// its texture laid in world units. Plants grow over them (decor.ts).
+let METAL: THREE.MeshStandardMaterial | null = null;
+const SEAM_MAT = new THREE.MeshStandardMaterial({ color: RUIN.seam, roughness: 0.8 });
+// The ruin style's props are a set of their own: each a plain steel body and at most a band or two of
+// old paint: yellow on what the ball can push or move, red on what is dangerous, nothing on the rest.
+let RUIN_PAINT: Record<"move" | "hazard", THREE.MeshStandardMaterial> | null = null;
+const ruinPaint = () => (RUIN_PAINT ??= {
+  move: new THREE.MeshStandardMaterial({ color: PROPS.cyan, roughness: 0.7 }),
+  hazard: new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.7 }),
+});
+const ruin = () => ENV.style === "ruin";
+const steel = (geo: THREE.BufferGeometry, mat: THREE.Material = STRUCT!.body): THREE.Mesh => {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+};
+// A band of paint `t` tall round a w x d box whose upright edges are rounded r, centred at height y.
+function paintBand(w: number, d: number, r: number, y: number, t: number, mat: THREE.Material): THREE.Mesh {
+  const geo = new THREE.ExtrudeGeometry(roundRect(new THREE.Shape(), w + 0.012, d + 0.012, r + 0.006), { depth: t, bevelEnabled: false, curveSegments: 6 }).rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.y = y - t / 2;
+  return m;
+}
+// A ring of paint `t` tall round a drum of radius r, centred at height y.
+function paintRing(r: number, y: number, t: number, mat: THREE.Material): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.006, r + 0.006, t, 48, 1, true), mat);
+  m.position.y = y;
+  return m;
+}
+// Where a piece's rust falls on the shared texture, picked from where it stands so neighbours differ.
+const rustShift = (at: THREE.Vector3): [number, number] => {
+  const h = Math.abs(Math.sin(at.x * 12.9898 + at.y * 4.1414 + at.z * 78.233) * 43758.5453);
+  return [(h % 1) * METAL_TILE, ((h * 7.13) % 1) * METAL_TILE];
+};
+// Steel for the props' bodies, which have no texture coordinates to speak of: the rust texture is laid
+// on each face from the piece's own frame, from whichever side the face looks most, so it stays put on a
+// prop that moves and never stretches on a rounded one.
+function propSteel(map: THREE.Texture): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.75, metalness: 0.15 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = "varying vec3 vSteelP;\nvarying vec3 vSteelN;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vSteelP = position; vSteelN = normal;");
+    shader.fragmentShader = "varying vec3 vSteelP;\nvarying vec3 vSteelN;\n" + shader.fragmentShader.replace("#include <map_fragment>", `
+      vec3 sw = pow(abs(normalize(vSteelN)), vec3(4.0)); sw /= sw.x + sw.y + sw.z;
+      vec3 sp = vSteelP / ${METAL_TILE.toFixed(1)};
+      diffuseColor *= texture2D(map, sp.zy) * sw.x + texture2D(map, sp.xz) * sw.y + texture2D(map, sp.xy) * sw.z;`);
+  };
+  m.customProgramCacheKey = () => "prop-steel";
+  return m;
+}
+// A steel post, a flange round its foot and its head.
+function metalColumn(g: THREE.Group, h: number): void {
+  const R = COLUMN_R, geo = new THREE.CylinderGeometry(R, R, h, 32, 1, false), [du, dv] = rustShift(g.position);
+  const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2 * Math.PI * R + du, uv.getY(i) * h + dv);
+  const body = new THREE.Mesh(geo, METAL!);
+  body.position.y = h / 2;
+  g.add(body);
+  for (const y of [0.09, h - 0.09]) {
+    if (y < 0.09 || y > h - 0.09) continue;
+    const flange = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.05, R + 0.05, 0.18, 32), SEAM_MAT);
+    flange.position.y = y;
+    g.add(flange);
+  }
+}
+// A pillar's ears (pillarEar, solid as drawn) along its stretches, in dark steel.
+function steelEars(col: THREE.Group, stretches: { ym: number; ph: number }[]): void {
+  const ball = new THREE.SphereGeometry(PILLAR_EAR.r, 10, 6).getAttribute("position");
+  for (const stretch of stretches) for (const side of [-1, 1]) {
+    const pts: THREE.Vector3[] = [];
+    for (const [x, y, z] of pillarEar(stretch, side)) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
+    col.add(steel(new ConvexGeometry(pts), SEAM_MAT));
+  }
+}
+// Each pillar: the lab support's bent stem and ears (solid as drawn), in steel.
+function metalSupport(g: THREE.Group, p: Piece & { type: "support" }): void {
+  const ball = new THREE.SphereGeometry(PILLAR_EAR.r, 10, 6).getAttribute("position");
+  for (const c of supportPillars(p)) {
+    const col = new THREE.Group();
+    col.position.set(c.x, 0, c.z);
+    const body = supportBody(c.y1, supportReach(p), supportBend(p)), uv = body.getAttribute("uv") as THREE.BufferAttribute, [du, dv] = rustShift(new THREE.Vector3(p.x + c.x, p.y, p.z + c.z));
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) + du, uv.getY(i) + dv);
+    col.add(new THREE.Mesh(body, METAL!));
+    steelEars(col, pillarStretches(c.y0, c.y1));
+    g.add(col);
+  }
+}
+
 function buildSupport(parent: THREE.Group, p: Piece & { type: "support" }) {
   const st = STRUCT!, g = new THREE.Group();
   if (supportOver(p)) { g.rotation.z = Math.PI; g.position.y = -PLATFORM_THICKNESS; }
   parent.add(g);
-  if (ENV.props === "soft") return softWhale(g, p);
+  if (ENV.style === "ruin") return metalSupport(g, p);
   for (const c of supportPillars(p)) {
     const col = new THREE.Group();
     col.position.set(c.x, 0, c.z);
@@ -515,12 +709,23 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   const xi = p.w / 2 + GATE_GAP;
   // Circuit-board panels along each beam's straight, front and back, like a barrier's.
   const cx = xi - GATE_CORNER, gap = 0.25, n = Math.max(1, Math.round(cx)), pw = (2 * cx - gap * (n + 1)) / n, panel = new THREE.BoxGeometry(pw, D * 0.6, 0.08);
-  for (const z of [p.d / 2, -p.d / 2]) {
+  for (const z of gateFrames(p)) {
     const arch = new THREE.Group();
     arch.position.z = z;
     const body = new THREE.Mesh(ENV.props === "soft" ? archTube(strip) : geo, st.body);
     body.castShadow = body.receiveShadow = true;
     arch.add(body);
+    if (ruin()) {
+      for (const side of [1, -1]) {
+        const col = new THREE.Group();
+        col.position.x = side * (xi + D / 2);
+        col.rotation.y = (side * Math.PI) / 2;
+        steelEars(col, pillarStretches(-PLATFORM_THICKNESS / 2 + D / 2 + GATE_BEND_R, gateLegTop(p)));
+        arch.add(col);
+      }
+      g.add(arch);
+      continue;
+    }
     for (const side of [1, -1]) {
       const col = new THREE.Group();
       col.position.x = side * (xi + D / 2);
@@ -544,6 +749,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
     }
     g.add(arch);
   }
+  if (p.type === "arch") return [];
   const hang = gateHang(p);
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(RAIL_R, RAIL_R, p.d, 24).rotateX(Math.PI / 2), RAIL_MAT);
   bar.position.y = hang.pivot;
@@ -573,11 +779,46 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   return out;
 }
 
+// Lamp posts and signal masts: every part pieceCapsules lists, drawn as it collides, in one steel mesh;
+// the lit parts glow on their own. A lamp's bulb sits under its hood (a box from pieceBoxes); a mast's
+// beacon blinks.
+let LIT: { lamp: THREE.MeshBasicMaterial; beacon: THREE.MeshBasicMaterial } | null = null;
+const litMats = () => (LIT ??= {
+  lamp: new THREE.MeshBasicMaterial({ color: RUIN.lamp }),
+  beacon: (() => {
+    const m = new THREE.MeshBasicMaterial({ color: RUIN.beacon });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.time = PORTAL_TIME;
+      shader.fragmentShader = "uniform float time;\n" + shader.fragmentShader.replace("#include <color_fragment>", "#include <color_fragment>\n  diffuseColor.rgb *= 0.35 + 0.65 * step(0.55, fract(time * 0.8));");
+    };
+    m.customProgramCacheKey = () => "beacon-blink";
+    return m;
+  })(),
+});
+function capsuleGeometry(c: Capsule): THREE.BufferGeometry {
+  const A = new THREE.Vector3(...c.a), d = new THREE.Vector3(...c.b).sub(A), len = d.length(), r1 = c.end ?? c.r;
+  const geo = len < 1e-6 ? new THREE.SphereGeometry(c.r, 12, 8) : c.end === undefined ? new THREE.CapsuleGeometry(c.r, len, 4, 10) : new THREE.CylinderGeometry(r1, c.r, len, 10);
+  if (len >= 1e-6) geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  return geo.translate((c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2, (c.a[2] + c.b[2]) / 2);
+}
+function buildFrame(g: THREE.Group, p: Piece & { type: "lamp" | "mast" }): void {
+  const parts = pieceCapsules(p), steelParts = parts.filter((c) => !c.lit).map((c) => capsuleGeometry(c).toNonIndexed());
+  for (const geo of steelParts) geo.deleteAttribute("uv");
+  g.add(steel(mergeGeometries(steelParts)!));
+  for (const c of parts.filter((c) => c.lit)) g.add(new THREE.Mesh(capsuleGeometry(c), litMats().beacon));
+  if (p.type === "lamp") {
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(1, 0.55, 1), litMats().lamp);
+    bulb.position.set(LAMP.reach - 0.04, p.h + LAMP.rise + 0.05 - LAMP.hood.h, 0);
+    bulb.userData.noShadow = true;
+    g.add(bulb);
+  }
+}
+
 // The cube, the gate's and the pushable prop's alike, `C` a side and centred on its body: a slate
 // rounded box wearing the ribbed octagon face on every side (the top face its white, solid-bordered
 // one on a plate over it), and on every face a pale rim with an orange lit line just inside it.
 function buildCube(g: THREE.Group, C: number): void {
-  if (ENV.props === "soft") return softSugar(g, C);
+  if (ruin()) { const r = propRound(C, C, C); g.add(steel(new RoundedBoxGeometry(C, C, C, 3, r)), paintBand(C, C, r, 0, C * 0.22, ruinPaint().move)); return; }
   const st = STRUCT!;
   const body = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 3, propRound(C, C, C)), st.cubeFace);
   body.castShadow = body.receiveShadow = true;
@@ -635,24 +876,18 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   const body = new THREE.Mesh(new ConvexGeometry(pts), soft ? softMats().tint : st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
-  if (soft) {
-    // A turtle: the wedge is its shell in teal with lemon plates sunk into the slope, a head out of the
-    // high wall and a foot at each side corner (TURTLE, solid), eyes on the head.
-    const A = ANIMALS.turtle, skin = fur(A.skin), balls = pieceBalls(p), head = balls[0]!;
-    body.material = fur(A.shell);
-    for (const b of balls) g.add(blob(b.r, b.x, b.y, b.z, skin));
-    for (const s of [-1, 1]) g.add(eye(0.06, head.x + s * 0.12, head.y + 0.1, head.z - head.r * 0.75, 1, 1.2, 0.6));
-    // Plates lie on the slope, `v` of the way up it and `u` of its width across, sunk in and turned to
-    // the slope's normal; the side ones only where the slope is wide enough.
-    const L = Math.hypot(p.d, p.h), ny = p.d / L, nz = p.h / L, front = D / 2;
-    for (const [u, v] of [[0, 0.22], [0, 0.5], [0, 0.78], [-0.3, 0.36], [0.3, 0.36], [-0.3, 0.64], [0.3, 0.64]] as const) {
-      const [a, b] = kickerSpan(p, v);
-      if (u && b - a < 2) continue;
-      const plate = decal(blob(0.13, (a + b) / 2 + u * (b - a), v * p.h - ny * 0.02, front - v * p.d - nz * 0.02, fur(A.plate), 1, 1, 0.05 / 0.13));
-      plate.rotation.x = -Math.atan2(p.d, p.h);
-      g.add(plate);
+  if (ruin()) {
+    body.material = st.body;
+    const along = Math.hypot(p.d, p.h), slope = new THREE.Group(), [a, b] = kickerSpan(p, 0.5), m = Math.min(0.35, (b - a) * 0.15);
+    slope.position.set(0, p.h / 2, f / 2);
+    slope.rotation.x = Math.atan2(p.h, p.d);
+    for (const x of sliding ? [a + m + 0.1, b - m - 0.1] : []) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.001, along * 0.8), ruinPaint().move);
+      stripe.position.set(x, LAYER, 0);
+      slope.add(stripe);
     }
-    if (sliding) g.add(pushMark(p.h + 0.45));
+    g.add(slope);
+    paint(slope, "y");
     return sliding ? g : undefined;
   }
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
@@ -747,10 +982,10 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
   const panel = new THREE.Group();
   panel.position.set(0, pose.y, pose.z);
   panel.rotation.x = (-pose.tilt * Math.PI) / 180;
-  const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, PLANK_T / 2 - 0.01), st.plank);
+  const body = new THREE.Mesh(roundedBox(w, h, PLANK_T, PLANK_T / 2 - 0.01), ruin() ? st.body : st.plank);
   body.castShadow = body.receiveShadow = true;
   panel.add(body);
-  if (ENV.props === "soft") { body.material = fur(ANIMALS.butterfly.panel); softButterfly(panel, w, h); }
+  if (ruin()) panel.add(paintBand(w, PLANK_T, PLANK_T / 2 - 0.01, h / 2 - 0.25, 0.2, ruinPaint().move));
   else {
     const rim = rimFrame(w - 0.3, h - 0.3, 0.1, PAINT);
     for (const side of [1, -1]) {
@@ -773,6 +1008,7 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
     block.position.set(m.x, m.y, m.z);
     block.castShadow = block.receiveShadow = true;
     g.add(block);
+    if (ruin()) continue;
     for (const dy of p.side || p.base ? [m.h / 2 - 0.08, -(m.h / 2 - 0.08)] : [m.h / 2 - 0.06]) {
       const band = new THREE.Mesh(new THREE.BoxGeometry(m.w + 0.008, 0.04, m.d + 0.008), st.plankGlow);
       band.position.set(m.x, m.y + dy, m.z);
@@ -788,9 +1024,11 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
 // cream face, two eyes and an orange nose, the push accent; in the lab look orange bands.
 // Returns what poses it `a` unrolled; the editor also outlines where it lies unrolled.
 function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number) => void {
-  const st = STRUCT!, soft = ENV.props === "soft", A = ANIMALS.pangolin, L = p.d;
+  const st = STRUCT!, tr = pangolinTrack(p), L = tr.L;
+  // A path with no length (two nodes on one spot, mid-edit) has no body to draw.
+  if (L < PANGOLIN_SEG) return () => {};
   const n = Math.max(24, Math.ceil(L / 0.06)), ss = Array.from({ length: n + 1 }, (_, i) => (i * L) / n);
-  const rings = ss.map((s) => pangolinRing(p, s)), R = rings[0]!.length, caps = (n + 1) * R;
+  const rings = ss.map((s) => pangolinRing(tr, s)), R = rings[0]!.length, caps = (n + 1) * R;
   const pos = new Float32Array((caps + 2 * (R + 1)) * 3), nor = new Float32Array(pos.length), idx: number[] = [];
   for (let i = 0; i < n; i++) for (let k = 0; k < R; k++) {
     const a = i * R + k, b = i * R + ((k + 1) % R);
@@ -805,7 +1043,7 @@ function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
   geo.setIndex(idx);
-  const body = new THREE.Mesh(geo, soft ? fur(A.body) : st.plank);
+  const body = new THREE.Mesh(geo, ruin() ? st.body : st.plank);
   body.userData.live = true;
   body.castShadow = body.receiveShadow = true;
   g.add(body);
@@ -813,31 +1051,14 @@ function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number
   // `over` lifts one a paint layer, onto the discs under it.
   type Disc = { s: number; x: number; top: boolean; rx: number; rs: number; over?: boolean };
   const discs: [Disc[], THREE.Material, boolean?][] = [];
-  const across = (s: number) => pangolinSize(p, s).w / 2 - 0.1;
-  if (soft) {
-    const rows: Disc[] = [], plates: Disc[] = [], head = pangolinEnds(p).head;
-    for (let s = Math.min(head, 1.7) + 0.2, row = 0; s < L - 0.25; s += 0.38, row++) {
-      const w = across(s), m = Math.max(1, Math.round((2 * w) / 0.55)) + (row % 2), step = (2 * w) / m;
-      for (let j = 0; j < m; j++) for (const top of [true, false]) {
-        const x = -w + step * (j + 0.5);
-        rows.push({ s, x, top, rx: step * 0.56, rs: 0.22 });
-        plates.push({ s: s - 0.07, x, top, rx: step * 0.46, rs: 0.16, over: true });
-      }
-    }
-    discs.push([rows, fur(A.scale)], [plates, fur(A.plate)]);
-    const face = Math.min(0.8, head * 0.4);
-    discs.push([[{ s: face, x: 0, top: true, rx: across(face) * 0.85, rs: face * 0.7 }], fur(A.face)]);
-    discs.push([[{ s: 0.2, x: 0, top: true, rx: 0.17, rs: 0.12 }], fur(A.tip)]);
-    discs.push([[-1, 1].map((k) => ({ s: face * 1.05, x: k * across(face * 1.05) * 0.36, top: true, rx: 0.1, rs: 0.12 })), fur(ANIMALS.eye), true]);
-  } else {
-    const bands: Disc[] = [];
-    for (let s = 1; s < L - 0.6; s += 1) for (const top of [true, false]) bands.push({ s, x: 0, top, rx: across(s) * 0.9, rs: 0.06 });
-    discs.push([bands, st.plankGlow]);
-  }
-  // Each paint vertex rides the body at its own s, so a disc bends with the coil and the sloping ends.
-  // What doesn't change as it unrolls is worked out here: per vertex its sample and the share of the
-  // way to the next (at, u), its height off the belly line (h), the turn of the surface under it from
-  // the line's (ct, st), and its offset and normal in the disc (x, y, nx, ny, nz).
+  const across = (s: number) => pangolinSize(tr, s).w / 2 - 0.1;
+  const bands: Disc[] = [];
+  for (let s = 1; s < L - 0.6; s += 1) for (const top of [true, false]) bands.push({ s, x: 0, top, rx: across(s) * 0.9, rs: 0.06 });
+  discs.push([bands, ruin() ? ruinPaint().move : st.plankGlow]);
+  // Each paint vertex rides the body at its own s, so a disc bends with the coil, the path's turns and
+  // the sloping ends. What doesn't change as it unrolls is worked out here: per vertex its sample and
+  // the share of the way to the next (at, u), its height off the belly line (h), the turn of the surface
+  // under it from the line's (ct, st), and its offset and normal in the disc (x, y, nx, ny, nz).
   const unit = new THREE.SphereGeometry(1, 12, 6), up = unit.getAttribute("position"), un = unit.getAttribute("normal"), ui = unit.getIndex()!;
   const painted = discs.map(([list, mat, ink]) => {
     const V = up.count, count = list.length * V, ix: number[] = [];
@@ -846,9 +1067,9 @@ function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number
     list.forEach((d, j) => {
       for (let v = 0; v < V; v++) {
         const o = j * V + v, sv = d.s - up.getZ(v) * d.rs, f = Math.max(0, Math.min(n - 1e-6, (sv / L) * n)), lift = d.over ? 2 * LAYER : 0;
-        const a = d.top ? Math.atan(pangolinSlope(p, sv)) : 0, mx = un.getX(v) / d.rx, my = un.getY(v) / 0.025, mz = un.getZ(v) / d.rs, l = Math.hypot(mx, my, mz);
+        const a = d.top ? Math.atan(pangolinSlope(tr, sv)) : 0, mx = un.getX(v) / d.rx, my = un.getY(v) / 0.025, mz = un.getZ(v) / d.rs, l = Math.hypot(mx, my, mz);
         at[o] = Math.floor(f); u[o] = f - at[o]!;
-        h[o] = d.top ? pangolinSize(p, sv).t - 0.02 + lift : 0.02 - lift;
+        h[o] = d.top ? pangolinSize(tr, sv).t - 0.02 + lift : 0.02 - lift;
         ct[o] = Math.cos(a); st[o] = Math.sin(a);
         x[o] = d.x + up.getX(v) * d.rx; y[o] = up.getY(v) * 0.025;
         nx[o] = mx / l; ny[o] = my / l; nz[o] = mz / l;
@@ -866,30 +1087,36 @@ function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number
     return { count, at, u, h, ct, st, x, y, nx, ny, nz, geo: dg };
   });
   unit.dispose();
-  const Y = new Float32Array(n + 1), Z = new Float32Array(n + 1), C = new Float32Array(n + 1), S = new Float32Array(n + 1);
+  // Per sample: the belly line's point, and the body's side, up and back (toward the snout), 3 each.
+  const Pt = new Float32Array((n + 1) * 3), X = new Float32Array(Pt.length), U = new Float32Array(Pt.length), B = new Float32Array(Pt.length);
   // One sphere round every pose, curled to laid out, so culling never needs it worked out again.
-  const bound = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), L / 2 + 2);
+  const lo = [0, 1, 2].map((k) => Math.min(...tr.c.map((c) => c[k]!))), hi = [0, 1, 2].map((k) => Math.max(...tr.c.map((c) => c[k]!)));
+  const bound = new THREE.Sphere(new THREE.Vector3((lo[0]! + hi[0]!) / 2, (lo[1]! + hi[1]!) / 2 + 0.5, (lo[2]! + hi[2]!) / 2), Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!) / 2 + p.w / 2 + 2);
   for (const m of [geo, ...painted.map((d) => d.geo)]) m.boundingSphere = bound;
   if (editor) {
-    const guide = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, PANGOLIN_T, L)), ROUTE_MAT);
-    guide.position.y = PANGOLIN_T / 2;
+    // Where it lies unrolled: its full width along the path, at its back's height.
+    const laid = pangolinLine(tr, L, ss), edge = (k: number) => laid.map((q) => pangolinPoint(q, (k * p.w) / 2, PANGOLIN_T));
+    const left = edge(-1), right = edge(1), seg: number[] = [];
+    for (const side of [left, right]) for (let i = 0; i < n; i++) seg.push(...side[i]!, ...side[i + 1]!);
+    seg.push(...left[0]!, ...right[0]!, ...left[n]!, ...right[n]!);
+    const guide = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(seg, 3)), ROUTE_MAT);
     guide.renderOrder = 9;
     g.add(guide);
   }
   return (a: number) => {
-    const line = pangolinLine(p, a, ss);
-    line.forEach(({ z, y, phi }, i) => {
-      const c = Math.cos(phi), sn = Math.sin(phi);
-      Y[i] = y; Z[i] = z; C[i] = c; S[i] = sn;
+    pangolinLine(tr, a, ss).forEach((q, i) => {
+      const o = i * 3, f = q.f, w = q.u, sx = f[1] * w[2] - f[2] * w[1], sy = f[2] * w[0] - f[0] * w[2], sz = f[0] * w[1] - f[1] * w[0];
+      Pt[o] = q.c[0]; Pt[o + 1] = q.c[1]; Pt[o + 2] = q.c[2];
+      X[o] = sx; X[o + 1] = sy; X[o + 2] = sz;
+      U[o] = w[0]; U[o + 1] = w[1]; U[o + 2] = w[2];
+      B[o] = -f[0]; B[o + 1] = -f[1]; B[o + 2] = -f[2];
       rings[i]!.forEach(([x, t, nx, nt], k) => {
-        const o = (i * R + k) * 3;
-        pos[o] = x; pos[o + 1] = y + t * c; pos[o + 2] = z + t * sn;
-        nor[o] = nx; nor[o + 1] = nt * c; nor[o + 2] = nt * sn;
+        const v = (i * R + k) * 3;
+        for (let c = 0; c < 3; c++) { pos[v + c] = Pt[o + c]! + X[o + c]! * x + U[o + c]! * t; nor[v + c] = X[o + c]! * nx + U[o + c]! * nt; }
       });
     });
     // The two end caps: a fan round each end ring's middle, facing out along the body.
     for (const [i, base, dir] of [[0, caps, 1], [n, caps + R + 1, -1]] as const) {
-      const { phi } = line[i]!, tz = -Math.cos(phi) * dir, ty = Math.sin(phi) * dir;
       let cx = 0, cy = 0, cz = 0;
       for (let k = 0; k < R; k++) {
         const f = (i * R + k) * 3, o = (base + 1 + k) * 3;
@@ -897,17 +1124,21 @@ function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number
         cx += pos[f]!; cy += pos[f + 1]!; cz += pos[f + 2]!;
       }
       pos[base * 3] = cx / R; pos[base * 3 + 1] = cy / R; pos[base * 3 + 2] = cz / R;
-      for (let k = 0; k <= R; k++) { const o = (base + k) * 3; nor[o] = 0; nor[o + 1] = -ty; nor[o + 2] = -tz; }
+      for (let k = 0; k <= R; k++) for (let c = 0; c < 3; c++) nor[(base + k) * 3 + c] = B[i * 3 + c]! * dir;
     }
     geo.attributes.position!.needsUpdate = geo.attributes.normal!.needsUpdate = true;
     for (const d of painted) {
       const P = d.geo.attributes.position!.array as Float32Array, N = d.geo.attributes.normal!.array as Float32Array;
       for (let v = 0; v < d.count; v++) {
-        const i = d.at[v]!, u = d.u[v]!, w = 1 - u, h = d.h[v]!, o = v * 3;
-        const c = C[i]! * w + C[i + 1]! * u, sn = S[i]! * w + S[i + 1]! * u, ct = c * d.ct[v]! - sn * d.st[v]!, st = sn * d.ct[v]! + c * d.st[v]!;
-        const ly = d.y[v]!, my = d.ny[v]!, mz = d.nz[v]!;
-        P[o] = d.x[v]!; P[o + 1] = Y[i]! * w + Y[i + 1]! * u + h * c + ly * ct; P[o + 2] = Z[i]! * w + Z[i + 1]! * u + h * sn + ly * st;
-        N[o] = d.nx[v]!; N[o + 1] = my * ct - mz * st; N[o + 2] = my * st + mz * ct;
+        const i = d.at[v]! * 3, j = i + 3, u = d.u[v]!, w = 1 - u, h = d.h[v]!, ct = d.ct[v]!, sn = d.st[v]!, o = v * 3;
+        const x = d.x[v]!, ly = d.y[v]!, nx = d.nx[v]!, my = d.ny[v]!, mz = d.nz[v]!;
+        for (let c = 0; c < 3; c++) {
+          // The surface under the disc is the body's up and back turned by the end's slope.
+          const xs = X[i + c]! * w + X[j + c]! * u, us = U[i + c]! * w + U[j + c]! * u, bs = B[i + c]! * w + B[j + c]! * u;
+          const top = us * ct + bs * sn, back = bs * ct - us * sn;
+          P[o + c] = Pt[i + c]! * w + Pt[j + c]! * u + xs * x + us * h + top * ly;
+          N[o + c] = xs * nx + top * my + back * mz;
+        }
       }
       d.geo.attributes.position!.needsUpdate = d.geo.attributes.normal!.needsUpdate = true;
     }
@@ -921,10 +1152,10 @@ function buildBoard(g: THREE.Group, p: Piece & { type: "board" }): THREE.Group {
   board.position.y = boardLift(p);
   board.rotation.order = "YXZ"; // roll about its own z, then tilt about its own x
   board.rotation.set((p.tilt * Math.PI) / 180, 0, ((p.roll ?? 0) * Math.PI) / 180);
-  const body = new THREE.Mesh(roundedBox(p.w, PLANK_T, p.d, PLANK_T / 2 - 0.01), st.plank);
+  const body = new THREE.Mesh(roundedBox(p.w, PLANK_T, p.d, PLANK_T / 2 - 0.01), ruin() ? st.body : st.plank);
   body.castShadow = body.receiveShadow = true;
   board.add(body);
-  if (ENV.props === "soft") { body.material = fur(ANIMALS.flounder.skin); softFlounder(board, p.w, p.d, PLANK_T); }
+  if (ruin()) for (const s of [-1, 1]) board.add(steel(new THREE.BoxGeometry(p.w + 0.012, PLANK_T + 0.012, 0.25).translate(0, 0, s * (p.d / 2 - 0.35)), ruinPaint().move));
   else {
     const rim = rimFrame(p.w - 0.2, p.d - 0.2, 0.1, PAINT);
     for (const side of [1, -1]) {
@@ -946,10 +1177,10 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: bool
   const board = new THREE.Group();
   board.position.y = H;
   board.rotation.x = (seesawTilt(p) * Math.PI) / 180;
-  const body = new THREE.Mesh(roundedBox(W, T, D, T / 2 - 0.01), st.plank);
+  const body = new THREE.Mesh(roundedBox(W, T, D, T / 2 - 0.01), ruin() ? st.body : st.plank);
   body.castShadow = body.receiveShadow = true;
   board.add(body);
-  if (ENV.props === "soft") { body.material = fur(ANIMALS.crocodile.skin); softCrocodile(board, W, D, T); }
+  if (ruin()) for (const s of [-1, 1]) board.add(steel(new THREE.BoxGeometry(W + 0.012, T + 0.012, 0.3).translate(0, 0, s * (D / 2 - 0.4)), ruinPaint().move));
   else {
     const rim = rimFrame(W - 0.2, D - 0.2, 0.1, PAINT);
     for (const side of [1, -1]) {
@@ -975,6 +1206,7 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: bool
     const post = new THREE.Mesh(new RoundedBoxGeometry(SEESAW_POST_W, postH, SEESAW_POST_D, 4, SEESAW_POST_R), st.body);
     post.position.set(x, postH / 2, 0);
     post.castShadow = post.receiveShadow = true;
+    if (ruin()) { g.add(post); continue; }
     // Slot, bars and cap are painted on the post's flat faces, no more than PAINT proud.
     const slot = new THREE.Mesh(new THREE.BoxGeometry(0.06, postH - 0.6, SEESAW_POST_D * 0.5), st.hinge);
     slot.position.set(x + side * (face - 0.03 + PAINT * 0.6), postH / 2 - 0.05, 0);
@@ -996,77 +1228,98 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: bool
   return board;
 }
 
-const TUBE_GLASS = new THREE.MeshPhysicalMaterial({
-  color: TUBE.glass, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1,
-});
+// The pipe's plating and windows, drawn in its shader from vPipe = (distance along, distance round from
+// the top, length): a seam round it every PIPE_PLATE with rivets beside it, and a small framed window on top
+// every PIPE_WINDOW, none within a unit of a mouth.
+const PIPE_PLATE = 2, PIPE_WINDOW = 4, PIPE_CIRC = 2 * Math.PI * TUBE_R;
+const PIPE_GLSL = `varying vec3 vPipe;
+float pipeArc() { float a = vPipe.y; return a > ${(PIPE_CIRC / 2).toFixed(4)} ? a - ${PIPE_CIRC.toFixed(4)} : a; }
+float pipeWindow() {
+  float c = (floor(vPipe.x / ${PIPE_WINDOW.toFixed(1)}) + 0.5) * ${PIPE_WINDOW.toFixed(1)};
+  if (c < 1.0 || c > vPipe.z - 1.0) return 1e3;
+  vec2 q = abs(vec2(vPipe.x - c, pipeArc())) - vec2(0.4 - 0.15, 0.3 - 0.15);
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.15;
+}
+`;
+function pipeShader(m: THREE.Material, body: (shader: { fragmentShader: string }) => void, key: string): void {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = "attribute vec3 pipe;\nvarying vec3 vPipe;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vPipe = pipe;");
+    shader.fragmentShader = PIPE_GLSL + shader.fragmentShader;
+    body(shader);
+  };
+  m.customProgramCacheKey = () => key;
+}
+let PIPE_MATS: { steel: THREE.MeshStandardMaterial; glass: THREE.MeshPhysicalMaterial } | null = null;
+function pipeMats() {
+  if (PIPE_MATS) return PIPE_MATS;
+  const steel = new THREE.MeshStandardMaterial({ map: METAL!.map, roughness: 0.75, metalness: 0.15, side: THREE.DoubleSide });
+  pipeShader(steel, (s) => {
+    s.fragmentShader = s.fragmentShader.replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\n  if (pipeWindow() < 0.0) discard;").replace("#include <map_fragment>", `#include <map_fragment>
+      float w = pipeWindow(), ds = abs(fract(vPipe.x / ${PIPE_PLATE.toFixed(1)}) - 0.5) * ${PIPE_PLATE.toFixed(1)};
+      float step8 = ${(PIPE_CIRC / 8).toFixed(4)}, da = (fract(vPipe.y / step8) - 0.5) * step8;
+      if (w < 0.07 || ds < 0.035) diffuseColor.rgb = ${glslColor(RUIN.seam)};
+      else if (length(vec2(abs(ds - 0.12), da)) < 0.04) diffuseColor.rgb = ${glslColor(RUIN.rivet)};`);
+  }, "pipe-steel");
+  const glass = new THREE.MeshPhysicalMaterial({ color: TUBE.glass, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1 });
+  pipeShader(glass, (s) => {
+    s.fragmentShader = s.fragmentShader.replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\n  if (pipeWindow() >= 0.0) discard;");
+  }, "pipe-glass");
+  return (PIPE_MATS = { steel, glass });
+}
 
-// Tube: one thin glass skin (the physics keeps a solid wall behind it) with a ring of rail round each mouth; both mouths
-// alike, since the tube runs either way.
+// Pipe (the "tube" piece): a rust-steel skin with small glass windows (the physics keeps a solid wall behind
+// it) and a ring of rail round each mouth; both mouths alike, since the pipe runs either way.
 function buildTube(g: THREE.Group, p: Tube) {
   const rings = tubeRings(p);
   if (rings.length < 2) return;
-  // One glass skin, the bore the ball rolls in, on the physics' own facets.
-  const skin = sweepTube(rings, TUBE_R, true, TUBE_SKIN_SIDES), skinGeo = new THREE.BufferGeometry();
-  skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
-  skinGeo.setIndex(skin.indices);
-  skinGeo.computeVertexNormals();
-  const glass = new THREE.Mesh(skinGeo, ENV.props === "soft" ? tubeMilk() : TUBE_GLASS);
-  glass.renderOrder = 1;
-  g.add(glass);
-  if (ENV.props === "soft") {
-    // A bendy straw: a band round the tube every unit along it, placed along each segment.
-    const band = (c: [number, number, number], d: [number, number, number]) => {
-      const t = ringMesh(c, d, TUBE_R + 0.02, 0.07, 8, 32), geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
-      geo.setIndex(t.indices);
-      geo.computeVertexNormals();
-      g.add(new THREE.Mesh(geo, tubeBand()));
-    };
-    let since = 0.5;
-    for (let i = 1; i < rings.length; i++) {
-      const a = rings[i - 1]!, b = rings[i]!;
-      const len = Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1], b.c[2] - a.c[2]);
-      let at = 1 - since;
-      while (at < len - 0.3) {
-        const f = at / len;
-        band([a.c[0] + (b.c[0] - a.c[0]) * f, a.c[1] + (b.c[1] - a.c[1]) * f, a.c[2] + (b.c[2] - a.c[2]) * f], b.d);
-        at += 1;
-      }
-      since = len - (at - 1);
+  // One skin, the bore the ball rolls in, on the physics' own facets.
+  const skin = sweepTube(rings, TUBE_R, false, TUBE_SKIN_SIDES), welded = new THREE.BufferGeometry();
+  welded.setAttribute("position", new THREE.Float32BufferAttribute(skin.positions, 3));
+  welded.setIndex(skin.indices);
+  welded.computeVertexNormals();
+  // Unwelded down one side, normals kept, so the distance round the pipe doesn't wrap mid-face.
+  const S = TUBE_SKIN_SIDES, P = welded.getAttribute("position"), N = welded.getAttribute("normal");
+  const along = [0];
+  for (let i = 1; i < rings.length; i++) { const a = rings[i - 1]!.c, b = rings[i]!.c; along.push(along[i - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])); }
+  const L = along[along.length - 1]!, [du, dv] = rustShift(new THREE.Vector3(p.x, p.y, p.z));
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], pipe: number[] = [], idx: number[] = [];
+  rings.forEach((_, i) => {
+    for (let j = 0; j <= S; j++) {
+      const k = i * S + (j % S), arc = (j / S) * PIPE_CIRC;
+      pos.push(P.getX(k), P.getY(k), P.getZ(k));
+      nor.push(N.getX(k), N.getY(k), N.getZ(k));
+      // One whole rust tile round, so the texture meets itself at the top.
+      uv.push(along[i]! + du, (j / S) * METAL_TILE + dv);
+      pipe.push(along[i]!, arc, L);
+    }
+  });
+  for (let i = 0; i + 1 < rings.length; i++) {
+    for (let j = 0; j < S; j++) {
+      const a = i * (S + 1) + j, b = a + 1, c = a + S + 1, e = b + S + 1;
+      idx.push(a, b, c, b, e, c);
     }
   }
+  welded.dispose();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute("pipe", new THREE.Float32BufferAttribute(pipe, 3));
+  geo.setIndex(idx);
+  const mats = pipeMats();
+  g.add(new THREE.Mesh(geo, mats.steel));
+  const glass = new THREE.Mesh(geo, mats.glass);
+  glass.renderOrder = 1;
+  glass.userData.noShadow = true;
+  g.add(glass);
   for (const m of mouthRings(rings)) g.add(railRing(m.c, m.d));
-}
-// The soft tube's skin: a milky pastel, more opaque than the lab glass.
-let TUBE_MILK: THREE.MeshPhysicalMaterial | null = null, TUBE_BAND: THREE.MeshStandardMaterial | null = null;
-function tubeBand(): THREE.MeshStandardMaterial {
-  TUBE_BAND ??= new THREE.MeshStandardMaterial({ color: PLATFORM.recess, roughness: 0.6 });
-  return TUBE_BAND;
-}
-function tubeMilk(): THREE.MeshPhysicalMaterial {
-  TUBE_MILK ??= new THREE.MeshPhysicalMaterial({ color: TUBE.glass, roughness: 0.5, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
-  return TUBE_MILK;
 }
 
 // A ring of the fences' and rails' own rail round centre c, axis d (a tube mouth's, or a hoop), with
 // the rails' light strip round its outside.
 function railRing(c: [number, number, number], d: [number, number, number]): THREE.Group {
   const ring = new THREE.Group();
-  if (ENV.props === "soft") {
-    // A snake biting its tail: the ring is a snake's body, RING_T thick, and its head sits on top
-    // looking along the ring (ringHead, solid).
-    const axis = new THREE.Vector3(...d).normalize(), u = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0).cross(axis).normalize() : new THREE.Vector3(1, 0, 0).cross(axis).normalize(), v = axis.clone().cross(u);
-    const loop: TubeRing[] = Array.from({ length: RING_SEGMENTS + 1 }, (_, k) => {
-      const a = (k / RING_SEGMENTS) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-      const at = new THREE.Vector3(...c).addScaledVector(u, ca * RING_R).addScaledVector(v, sa * RING_R), dir = u.clone().multiplyScalar(-sa).addScaledVector(v, ca);
-      return { c: [at.x, at.y, at.z], d: [dir.x, dir.y, dir.z], m: [dir.x, dir.y, dir.z] };
-    });
-    snakeBody(loop, ring, false, RING_T);
-    const h = ringHead({ c, d }), top = new THREE.Vector3(...h.c).sub(new THREE.Vector3(...c)).normalize();
-    snakeHeadMesh(h.c, h.d, ring, [top.x, top.y, top.z]);
-    return ring;
-  }
-  for (const [R, r, sides, mat] of [[RING_R, RING_T, RING_SIDES, RAIL_MAT], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]] as const) {
+  for (const [R, r, sides, mat] of (ruin() ? [[RING_R, RING_T, RING_SIDES, RAIL_MAT]] : [[RING_R, RING_T, RING_SIDES, RAIL_MAT], [RING_R + RING_T * 0.85, 0.022, 6, STRIPE_MAT]]) as [number, number, number, THREE.Material][]) {
     const t = ringMesh(c, d, R, r, sides, RING_SEGMENTS), geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
     geo.setIndex(t.indices);
@@ -1087,7 +1340,6 @@ function buildHoop(g: THREE.Group) {
 // panels round its side, each in a dark frame. Rings and panels are painted on, PAINT proud at most.
 // Like a crate, the group is centred on the physics body and placed by it each frame.
 function buildBarrel(g: THREE.Group, r: number, h: number) {
-  if (ENV.props === "soft") return softPill(g, r, h);
   const st = STRUCT!, rr = propRound(2 * r, h, 2 * r);
   const m = revolveMesh(barrelProfile(r, h), 48), geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
@@ -1096,6 +1348,12 @@ function buildBarrel(g: THREE.Group, r: number, h: number) {
   const body = new THREE.Mesh(geo, st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
+  if (ruin()) {
+    const rib = new THREE.TorusGeometry(r, 0.035, 8, 48).rotateX(Math.PI / 2);
+    for (const y of [-h / 6, h / 6]) g.add(steel(rib.clone().translate(0, y, 0), SEAM_MAT));
+    g.add(paintRing(r, 0, Math.min(0.25, h * 0.15), ruinPaint().move));
+    return;
+  }
   for (const y of [-h / 2 + rr + 0.08, h / 2 - rr - 0.08]) {
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT, r + PAINT, 0.08, 48, 1, true), st.plankGlow);
     ring.position.y = y;
@@ -1135,21 +1393,10 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
     g.add(line);
   }
   const bean = new THREE.Group();
-  const body = new THREE.Mesh(beanGeometry(p.r, p.len), ENV.props === "soft" ? fur(ANIMALS.caterpillar.skin) : mat);
+  const body = new THREE.Mesh(beanGeometry(p.r, p.len), ruin() ? STRUCT!.body : mat);
   body.castShadow = body.receiveShadow = true;
   bean.add(body);
-  if (ENV.props === "soft") {
-    // A caterpillar: the capsule in coral with a dark band round it every 0.3 along its straight, and
-    // two eyes on its +y end (the end it leads with on its track).
-    const A = ANIMALS.caterpillar, straight = Math.max(0, p.len - 2 * p.r), n = Math.max(1, Math.round(straight / 0.3));
-    for (let k = 0; k < n; k++) {
-      const band = new THREE.Mesh(new THREE.TorusGeometry(p.r - 0.01, 0.018, 8, 40), fur(A.band));
-      band.rotation.x = Math.PI / 2;
-      band.position.y = -straight / 2 + (k + 0.5) * (straight / n);
-      bean.add(band);
-    }
-    for (const s of [-1, 1]) bean.add(eye(p.r * 0.2, s * p.r * 0.38, p.len / 2 - p.r + p.r * 0.75, p.r * 0.5, 1, 1.2, 0.6));
-  }
+  if (ruin()) for (const s of [-1, 1]) bean.add(paintRing(p.r, s * Math.max(0, p.len / 2 - p.r - 0.12), 0.16, ruinPaint().hazard));
   g.add(bean);
   const at = beanAt(p, track, 0);
   posePlank(g, bean, at, at.q);
@@ -1158,7 +1405,7 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
 
 // Pushable crate: one textured cube, placed by the physics body each frame.
 function buildCrate(g: THREE.Group, w: number, h: number, d: number) {
-  if (ENV.props === "soft") return softCrate(g, w, h, d);
+  if (ruin()) { const r = crateRound(w, h, d); g.add(steel(new RoundedBoxGeometry(w, h, d, 4, r)), paintBand(w, d, r, 0, Math.min(0.3, h * 0.25), ruinPaint().move)); return; }
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 6, crateRound(w, h, d)), STRUCT!.crate);
   m.castShadow = m.receiveShadow = true;
   g.add(m);
@@ -1203,18 +1450,7 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   const body = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, ENV.props === "soft" ? 6 : 3, sr), st.body);
   body.castShadow = body.receiveShadow = true;
   block.add(body);
-  if (ENV.props === "soft") {
-    // A pig: the block in pink with a ball ear at each top corner (solid, carried with the block), and
-    // on its front a snout with two nostrils and two eyes.
-    const A = ANIMALS.pig;
-    body.material = fur(A.skin);
-    for (const b of pieceBalls(p)) block.add(blob(b.r, b.x, b.y, b.z, fur(A.skin)));
-    block.add(decal(blob(0.17, 0, -h * 0.1, d / 2 - 0.02, fur(A.snout), 1.25, 0.85, 0.3)));
-    for (const s of [-1, 1]) block.add(eye(0.03, s * 0.06, -h * 0.1, d / 2 + 0.03, 1, 1.2, 0.5), eye(0.07, s * 0.3, h * 0.2, d / 2 - 0.015));
-    block.add(pushMark(h / 2 + 0.5));
-    g.add(block);
-    return block;
-  }
+  if (ruin()) { block.add(paintBand(w, d, sr, 0, Math.min(0.3, h * 0.25), ruinPaint().move)); g.add(block); return block; }
   // The base ring and top board are painted on the block's flat faces, clear of its rounding.
   const ring = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * sr, 0.1, d + 2 * PAINT), st.plankGlow);
   ring.position.y = -h / 2 + sr + 0.06;
@@ -1390,20 +1626,18 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   const deck = new THREE.Group();
   deck.position.y = H;
   g.add(deck);
+  if (ruin()) {
+    body.material = st.body;
+    const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.05, 10, 48).rotateX(Math.PI / 2);
+    for (let k = 1; k <= 3; k++) {
+      const ring = new THREE.Mesh(ringGeo, PALE);
+      ring.position.y = (k * JUMP_REACH) / 3;
+      deck.add(ring);
+    }
+    return;
+  }
   if (soft) {
-    // A frog: the pad in lime with darker spots sunk into its top, a flat ink eye near each +z corner
-    // (the ball crosses a pad anywhere, so nothing stands up), a smile on the +z ramp, and the launch
-    // button under its three light rings.
-    const A = ANIMALS.frog;
-    body.material = fur(A.skin);
-    for (const s of [-1, 1]) { const e = eye(FROG.eye.r, s * (p.w / 2 - JUMP_RUN - FROG.eye.in), H - 0.02, p.d / 2 - JUMP_RUN - FROG.eye.in, 1.1, 1, 0.05 / FROG.eye.r); e.rotateX(Math.PI / 2); g.add(e); }
-    for (const [u, v, r] of [[-0.8, -0.75, 0.17], [0.75, -0.8, 0.14], [0, -0.85, 0.11], [-0.85, 0.15, 0.13], [0.85, 0.2, 0.12]] as const) g.add(decal(blob(r, (u * tw) / 2, H - 0.02, (v * td) / 2, fur(A.spot), 1, 1, 0.05 / r)).rotateX(Math.PI / 2));
-    // The smile sits high on the +z ramp, a quarter of the way down from the top edge.
-    const ln = Math.hypot(1, H), smile = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.014, 6, 24, Math.PI).rotateZ(Math.PI).scale(1, 0.4, 1), fur(ANIMALS.eye));
-    smile.position.set(0, H * 0.75 - 0.01 / ln, td / 2 + 0.25 - (0.01 * H) / ln);
-    smile.rotation.x = Math.atan2(-1, H);
-    smile.userData.noShadow = true;
-    g.add(smile);
+    // The launch button under its three light rings.
     const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), KICKER_LIGHT);
     button.position.y = 0.02;
     deck.add(button);
@@ -1476,26 +1710,33 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   }
 }
 
-// Shared clock for the goal portal's swirl and motes, advanced by the scene's tick.
+// Shared clock for the wormhole's swirl and motes, advanced by the scene's tick.
 const PORTAL_TIME = { value: 0 };
-// The portal's face: a black event horizon ringed by a thin white photon ring, inside an accretion
-// disc whose spiral arms wind inward, hot lemon near the hole cooling to blue at the rim.
-const PORTAL_MAT = new THREE.ShaderMaterial({
+// The origin's wormhole. Closed (`open` 0) it is a steel iris of six blades turning in to the middle;
+// opening, the portal grows from the middle out to the rim: a black event horizon ringed by a thin
+// white photon ring, inside an accretion disc whose spiral arms wind inward, hot lemon near the hole
+// cooling to blue at the rim.
+const WORMHOLE_MAT = new THREE.ShaderMaterial({
   fog: false,
-  uniforms: { time: PORTAL_TIME, hot: { value: new THREE.Color(PROPS.cyan) }, cool: { value: new THREE.Color(GOAL.disc) } },
+  uniforms: { time: PORTAL_TIME, open: { value: 0 }, hot: { value: new THREE.Color(PROPS.cyan) }, cool: { value: new THREE.Color(GOAL.disc) }, steel: { value: new THREE.Color(RUIN.paint) }, seam: { value: new THREE.Color(RUIN.seam) } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform float time; uniform vec3 hot, cool; varying vec2 vUv;
+  fragmentShader: `uniform float time, open; uniform vec3 hot, cool, steel, seam; varying vec2 vUv;
     void main(){
       vec2 p = vUv * 2.0 - 1.0;
-      float r = length(p), a = atan(p.y, p.x), hole = 0.34;
-      float arms = 0.5 + 0.5 * sin(3.0 * a - 9.0 * log(max(r, 0.01)) - time * 2.6);
-      float fine = 0.5 + 0.5 * sin(7.0 * a - 16.0 * log(max(r, 0.01)) - time * 4.1 + 1.3);
-      float d = max(r - hole, 0.0);
-      float heat = exp(-d * 3.2);
-      vec3 col = mix(cool * 0.25, mix(cool * 1.3, hot, heat), 0.15 + 0.85 * pow(arms, 2.0) * (0.55 + 0.45 * fine));
-      col *= 0.4 + 1.2 * heat + 0.2 * (1.0 - smoothstep(0.85, 1.0, r));
-      col = mix(col, vec3(1.0), exp(-pow((r - hole) / 0.025, 2.0)));
-      col = mix(vec3(0.015, 0.02, 0.05), col, smoothstep(hole - 0.03, hole + 0.005, r));
+      float r = length(p), a = atan(p.y, p.x);
+      float blade = fract(a / 6.2832 * 6.0 + r * 0.8 + open * 0.4);
+      vec3 col = mix(seam, steel, smoothstep(0.0, 0.06, blade) * (1.0 - smoothstep(0.86, 0.94, blade))) * (0.75 + 0.25 * r);
+      float q = r / max(open, 0.001), hole = 0.34;
+      if (q < 1.0) {
+        float arms = 0.5 + 0.5 * sin(3.0 * a - 9.0 * log(max(q, 0.01)) - time * 2.6);
+        float fine = 0.5 + 0.5 * sin(7.0 * a - 16.0 * log(max(q, 0.01)) - time * 4.1 + 1.3);
+        float heat = exp(-max(q - hole, 0.0) * 3.2);
+        vec3 c = mix(cool * 0.25, mix(cool * 1.3, hot, heat), 0.15 + 0.85 * pow(arms, 2.0) * (0.55 + 0.45 * fine));
+        c *= 0.4 + 1.2 * heat + 0.2 * (1.0 - smoothstep(0.85, 1.0, q));
+        c = mix(c, vec3(1.0), exp(-pow((q - hole) / 0.025, 2.0)));
+        col = mix(vec3(0.015, 0.02, 0.05), c, smoothstep(hole - 0.03, hole + 0.005, q));
+        col = mix(col, seam * 0.5, smoothstep(0.92, 1.0, q));
+      }
       gl_FragColor = vec4(col, 1.0);
       #include <colorspace_fragment>
     }`,
@@ -1525,33 +1766,7 @@ const MOTE_MAT = new THREE.ShaderMaterial({
     }`,
 });
 
-// Goal: a black-hole portal sunk in a low disc, a glowing lip round it and sparks spiralling in.
-function buildGoal(g: THREE.Group, r: number) {
-  const st = STRUCT!;
-  const side = new THREE.Mesh(new THREE.CylinderGeometry(r, r, GOAL_DISC_H, 64, 1, true), st.top);
-  side.position.y = GOAL_DISC_H / 2;
-  const face = new THREE.Mesh(new THREE.CircleGeometry(r, 64).rotateX(-Math.PI / 2), PORTAL_MAT);
-  face.position.y = GOAL_DISC_H;
-  face.rotation.y = Math.PI;
-  face.userData.noShadow = true;
-  const t = torusMesh(r + GOAL_RING.gap, GOAL_RING.tube), ringGeo = new THREE.BufferGeometry();
-  ringGeo.setAttribute("position", new THREE.Float32BufferAttribute(t.positions, 3));
-  ringGeo.setIndex(t.indices);
-  ringGeo.computeVertexNormals();
-  const ring = new THREE.Mesh(ringGeo, st.glow);
-  ring.position.y = GOAL_RING.y;
-  const moteGeo = new THREE.BufferGeometry();
-  moteGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(MOTES * 3), 3));
-  moteGeo.setAttribute("seed", new THREE.Float32BufferAttribute(Array.from({ length: MOTES }, (_, i) => (i * 0.618034) % 1), 1));
-  const motes = new THREE.Points(moteGeo, MOTE_MAT);
-  motes.position.y = GOAL_DISC_H;
-  motes.scale.setScalar(r);
-  motes.frustumCulled = false;
-  g.add(side, face, ring, motes);
-}
-
-function buildPillar(g: THREE.Group): ((e: number) => void) | undefined {
-  if (ENV.props === "soft") return softGiraffe(g);
+function buildPillar(g: THREE.Group): void {
   const st = STRUCT!;
   const R = PILLAR_R, H = PILLAR_H, capH = PILLAR_CAP, C = PILLAR_COLLAR, RG = PILLAR_RING;
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H - capH, 64), st.pillar);
@@ -1564,13 +1779,12 @@ function buildPillar(g: THREE.Group): ((e: number) => void) | undefined {
   dome.scale.y = (capH - C.h) / (R + C.r);
   dome.position.y = H - capH + C.h;
   dome.castShadow = true;
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(R + RG.r, R + RG.r, RG.h, 64), st.glow);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(R + RG.r, R + RG.r, RG.h, 64), ruin() ? SEAM_MAT : st.glow);
   ring.position.y = RG.h / 2;
   g.add(body, collar, dome, ring);
 }
 
-// Soft props: the animals (docs/animals.md). Each stays inside its lab prop's collider, and whatever
-// stands out of it (ears, heads, a spout) is laid out in level.ts and built by the physics as drawn.
+// The soft look's plain tint for its rounder kicker and jump pad bodies.
 let SOFT: { tint: THREE.MeshStandardMaterial; glaze: THREE.MeshStandardMaterial; eyes: THREE.MeshStandardMaterial } | null = null;
 function softMats() {
   SOFT ??= {
@@ -1580,339 +1794,6 @@ function softMats() {
   };
   return SOFT;
 }
-// Bumper: a ladybug, the pudding's dome in red with an ink line down its back and six ink spots sunk
-// in, and a cream head out of its front (LADYBUG, solid) wearing two eyes.
-function softBumper(g: THREE.Group) {
-  const A = ANIMALS.ladybug, R = 1, H = 1;
-  const prof: [number, number][] = [];
-  for (let k = 0; k <= 18; k++) { const t = k / 18, y = t * H, u = (y - 0.42) / 0.6; prof.push([Math.max(0.001, R * 0.985 * Math.sqrt(Math.max(0, 1 - u * u))), y]); }
-  prof[0] = [R * 0.72, 0];
-  prof[prof.length - 1] = [0.001, H];
-  const m = revolveMesh(prof, 56), geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(m.positions, 3));
-  geo.setIndex(m.indices);
-  geo.computeVertexNormals();
-  const body = new THREE.Mesh(geo, fur(A.shell));
-  body.castShadow = body.receiveShadow = true;
-  g.add(body);
-  // The line: the upper half of a thin ring in the plane down the middle, squashed to the dome's section.
-  const line = new THREE.Mesh(new THREE.TorusGeometry(0.99, 0.014, 6, 48, Math.PI).rotateY(Math.PI / 2).scale(1, 0.6, 0.985).translate(0, 0.42, 0), fur(ANIMALS.eye));
-  line.userData.noShadow = true;
-  g.add(line);
-  // Spots on the dome, each turned to its normal there and sunk in.
-  const rs = (y: number) => { const u = (y - 0.42) / 0.6; return R * 0.985 * Math.sqrt(Math.max(0, 1 - u * u)); };
-  for (const [deg, y, r] of [[50, 0.82, 0.12], [-50, 0.82, 0.12], [105, 0.62, 0.13], [-105, 0.62, 0.13], [155, 0.78, 0.11], [-155, 0.78, 0.11]] as const) {
-    const a = (deg * Math.PI) / 180, rr = rs(y), n = new THREE.Vector3((Math.sin(a) * rr) / 0.985 ** 2, (y - 0.42) / 0.6 ** 2, (Math.cos(a) * rr) / 0.985 ** 2).normalize();
-    const spot = decal(blob(r, Math.sin(a) * rr - n.x * 0.02, y - n.y * 0.02, Math.cos(a) * rr - n.z * 0.02, fur(ANIMALS.eye), 1, 1, 0.05 / r));
-    spot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
-    g.add(spot);
-  }
-  const hd = LADYBUG.head;
-  g.add(blob(hd.r, 0, hd.y, hd.z, fur(A.head)));
-  for (const s of [-1, 1]) g.add(eye(0.07, s * 0.12, hd.y + 0.12, hd.z + hd.r * 0.78, 1, 1.2, 0.6));
-}
-// Magnet: an octopus, the donut as its head in lavender with red spots sunk into its top, two big eyes
-// on its front and eight arm stubs round its foot (OCTOPUS, solid).
-function softMagnet(g: THREE.Group) {
-  const A = ANIMALS.octopus, skin = fur(A.skin), Rm = 0.6, r = 0.39;
-  const dough = new THREE.Mesh(new THREE.TorusGeometry(Rm, r, 24, 64), skin);
-  dough.rotation.x = Math.PI / 2;
-  dough.position.y = r;
-  dough.castShadow = dough.receiveShadow = true;
-  g.add(dough);
-  for (let k = 0; k < 5; k++) {
-    const a = ((k + 0.5) / 5) * Math.PI * 2 + 0.4, rr = 0.09 + (k % 2) * 0.03;
-    g.add(decal(blob(rr, Math.sin(a) * Rm, 2 * r - 0.02, Math.cos(a) * Rm, fur(A.spot), 1, 1, 0.05 / rr)).rotateX(Math.PI / 2));
-  }
-  const O = OCTOPUS.arm;
-  for (let k = 0; k < O.n; k++) { const a = ((k + 0.5) / O.n) * Math.PI * 2; g.add(blob(O.r, Math.sin(a) * O.at, O.y, Math.cos(a) * O.at, skin)); }
-  for (const s of [-1, 1]) g.add(eye(0.12, s * 0.28, r + 0.1, Rm + r * 0.9, 1, 1.2, 0.6));
-}
-// Crate: a cow, the box in white with ink patches on its top, back and sides (none on its face), a pink
-// muzzle with nostrils and two eyes on its front, a ball ear out of each side near the front and a
-// knob horn on top (solid, carried with the box).
-function softCrate(g: THREE.Group, w: number, h: number, d: number) {
-  const A = ANIMALS.cow, r = Math.min(w, h, d) * 0.3;
-  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 8, r), fur(A.hide));
-  m.castShadow = m.receiveShadow = true;
-  g.add(m);
-  // Patches: on a face, u and v of the way across its flat middle, rx by ry.
-  const fw = (a: number) => (a - 2 * r) / 2;
-  for (const [face, u, v, rx, ry] of [["top", -0.3, -0.3, 0.22, 0.17], ["top", 0.35, 0.3, 0.19, 0.25], ["left", 0.1, -0.1, 0.22, 0.3], ["right", -0.3, 0.2, 0.2, 0.22], ["back", 0, 0, 0.26, 0.2]] as const) {
-    const s = flat(1, 0, 0, 0, fur(A.patch), rx, ry);
-    if (face === "top") { s.position.set(u * fw(w), h / 2 - 0.02, v * fw(d)); s.rotation.x = Math.PI / 2; }
-    else if (face === "back") s.position.set(u * fw(w), v * fw(h), -(d / 2 - 0.02));
-    else { s.position.set((face === "left" ? -1 : 1) * (w / 2 - 0.02), v * fw(h), u * fw(d)); s.rotation.y = Math.PI / 2; }
-    g.add(s);
-  }
-  g.add(decal(blob(0.22, 0, -h * 0.22, d / 2 - 0.02, fur(A.muzzle), 1.3, 0.8, 0.25)));
-  for (const s of [-1, 1]) g.add(eye(0.03, s * 0.09, -h * 0.2, d / 2 + 0.03, 1, 1.3, 0.5), eye(0.08, s * 0.32, h * 0.12, d / 2 - 0.015));
-  for (const b of pieceBalls({ type: "crate", x: 0, y: 0, z: 0, w, h, d, rot: 0 } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(b.r < 0.1 ? A.horn : A.hide)));
-  g.add(pushMark(h / 2 + 0.5));
-}
-// Animal props: one material per colour; a blob is a ball of radius r squashed to (sx, sy, sz) of it,
-// baked into its geometry so its outline stays even. A decal (an eye, a spot, a muzzle, a plate: anything
-// sunk into a body) gets no outline of its own, since its hull would show as a dark crescent beside it;
-// `decal` marks one. A thin real part, like the fish's body or fins, keeps its outline.
-const ANIMAL_MATS = new Map<number, THREE.MeshStandardMaterial>();
-function fur(c: number): THREE.MeshStandardMaterial {
-  let m = ANIMAL_MATS.get(c);
-  if (!m) ANIMAL_MATS.set(c, (m = new THREE.MeshStandardMaterial({ color: c, roughness: ENV.bodyRoughness })));
-  return m;
-}
-function blob(r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sy = 1, sz = 1): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20).scale(r * sx, r * sy, r * sz), mat);
-  m.position.set(x, y, z);
-  m.castShadow = m.receiveShadow = true;
-  return m;
-}
-const decal = (m: THREE.Mesh): THREE.Mesh => { m.userData.noShadow = true; return m; };
-const eye = (r: number, x: number, y: number, z: number, sx = 1, sy = 1.2, sz = 0.5): THREE.Mesh => decal(blob(r, x, y, z, fur(ANIMALS.eye), sx, sy, sz));
-// A flat disc of radius r (stretched sx, sy) lying across local z, 0.05 thick: put its centre 0.02
-// under a surface and it stands PAINT proud, like paint.
-const flat = (r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sy = 1): THREE.Mesh => decal(blob(r, x, y, z, mat, sx, sy, 0.025 / r));
-// The same lying flat on a top face (across local y).
-function flatTop(r: number, x: number, y: number, z: number, mat: THREE.Material, sx = 1, sz = 1): THREE.Mesh {
-  const m = flat(r, x, y, z, mat, sx, sz);
-  m.rotation.x = Math.PI / 2;
-  return m;
-}
-// Blockade: a bunny, a block in off-white fur rounded BUNNY.r with a tall ear on each top corner (pink
-// inside) and, on its front, two eyes, a pink nose and two teeth lying on the face like paint.
-function softBlockade(g: THREE.Group) {
-  const C = ANIMALS.bunny, W = BLOCKADE_W, H = BLOCKADE_H, D = BLOCKADE_D, E = BUNNY.ear, coat = fur(C.fur);
-  const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 8, BUNNY.r), coat);
-  body.position.y = H / 2;
-  body.castShadow = body.receiveShadow = true;
-  g.add(body);
-  for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new RoundedBoxGeometry(E.w, E.h, E.d, 6, E.r), coat);
-    ear.position.set(s * E.x, H + E.h / 2, 0);
-    ear.castShadow = ear.receiveShadow = true;
-    const inner = decal(new THREE.Mesh(new RoundedBoxGeometry(E.w * 0.5, E.h * 0.68, 0.02, 4, 0.08), fur(C.ear)));
-    inner.position.set(s * E.x, H + E.h * 0.54, E.d / 2 - 0.01 + PAINT);
-    g.add(ear, inner);
-  }
-  const face = new THREE.Group();
-  face.position.z = D / 2;
-  face.add(eye(0.09, -0.42, H * 0.66, -0.015), eye(0.09, 0.42, H * 0.66, -0.015), decal(blob(0.07, 0, H * 0.48, -0.005, fur(C.nose), 1.2, 0.8, 0.5)));
-  const tooth = new THREE.BoxGeometry(0.11, 0.16, 0.02);
-  for (const s of [-1, 1]) {
-    const t = decal(new THREE.Mesh(tooth, fur(C.tooth)));
-    t.position.set(s * 0.065, H * 0.48 - 0.13, -0.005);
-    face.add(t);
-  }
-  g.add(face);
-}
-// Barrier: a fish on the pod's one stick: a salmon body with a fan tail at local -x, a fin on its back
-// and one each side, an eye each side and cream lips at its nose (local +x), all inside the pod.
-function softBarrier(g: THREE.Group) {
-  const F = ANIMALS.fish, fin = fur(F.fin), cy = 0.78;
-  g.add(blob(1, 0.15, cy, 0, fur(F.body), 0.85, 0.5, 0.21));
-  for (const s of [-1, 1]) {
-    const lobe = blob(1, -0.95, cy + s * 0.22, 0, fin, 0.3, 0.17, 0.05);
-    lobe.rotation.z = -s * 0.55;
-    const side = blob(1, 0.1, cy - 0.12, s * 0.22, fin, 0.22, 0.1, 0.03);
-    side.rotation.z = -0.5;
-    g.add(lobe, side, eye(0.08, 0.6, cy + 0.12, s * 0.18, 1, 1.2, 0.6));
-  }
-  g.add(blob(1, 0.05, cy + 0.42, 0, fin, 0.38, 0.2, 0.05), blob(0.1, 0.98, cy - 0.06, 0, fur(F.lip), 0.6, 0.8, 1));
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.2, 20), fin);
-  stick.position.y = (BARRIER_LEG + 0.2) / 2;
-  stick.castShadow = true;
-  g.add(stick);
-}
-// Pillar: a giraffe, a neck in yellow hide with orange spots carrying a ball head with a cream muzzle,
-// two eyes, two round ears and two knob horns, every ball solid as drawn (GIRAFFE). Returns its pose:
-// the neck stretched `e` up (giraffeStretch), the spots spread along it and the head lifted with it.
-function softGiraffe(g: THREE.Group): (e: number) => void {
-  const A = ANIMALS.giraffe, G = GIRAFFE, hide = fur(A.hide), R = PILLAR_R;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(R, R, G.neck, 48), hide);
-  neck.position.y = G.neck / 2;
-  neck.castShadow = neck.receiveShadow = true;
-  g.add(neck);
-  // Spots: flat discs sunk into the neck in staggered rows round it.
-  const spots: THREE.Object3D[] = [];
-  for (let row = 0; row < 4; row++) for (let k = 0; k < 5; k++) {
-    const a = ((k + (row % 2) * 0.5) / 5) * Math.PI * 2, r = 0.13 + ((row + k) % 3) * 0.02;
-    const spot = decal(blob(r, Math.sin(a) * (R - 0.02), 0.35 + row * 0.42, Math.cos(a) * (R - 0.02), fur(A.spot), 1, 1.15, 0.03 / r));
-    spot.rotation.y = a;
-    spot.userData.y = spot.position.y;
-    spots.push(spot);
-    g.add(spot);
-  }
-  const head = new THREE.Group();
-  head.add(blob(G.head, 0, G.headY, 0, hide), blob(G.muzzle.r, 0, G.headY + G.muzzle.y, G.muzzle.z, fur(A.muzzle)));
-  for (const s of [-1, 1]) {
-    head.add(blob(G.ear.r, s * G.ear.x, G.headY + G.ear.y, G.ear.z, hide), blob(G.horn.r, s * G.horn.x, G.headY + G.horn.y, G.horn.z, fur(A.horn)));
-    head.add(eye(0.09, s * 0.3, G.headY + 0.12, 0.5, 1, 1.2, 0.6), eye(0.035, s * 0.1, G.headY + G.muzzle.y + 0.02, G.muzzle.z + G.muzzle.r - 0.02, 1, 1, 0.5));
-  }
-  g.add(head);
-  return (e) => {
-    const k = (G.neck + e) / G.neck;
-    neck.scale.y = k;
-    neck.position.y = (G.neck * k) / 2;
-    for (const spot of spots) spot.position.y = (spot.userData.y as number) * k;
-    head.position.y = e;
-  };
-}
-// Barrel: an owl, the pill in tan with a cream face and belly wrapped round its front (curved panels,
-// since a flat disc sinks into the pill's curve), a dark wing down each side, two big eyes and an
-// orange beak, and a tuft ball sunk into each side of its cap (solid, carried with the pill).
-function softPill(g: THREE.Group, r: number, h: number) {
-  const A = ANIMALS.owl;
-  const cap = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.98, Math.max(0.01, h - 2 * r), 8, 32), fur(A.feather));
-  cap.castShadow = cap.receiveShadow = true;
-  g.add(cap);
-  // A curved panel round the front, `half` radians each way from +z, from y0 to y1.
-  const panel = (half: number, y0: number, y1: number, mat: THREE.Material) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r + PAINT, r + PAINT, y1 - y0, 24, 1, true, -half, 2 * half), mat);
-    m.position.y = (y0 + y1) / 2;
-    g.add(m);
-  };
-  panel(0.8, h * 0.08, h * 0.34, fur(A.belly));
-  panel(0.55, -h * 0.4, h * 0.02, fur(A.belly));
-  // A flat disc on the pill's side at angle `a` round from +z, standing `poke` proud at its middle.
-  const on = (a: number, y: number, rr: number, mat: THREE.Material, sx: number, sy: number, poke = 0.012) => {
-    const m = flat(rr, Math.sin(a) * (r - 0.025 + poke), y, Math.cos(a) * (r - 0.025 + poke), mat, sx, sy);
-    m.rotation.y = a;
-    return m;
-  };
-  for (const s of [-1, 1]) g.add(on(s * Math.PI / 2, 0.02, 0.1, fur(A.wing), 1.1, 2.6), on(s * 0.42, h * 0.21, 0.1, fur(ANIMALS.eye), 1, 1.1, 0.035));
-  g.add(on(0, h * 0.09, 0.06, fur(A.beak), 0.8, 1.2, 0.04));
-  for (const b of pieceBalls({ type: "barrel", x: 0, y: 0, z: 0, r, h, rot: 0 } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(A.feather)));
-  g.add(pushMark(h / 2 + 0.45));
-}
-// Cube: a chick, the cube in pale yellow with a wing on each side, an orange beak and two eyes on
-// its front with a blush dot under each. Hanging from a gate or pushed about alike.
-function softSugar(g: THREE.Group, C: number) {
-  const A = ANIMALS.chick;
-  const m = new THREE.Mesh(new RoundedBoxGeometry(C, C, C, 8, C * 0.3), fur(A.down));
-  m.castShadow = m.receiveShadow = true;
-  g.add(m);
-  for (const s of [-1, 1]) {
-    const wing = flat(C * 0.16, s * (C / 2 - 0.02), -C * 0.05, -C * 0.05, fur(A.wing), 1, 1.5);
-    wing.rotation.y = Math.PI / 2;
-    g.add(wing, eye(C * 0.07, s * C * 0.2, C * 0.12, C / 2 - 0.015), flat(C * 0.05, s * C * 0.3, -C * 0.03, C / 2 - 0.02, fur(A.blush), 1, 0.7));
-  }
-  g.add(blob(C * 0.09, 0, -C * 0.02, C / 2 - 0.01, fur(A.beak), 0.9, 0.6, 0.6), pushMark(C / 2 + 0.35));
-}
-
-// Plank: a butterfly on both faces of the panel: two orange wings a side with a lemon spot on the upper
-// and an ink dot on the lower, an ink body down the middle with a head and two antennae.
-function softButterfly(panel: THREE.Group, w: number, h: number): void {
-  const A = ANIMALS.butterfly, ink = fur(ANIMALS.eye);
-  for (const side of [1, -1]) {
-    const z = side * (PLANK_T / 2 - 0.02), at = (m: THREE.Mesh) => { m.position.z = z; panel.add(m); };
-    for (const s of [-1, 1]) {
-      at(flat(1, s * w * 0.26, h * 0.14, 0, fur(A.wing), w * 0.24, h * 0.27));
-      at(flat(1, s * w * 0.22, -h * 0.2, 0, fur(A.wing), w * 0.19, h * 0.2));
-      at(flat(h * 0.06, s * w * 0.28, h * 0.17, 0, fur(A.spot)));
-      at(flat(h * 0.03, s * w * 0.24, -h * 0.22, 0, ink));
-      const feeler = new THREE.Mesh(new THREE.BoxGeometry(0.03, h * 0.14, 0.05), ink);
-      feeler.position.set(s * w * 0.06, h * 0.47, z);
-      feeler.rotation.z = -s * 0.5;
-      panel.add(feeler);
-    }
-    at(flat(1, 0, -h * 0.02, 0, ink, w * 0.05, h * 0.4));
-    at(flat(w * 0.07, 0, h * 0.4, 0, ink));
-  }
-}
-// Board: a flounder lying on the floor, seen from above: two eyes together near its +z end, a mouth
-// at the tip, dark spots down its back and a darker fin along each long edge.
-function softFlounder(board: THREE.Group, w: number, d: number, t: number): void {
-  const A = ANIMALS.flounder, y = t / 2 - 0.02, ink = fur(ANIMALS.eye), spot = fur(A.spot);
-  for (const s of [-1, 1]) {
-    board.add(flatTop(0.09, s * 0.2, y, d / 2 - 0.9, ink, 1, 1.2));
-    board.add(flatTop(1, s * (w / 2 - 0.16), y, 0, spot, 0.1, Math.max(0.3, d / 2 - 0.7)));
-  }
-  board.add(flatTop(1, 0, y, d / 2 - 0.42, ink, 0.14, 0.03));
-  for (const [u, v, r] of [[-0.3, -0.05, 0.16], [0.3, -0.25, 0.13], [-0.1, -0.5, 0.18], [0.3, -0.75, 0.11], [-0.25, -0.9, 0.09], [0.05, 0.3, 0.12]] as const) board.add(flatTop(r, u * (w / 2 - 0.5), y, v * (d / 2 - 0.5), spot));
-}
-// Seesaw: a crocodile, seen from above: two eyes and two nostrils toward its +z end, a row of dark
-// scutes down its back and a row of white teeth along each edge beside its jaw.
-function softCrocodile(board: THREE.Group, w: number, d: number, t: number): void {
-  const A = ANIMALS.crocodile, y = t / 2 - 0.02, ink = fur(ANIMALS.eye), scute = fur(A.scute), tooth = fur(A.tooth);
-  for (const s of [-1, 1]) {
-    board.add(flatTop(0.11, s * 0.45, y, d / 2 - 0.9, ink, 1, 1.1), flatTop(0.04, s * 0.14, y, d / 2 - 0.25, ink));
-    for (let z = d / 2 - 1.5; z < d / 2 - 0.3; z += 0.3) board.add(flatTop(0.06, s * (w / 2 - 0.12), y, z, tooth, 0.7, 1));
-  }
-  for (let z = d / 2 - 1.6; z > -d / 2 + 0.3; z -= 0.45) board.add(flatTop(0.1, 0, y, z, scute, 1, 0.8), flatTop(0.07, -0.4, y, z - 0.2, scute, 1, 0.8), flatTop(0.07, 0.4, y, z - 0.2, scute, 1, 0.8));
-}
-// Column: a penguin, a navy cylinder rounded at the top with a cream belly down its front, a darker
-// flipper down each side, two eyes near the top and an orange beak (solid as drawn).
-function softPenguin(g: THREE.Group, h: number): void {
-  const A = ANIMALS.penguin, R = COLUMN_R, coat = fur(A.coat), dome = Math.min(0.25, h * 0.2);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h - dome, 48), coat);
-  body.position.y = (h - dome) / 2;
-  body.castShadow = body.receiveShadow = true;
-  g.add(body, blob(R, 0, h - dome, 0, coat, 1, dome / R, 1));
-  const bh = Math.max(0.2, h - 1.3), belly = new THREE.Mesh(new THREE.CylinderGeometry(R + PAINT, R + PAINT, bh, 32, 1, true, -0.95, 1.9), fur(A.belly));
-  belly.position.y = 0.35 + bh / 2;
-  g.add(belly);
-  for (const s of [-1, 1]) {
-    const flipper = flat(0.14, s * (R - 0.015), h * 0.5, 0.05, fur(A.flipper), 1, Math.max(1, (h * 0.3) / 0.14));
-    flipper.rotation.y = s * Math.PI / 2;
-    g.add(flipper, eye(0.1, s * 0.22, h - 0.28, 0.77, 1, 1.2, 0.5));
-  }
-  for (const b of pieceBalls({ type: "column", x: 0, y: 0, z: 0, h } as Piece)) g.add(blob(b.r, b.x, b.y, b.z, fur(A.beak)));
-}
-// Support: a whale in place of the pillars (whaleParts, solid as drawn): the body and flukes as rounded
-// boxes in blue, a face on its head end (local +x: two eyes and a blush dot each side), a cream
-// belly and a flipper on its outward side, and its spout a column of water, bulging in waves up its
-// height inside its collider with two white streaks, to a white splash under the platform, droplets
-// round it and rising beside it.
-function softWhale(g: THREE.Group, p: Piece & { type: "support" }): void {
-  const A = ANIMALS.whale, skin = fur(A.skin), parts = whaleParts(p), body = parts.boxes[0]!, zf = body.z + body.d / 2, xf = body.x + body.w / 2;
-  for (const b of parts.boxes) {
-    const m = new THREE.Mesh(new RoundedBoxGeometry(b.w, b.h, b.d, 6, b.r ?? 0), skin);
-    m.position.set(b.x, b.y, b.z);
-    m.castShadow = m.receiveShadow = true;
-    g.add(m);
-  }
-  const [spout, splash] = parts.cylinders as [Cylinder, Cylinder], sy = spout.y0 ?? 0;
-  const prof: [number, number][] = [[0, sy]];
-  for (let k = 0; k <= 32; k++) { const t = k / 32, y = sy + t * spout.h; prof.push([spout.r - 0.045 + 0.04 * Math.sin((y * Math.PI * 2) / 0.8 + 1) * Math.min(1, 6 * t * (1 - t) + 0.2), y]); }
-  prof.push([0, sy + spout.h]);
-  const wave = revolveMesh(prof, 32), geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(wave.positions, 3));
-  geo.setIndex(wave.indices);
-  geo.computeVertexNormals();
-  const column = new THREE.Mesh(geo, fur(A.water));
-  column.position.set(spout.x ?? 0, 0, spout.z ?? 0);
-  column.castShadow = true;
-  g.add(column);
-  for (const a of [0.7, -2.2]) {
-    const streak = flat(0.05, Math.sin(a) * (spout.r - 0.065), sy + spout.h * (a > 0 ? 0.55 : 0.4), (spout.z ?? 0) + Math.cos(a) * (spout.r - 0.065), fur(A.splash), 1, Math.max(1, (spout.h * 0.3) / 0.05));
-    streak.rotation.y = a;
-    g.add(streak);
-  }
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(splash.r, splash.r * 0.8, splash.h, 32), fur(A.splash));
-  top.position.set(splash.x ?? 0, (splash.y0 ?? 0) + splash.h / 2, splash.z ?? 0);
-  top.castShadow = true;
-  g.add(top);
-  for (const b of parts.balls) g.add(blob(b.r, b.x, b.y, b.z, fur(A.splash)));
-  g.add(flat(1, -0.1, body.y - body.h * 0.22, zf - 0.02, fur(A.belly), body.w * 0.4, body.h * 0.26));
-  const fin = flat(0.2, body.w * 0.12, body.y - body.h * 0.12, zf - 0.02, fur(A.fin), 1.6, 0.8);
-  fin.rotation.z = -0.4;
-  g.add(fin);
-  // The face, on the head end.
-  for (const s of [-1, 1]) {
-    const e = blob(0.1, xf - 0.015, body.y + 0.2, body.z + s * 0.26, fur(ANIMALS.eye), 0.5, 1.2, 1);
-    e.userData.noShadow = true;
-    const blush = flat(0.06, xf - 0.02, body.y + 0.02, body.z + s * 0.45, fur(ANIMALS.chick.blush), 1.2, 1);
-    blush.rotation.y = Math.PI / 2;
-    g.add(e, blush);
-  }
-}
-
-// A pushable animal's marker: a small green dome hovering over it, so a player knows it moves.
-function pushMark(y: number): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), PUSH_MAT);
-  m.position.y = y;
-  return m;
-}
-const PUSH_MAT = new THREE.MeshStandardMaterial({ color: ANIMALS.push, emissive: ANIMALS.push, emissiveIntensity: 0.35, roughness: 0.5 });
 
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until
@@ -1982,6 +1863,19 @@ patchChunk("shadowmap_pars_fragment", /float phi = interleavedGradientNoise[\s\S
 patchChunk("lights_fragment_begin", /\( directLight\.visible && receiveShadow \) \? getShadow\( directionalShadowMap/,
   "( directLight.visible && receiveShadow && dot( geometryNormal, directLight.direction ) > 0.0 ) ? getShadow( directionalShadowMap");
 
+// Mist (ENV.mist): no sea or clouds, a plain void from mistBottom below to mistTop above, and fog in
+// the void's colour in the direction looked, so whatever fades out fades into the background behind it.
+const glslColor = (hex: number) => { const c = new THREE.Color(hex); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
+const MIST_GLSL = `vec3 mistAt(float y) { return mix(${glslColor(ENV.mistBottom)}, ${glslColor(ENV.mistTop)}, smoothstep(-0.55, 0.45, y)); }`;
+if (ENV.mist) {
+  THREE.ShaderChunk.fog_pars_vertex += "\n#ifdef USE_FOG\n  varying vec3 vFogDir;\n#endif";
+  THREE.ShaderChunk.fog_vertex += "\n#ifdef USE_FOG\n  vFogDir = transpose( mat3( viewMatrix ) ) * mvPosition.xyz;\n#endif";
+  THREE.ShaderChunk.fog_pars_fragment += `\n#ifdef USE_FOG\n  varying vec3 vFogDir;\n  ${MIST_GLSL}\n#endif`;
+  const mix = "gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );";
+  if (!THREE.ShaderChunk.fog_fragment.includes(mix)) throw new Error("three's fog_fragment changed; redo the mist patch");
+  THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(mix, "gl_FragColor.rgb = mix( gl_FragColor.rgb, mistAt( normalize( vFogDir ).y ), fogFactor );");
+}
+
 // The sky light and the shadow-casting sun, shared by play, the editor and the thumbnails; point the
 // sun's shadow at a level with fitSun.
 export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
@@ -2002,11 +1896,12 @@ export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
 
 export function createScene(fog = FOG_PLAY * ENV.fog): SceneEnv {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY_HORIZON);
+  scene.background = new THREE.Color(ENV.mist ? ENV.mistTop : SKY_HORIZON);
   scene.fog = new THREE.FogExp2(SKY_HORIZON, fog);
-  const sky = makeSky(), ocean = makeOcean();
+  const sky = ENV.mist ? makeMist() : makeSky(), ocean = ENV.mist ? null : makeOcean();
   sky.layers.set(SKY_LAYER);
-  scene.add(sky, ocean);
+  scene.add(sky);
+  if (ocean) scene.add(ocean);
   const sun = addLights(scene);
   const rain = ENV.rain > 0 ? makeRain(ENV.rain) : null;
   if (rain) scene.add(rain.lines);
@@ -2020,13 +1915,16 @@ export function createScene(fog = FOG_PLAY * ENV.fog): SceneEnv {
     bubbles?.tick(camera, t);
     sky.position.copy(camera.position);
     (sky.material as THREE.ShaderMaterial).uniforms.time!.value = t;
-    ocean.position.set(camera.position.x, OCEAN_Y, camera.position.z);
-    (ocean.material as THREE.ShaderMaterial).uniforms.time!.value = t;
+    if (ocean) {
+      ocean.position.set(camera.position.x, OCEAN_Y, camera.position.z);
+      (ocean.material as THREE.ShaderMaterial).uniforms.time!.value = t;
+    }
     PORTAL_TIME.value = t;
+    DECOR_TIME.value = t;
   };
   const setDetail = (full: boolean) => {
     (sky.material as THREE.ShaderMaterial).uniforms.detail!.value = full ? 1 : 0;
-    (ocean.material as THREE.ShaderMaterial).uniforms.detail!.value = full ? 1 : 0;
+    if (ocean) (ocean.material as THREE.ShaderMaterial).uniforms.detail!.value = full ? 1 : 0;
   };
   let skyTarget: THREE.WebGLRenderTarget | null = null;
   const skyCam = new THREE.PerspectiveCamera();
@@ -2135,6 +2033,21 @@ const NOISE_GLSL = `
 // marches its view ray through the deck: coverage decides where clouds stand, coverage also
 // sets how tall they billow, 3D noise erodes the edges into puffs, and one step toward the sun
 // shades their undersides. Distant clouds melt into the horizon haze.
+// The mist's void (ENV.mist): the same colour the fog takes, looking that way.
+function makeMist(): THREE.Mesh {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { time: { value: 0 }, detail: { value: 1 } },
+    vertexShader: `varying vec3 vP; void main(){ vP = position; vec4 c = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = c.xyww; }`,
+    fragmentShader: `varying vec3 vP; ${MIST_GLSL}
+      void main(){ gl_FragColor = vec4(mistAt(normalize(vP).y), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), mat);
+  m.frustumCulled = false;
+  return m;
+}
 function makeSky(): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
@@ -2411,13 +2324,18 @@ export interface Built {
   planks: Map<number, THREE.Group>;
   // Each pangolin's pose: bends it to `a` unrolled (pangolinLine).
   pangolins: Map<number, (a: number) => void>;
-  // Each giraffe's pose: its neck stretched `e` up (giraffeStretch).
-  giraffes: Map<number, (e: number) => void>;
   // Each moving platform's piece group, placed by its schedule every frame in play.
   movers: Map<number, THREE.Group>;
   // Every treadmill rod, local to its piece group, with its z and radius (turnBelts).
   beltRods: { mesh: THREE.Mesh; z: number; r: number }[];
-  goal: { index: number; mesh: THREE.Object3D } | null;
+  // The scattered overgrowth (decor.ts), kept apart so the editor can carry it over a rebuild.
+  decor: THREE.Group;
+  // Each apple's floating group, by piece index; and the origin's wormhole, opened `open` (0 to 1) of the way.
+  apples: Map<number, THREE.Group>;
+  origin: ((open: number) => void) | null;
+  // Each piece group's ink hulls (stylize) with the group's bounds in its own frame, hidden while the
+  // camera is near the piece (hideHullsAround).
+  hulls: { group: THREE.Group; index: number; box: THREE.Box3; hulls: THREE.Mesh[]; meshes: THREE.Mesh[]; platform: boolean }[];
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -2449,8 +2367,9 @@ export function fitSun(sun: THREE.DirectionalLight, built: Built) {
 }
 
 // `reuse` is the last build of the same level (the editor's): a piece that has not changed keeps its group
-// from it, so an edit rebuilds only what it touched. The groups left over are disposed.
-export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built {
+// from it, so an edit rebuilds only what it touched. The groups left over are disposed. `plants` false
+// leaves the overgrowth out (the editor grows it only on request).
+export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants = true): Built {
   if (!MAT) throw new Error("initMaterials first");
   const mat = MAT;
   const group = new THREE.Group();
@@ -2460,26 +2379,24 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
   const bridges = new Map<number, THREE.Group[]>();
   const planks = new Map<number, THREE.Group>();
   const pangolins = new Map<number, (a: number) => void>();
-  const giraffes = new Map<number, (e: number) => void>();
   const movers = new Map<number, THREE.Group>();
   const beltRodMeshes: Built["beltRods"] = [];
-  let goal: Built["goal"] = null;
   const pool = new Map<string, number[]>(), kept = new Set<THREE.Group>();
   reuse?.pieceGroups.forEach((g, i) => { const k = g.userData.buildKey as string | undefined; if (k) pool.set(k, [...(pool.get(k) ?? []), i]); });
 
+  const seams = platformSeams(level);
   level.pieces.forEach((p, index) => {
-    // A piece is rebuilt when it or anything else it is drawn from changes: a platform's holes; rails
+    // A piece is rebuilt when it or anything else it is drawn from changes: a platform's holes and joins; rails
     // follow the platforms round them, so they are always rebuilt.
-    const key = p.type === "rails" ? "" : JSON.stringify(p) + (p.type === "slab" || p.type === "curve" ? JSON.stringify(isTilted(p) ? holeCuts(level, p) : holesOn(level, p)) : "");
+    const key = p.type === "rails" ? "" : JSON.stringify(p) + (isPlatform(p) ? floorOf(level, p) : "") + (p.type === "slab" || p.type === "curve" ? JSON.stringify(isTilted(p) ? holeCuts(level, p) : holesOn(level, p)) : "") + JSON.stringify(seams.get(index) ?? []);
     const was = key ? pool.get(key)?.shift() : undefined;
     if (reuse && was !== undefined) {
       const g = reuse.pieceGroups[was]!;
       g.userData.pieceIndex = index;
-      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.pangolins, pangolins], [reuse.giraffes, giraffes], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
+      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.pangolins, pangolins], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
         if (from.has(was)) to.set(index, from.get(was));
       }
       for (const r of reuse.beltRods) { let o: THREE.Object3D | null = r.mesh; while (o && o !== g) o = o.parent; if (o) beltRodMeshes.push(r); }
-      if (reuse.goal?.index === was) goal = { index, mesh: reuse.goal.mesh };
       kept.add(g);
       group.add(g);
       pieceGroups.push(g);
@@ -2496,7 +2413,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g);
     if (p.type === "barrier") buildBarrier(g);
-    if (p.type === "pillar") { const pose = buildPillar(g); if (pose) giraffes.set(index, pose); }
+    if (p.type === "pillar") buildPillar(g);
     if (p.type === "bumper") buildBumper(g);
     if (p.type === "magnet") buildMagnet(g);
     if (p.type === "column") buildColumn(g, p.h);
@@ -2507,18 +2424,21 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p, editor));
     if (p.type === "board") planks.set(index, buildBoard(g, p));
-    if (p.type === "pangolin") { const pose = buildPangolin(g, p, editor); pose(pangolinRest(p)); pangolins.set(index, pose); }
+    if (p.type === "pangolin") { const pose = buildPangolin(g, p, editor); pose(pangolinRest(pangolinTrack(p))); pangolins.set(index, pose); }
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
     if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
     if (p.type === "support") buildSupport(g, p);
     if (p.type === "gate") bridges.set(index, buildGate(g, p));
+    if (p.type === "arch") buildGate(g, p);
+    if (p.type === "lamp" || p.type === "mast") buildFrame(g, p);
+    if (p.type === "tree") g.add(buildTree(p));
     if (p.type === "kicker") { const k = buildKicker(g, p, editor); if (k) planks.set(index, k); }
     if (p.type === "tube") buildTube(g, p);
     if (p.type === "hoop") buildHoop(g);
     for (const b of pieceBoxes(p)) {
       if (b.kind !== "block" || p.type === "blockade" || p.type === "barrier" || p.type === "support") continue; // these props draw themselves; the box is only their collider
-      const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), mat.block);
+      const m = new THREE.Mesh(roundedBox(b.w, b.h, b.d, EDGE_RADIUS), ruin() ? STRUCT!.body : mat.block);
       m.position.set(b.x, b.y, b.z);
       m.castShadow = true;
       m.receiveShadow = true;
@@ -2527,15 +2447,16 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (p.type === "slab" || p.type === "curve") {
       const rot = pieceRot(p);
       const cuts: XZ[][] = isTilted(p) ? holeCuts(level, p) : holesOn(level, p).map((h) => h.map((v) => { const o = rotXZ(v[0] - p.x, v[1] - p.z, -rot); return [o.x, o.z] as XZ; }));
+      const joins: PlatformJoins = { joins: (seams.get(index) ?? []).map((q) => q.map(([x, z]) => pieceLocal(p, x, z))), uvFrame: tileFrame(p) };
       const geo = p.type === "slab"
-        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined, isBelt(p), isShaped(p) ? slabOutline(p) : undefined, isCurled(p) ? (v) => curlPoint(p, v) : undefined)
-        : curveGeometry(p);
+        ? platformGeometry(p.w, p.d, PLATFORM_THICKNESS, LIP, TILE, undefined, undefined, cuts, p.twist ? (z) => twistAt(p, z) : undefined, isBelt(p), isShaped(p) ? slabOutline(p) : undefined, isCurled(p) ? (v) => curlPoint(p, v) : undefined, joins)
+        : curveGeometry(p, seams.get(index));
       if (p.type === "curve" && p.roll) {
         const a = geo.getAttribute("position");
         for (let i = 0; i < a.count; i++) a.setXYZ(i, ...curveRollPoint(p, [a.getX(i), a.getY(i), a.getZ(i)]));
         geo.computeVertexNormals();
       }
-      const m = new THREE.Mesh(geo, [mat.platform, mat.edge, mat.rim, mat.border]);
+      const m = new THREE.Mesh(geo, [floorMat(floorOf(level, p), patchSeed(level.id)), mat.edge, mat.rim, mat.border]);
       m.receiveShadow = true;
       g.add(m);
       if (isGlass(p) && !isBelt(p)) g.add(glassPane(geo));
@@ -2547,10 +2468,14 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
       }
     }
     if (p.type === "hole" && editor) buildHoleMarker(g, p);
+    if (p.type === "clearing" && editor) buildClearingMarker(g, p);
     if (p.type === "ramp") {
-      const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t));
+      // The strip runs along the ramp, turned a quarter into place after.
+      const strip = (x: number, z: number): XZ => { const l = pieceLocal(p, x, z); return [-l[1], l[0]]; }, frame = tileFrame(p);
+      const geo = platformGeometry(p.d, p.w, PLATFORM_THICKNESS, LIP, TILE, undefined, (t) => rampHeight(p, t), [], undefined, false, undefined, undefined,
+        { joins: (seams.get(index) ?? []).map((q) => q.map(([x, z]) => strip(x, z))), uvFrame: (x, z) => frame(z, -x) });
       geo.rotateY(Math.PI / 2);
-      const m = new THREE.Mesh(geo, [mat.platform, mat.edge, mat.rim, mat.border]);
+      const m = new THREE.Mesh(geo, [floorMat(floorOf(level, p), patchSeed(level.id)), mat.edge, mat.rim, mat.border]);
       m.receiveShadow = true;
       m.castShadow = true;
       g.add(m);
@@ -2558,7 +2483,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (p.type === "fence") buildFence(p, g);
     if (p.type === "rails") buildRailsPiece(p, g, level);
     if (p.type === "spinner") {
-      const bar = new THREE.Mesh(ENV.props === "soft" ? new RoundedBoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH, 6, SPINNER_WIDTH * 0.48) : new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
+      const bar = new THREE.Mesh(ENV.props === "soft" ? new RoundedBoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH, 6, SPINNER_WIDTH * 0.48) : new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), ruin() ? STRUCT!.body : SPINNER_MAT);
       bar.position.y = SPINNER_HEIGHT / 2;
       bar.castShadow = true;
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(SPINNER_HUB_R, SPINNER_HUB_R, SPINNER_HEIGHT + 0.05, 48), mat.block);
@@ -2566,10 +2491,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
       g.add(bar, hub);
       spinnerBars.set(index, bar);
     }
-    if (p.type === "goal") {
-      buildGoal(g, p.r);
-      goal = { index, mesh: g };
-    }
+    if (p.type === "apple") buildApple(g);
     if (p.type === "start") {
       buildStartPad(g);
       if (editor) {
@@ -2581,6 +2503,8 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     group.add(g);
     pieceGroups.push(g);
   });
+  const decor = plants ? buildDecor(level) : new THREE.Group();
+  group.add(decor);
 
   // Everything solid casts and takes shadows; glows, the portal, holograms and editor guides don't.
   group.traverse((o) => {
@@ -2594,7 +2518,21 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
   for (const g of reuse?.pieceGroups ?? []) {
     if (!kept.has(g)) g.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
   }
-  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, giraffes, movers, beltRods: beltRodMeshes, goal };
+  group.updateMatrixWorld(true);
+  const hulls = pieceGroups.flatMap((g, i) => {
+    const box = new THREE.Box3(), inv = g.matrixWorld.clone().invert(), list: THREE.Mesh[] = [], meshes: THREE.Mesh[] = [], m = new THREE.Matrix4();
+    g.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh) return;
+      meshes.push(o);
+      if (o.userData.outline) { if (o.parent instanceof THREE.Mesh) list.push(o); return; }
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      box.union(o.geometry.boundingBox!.clone().applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld)));
+    });
+    return list.length && !box.isEmpty() ? [{ group: g, index: i, box, hulls: list, meshes, platform: isPlatform(level.pieces[i]!) }] : [];
+  });
+  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, movers, beltRods: beltRodMeshes, decor, hulls,
+    apples: new Map(pieceGroups.flatMap((g, i) => (g.userData.apple ? [[i, g.userData.apple as THREE.Group]] : []))),
+    origin: (pieceGroups.find((g) => g.userData.origin)?.userData.origin as Built["origin"] | undefined) ?? null };
 }
 
 // Cel shading: every standard material becomes a toon material with the same maps and glow, lit
@@ -2619,9 +2557,63 @@ function toonOf(m: THREE.Material): THREE.Material {
     color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
     transparent: m.transparent, opacity: m.opacity, side: m.side, depthWrite: m.depthWrite, gradientMap: toonRamp(),
   });
+  t.onBeforeCompile = m.onBeforeCompile;
+  t.customProgramCacheKey = m.customProgramCacheKey;
   TOON_CACHE.set(m, t);
   return t;
 }
+// In the game's view a prop near the eye turns see-through as a whole (fade.ts), by its nearest mesh's
+// bounds (in the mesh's frame): its meshes swap to see-through copies of their materials while it is
+// faded, its ink hull fading faster (INK_FADE) so the hull's inside never tints through. A mesh's hull
+// is drawn inside out, so from inside the mesh its faces fill the view with ink: it is hidden while the
+// eye is inside its mesh. Platforms stay solid; those that meet have no wall where they join, so from
+// inside one the next one's open end shows its hull: while the eye is inside any platform, every
+// platform's hull is hidden.
+const EYE = new THREE.Vector3(), INV = new THREE.Matrix4();
+const eyeIn = (o: THREE.Object3D, eye: THREE.Vector3) => EYE.copy(eye).applyMatrix4(INV.copy(o.matrixWorld).invert());
+export function hideHullsAround(built: Built, eye: THREE.Vector3): void {
+  const inside = built.hulls.some((r) => r.platform && r.box.containsPoint(eyeIn(r.group, eye)));
+  const dist = (h: THREE.Mesh) => { const m = h.parent as THREE.Mesh; return m.geometry.boundingBox!.distanceToPoint(eyeIn(m, eye)); };
+  const faded: [number, number][] = [];
+  for (const r of built.hulls) {
+    const d = r.hulls.map(dist);
+    r.hulls.forEach((h, k) => { h.visible = !(r.platform && inside) && d[k]! > ENV.outline; });
+    if (r.platform) continue;
+    const o = fadeAt(Math.min(...d));
+    fadePiece(r, o);
+    if (o < 1) faded.push([r.index, o]);
+  }
+  // The plants growing on a faded prop fade with it.
+  fadePlantsOn(faded);
+}
+
+// A see-through copy of a material, keeping its shader changes, its own opacity kept in userData.
+function seeThrough(m: THREE.Material): THREE.Material {
+  const c = m.clone();
+  c.onBeforeCompile = m.onBeforeCompile;
+  c.customProgramCacheKey = m.customProgramCacheKey;
+  c.transparent = true;
+  c.userData.opacity = m.opacity;
+  return c;
+}
+// Draws a prop `o` solid (1 is its own materials again).
+function fadePiece(r: Built["hulls"][number], o: number): void {
+  for (const m of r.meshes) {
+    const ud = m.userData;
+    if (o >= 1) { if (ud.solid) { m.material = ud.solid; ud.solid = undefined; } continue; }
+    if (!ud.solid) { ud.solid = m.material; ud.faded ??= Array.isArray(m.material) ? m.material.map(seeThrough) : seeThrough(m.material); m.material = ud.faded; }
+    const k = ud.outline ? o ** INK_FADE : o;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) mat.opacity = mat.userData.opacity * k;
+  }
+}
+// Every prop solid again, every hull shown (a view that doesn't fade, after one that did).
+export function unfadeAll(built: Built): void {
+  for (const r of built.hulls) { fadePiece(r, 1); for (const h of r.hulls) h.visible = true; }
+  fadePlantsOn([]);
+}
+
+// The props' steel (rusting under the ruin look), for the title picture.
+export const steelMaterial = (): THREE.MeshStandardMaterial => STRUCT!.body;
 export function stylize(root: THREE.Object3D): void {
   const hulls: [THREE.Mesh, THREE.Mesh][] = [];
   root.traverse((o) => {
@@ -2632,7 +2624,7 @@ export function stylize(root: THREE.Object3D): void {
       // Cel-lit bodies take no shadows: on a curved body the shadow map's terminator breaks the flat
       // bands into jagged steps. Floors, planks and blocks (anything wearing the floor texture) keep
       // them, so drop shadows stay.
-      const floorLike = mats.some((m) => m instanceof THREE.MeshStandardMaterial && m.map !== null && (m.map === MAT!.platform.map || m.map === MAT!.block.map));
+      const floorLike = mats.some((m) => m instanceof THREE.MeshStandardMaterial && m.map !== null && (isFloorMat(m) || m.map === MAT!.block.map));
       if (!floorLike) o.receiveShadow = false;
       o.material = Array.isArray(o.material) ? o.material.map(toonOf) : toonOf(o.material);
     }
@@ -2683,7 +2675,7 @@ export function markOverlapping(built: Built, bad: Set<number>) {
     for (const o of g.children) {
       if (!(o instanceof THREE.Mesh) || !Array.isArray(o.material)) continue;
       const m = o.material as THREE.Material[];
-      if (m[0] === MAT!.platform || m[0] === BAD_MAT) m[0] = bad.has(i) ? BAD_MAT! : MAT!.platform;
+      if (isFloorMat(m[0]!) || m[0] === BAD_MAT) { if (bad.has(i)) { o.userData.floor ??= m[0]; m[0] = BAD_MAT!; } else if (m[0] === BAD_MAT) m[0] = o.userData.floor as THREE.Material; }
     }
   });
 }

@@ -1,8 +1,8 @@
-# Zoosky
+# Rustbloom
 
 ![Rolling through a level](docs/images/gameplay.webp)
 
-Zoosky is my personal reimagination of the classic iOS 3D puzzle platformer game: Aerox. It began as Oxare, an anagram of the name, and became Zoosky once the levels filled with animals floating among the clouds. I loved how simple this game looks yet how deeply addictive and fun the puzzle solving process is. Unfortunately, the game stopped receiving new updates and the original 40 levels were not enough content for me. Thus, I rebuilt the game to the best of my ability on a new engine 10+ years later. Hope this is fun for someone.
+Rustbloom is my personal reimagination of the classic iOS 3D puzzle platformer game: Aerox. It began as Oxare, an anagram of the name, became Zoosky once the levels filled with animals floating among the clouds, and Rustbloom once those gave way to an old steel structure overgrown with plants, drifting in the mist. I loved how simple this game looks yet how deeply addictive and fun the puzzle solving process is. Unfortunately, the game stopped receiving new updates and the original 40 levels were not enough content for me. Thus, I rebuilt the game to the best of my ability on a new engine 10+ years later. Hope this is fun for someone.
 
 ## Features
 

@@ -16,6 +16,7 @@ import { Menu } from "./menu.ts";
 import { loadThumbIndex } from "./thumbs.ts";
 import { loadTuning } from "./tuning.ts";
 import { h } from "./ui.ts";
+import { applyUiScale } from "./uiscale.ts";
 import { worldOf, type Level } from "./level.ts";
 
 export interface Ctx { renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement; overlay: HTMLElement }
@@ -29,6 +30,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const ctx: Ctx = { renderer, canvas, overlay };
+applyUiScale();
 
 loadTuning();
 

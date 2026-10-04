@@ -10,6 +10,12 @@ Every platform edge has the same profile, top and bottom, so a platform looks th
 - a thin grey border line just inside the lip
 - the wall between the two lips, carrying the cyan edge strip
 
+## Joins
+
+Where two platforms meet at the same height there is no seam: that edge has no lip or border, the top runs flat right to it, and its corners are square, so the two tops read as one. The joined spans come from the physics floor (`platformSeams` in `src/floor.ts`, the edges two tops share once each is split at the other's corners), carried into each piece's own frame and handed to `platformMesh` as `joins`; it splits its outline where a join starts or ends. An open edge that runs straight on into a join (a 10-wide end where a 6-wide lane leaves it) steps its lip rings across the join's end, so its lip carries the lane's side lip on and the two meet on a mitre. A slab, curve or ramp with a join lays its top as the grid's cells, each clipped to the ring inside the lips, so a bend or warp still has points to bend. The top's tiles are laid in the level's frame (`tileFrame` in `scene.ts`), turned back only by a piece's turn past the nearest quarter turn, so they run straight on across a join. Moving, tilted and rolled pieces are never joined.
+
+With `ENV.ruin` (docs/colors.md "Looks") the same profile is old steel: steel lips, and a riveted, rusting plate wall in place of the strip.
+
 The wall's texture runs along the perimeter (u is the distance walked round the loop), so the wall ring ends on a copy of its first vertex at the full perimeter. Wrapping straight back to the first vertex would squeeze every repeat into one quad and leave a comb of stripes along one edge. The two copies share one normal (`seams`), so the join shows no crease.
 
 Seen from above, outside corners are rounded. Inside corners (a hole's corners, or the corner of a notch) are rounded too, the other way.
@@ -42,12 +48,12 @@ The ball rolls on one welded triangle mesh built from every platform top (`floor
 
 - Joins weld only where the corner points of the two pieces land on the same spot, so keep piece edges on the 0.5 grid.
 - An open edge (nothing next to it, including a hole's edge) has the same rounded lip as the visuals, so the ball rolls off it.
-- Where two pieces meet, the lip is only a tiny dip (`PLATFORM_SEAM_DROP`, 0.015) so the ball keeps its speed. The visuals still show the full groove.
+- Where two pieces meet, the floor is flat: no lip and no dip, as drawn. Each piece still adds a point on the seam where the inset corner of its open side lands (0.45 along at a square corner, further at a slanted one), and both pieces take each other's, so the strips there weld. Along a straight run the inset points are kept in order between the run's corners, or a slanted corner would fold the strip over itself.
 - Under the top there is a second mesh with the side walls and underside, so a ball below or beside a platform hits it.
 - A treadmill is in the floor as its frame only: a slab top with its opening cut out, the opening's edge dropping square with no lip. Its rods are their own spinning bodies.
 - Both meshes are zero-thickness shells that only push from their front face, so every platform is also filled with solid convex hulls from its underside to 0.03 below its surface, chamfered under the lip. The ball never touches them while rolling, but if it ever reaches the corner where a wall meets the lip, the solid pushes it back out instead of letting it in. `check.ts` fires balls at raised slab, holed slab, curve and ramp edges to prove nothing gets inside.
 
-`npm run check` checks that seams stay shallow, curves stay flat, and that the ball falls through holes and notches but rolls past them.
+`npm run check` checks that the ball neither sinks nor hops crossing a join, curves stay flat, and that the ball falls through holes and notches but rolls past them.
 
 ## Shaped slabs
 

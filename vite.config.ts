@@ -23,7 +23,7 @@ function levelSaver(): Plugin {
         req.on("data", (c: Buffer) => { body += c; });
         req.on("end", () => {
           try {
-            const level = JSON.parse(body) as { id: string; name: string; hidden?: boolean; world?: string; thumb?: unknown; pieces: unknown[] };
+            const level = JSON.parse(body) as { id: string; name: string; hidden?: boolean; world?: string; floor?: string; thumb?: unknown; pieces: unknown[] };
             if (typeof level.id !== "string" || !/^[a-z0-9-]+$/.test(level.id)) throw new Error("level id must be lowercase letters, digits and dashes");
             if (typeof level.name !== "string" || !Array.isArray(level.pieces)) throw new Error("level needs a name and pieces");
             const file = `src/levels/${level.id}.json`;
@@ -32,7 +32,8 @@ function levelSaver(): Plugin {
             const thumb = level.thumb ? `  "thumb": ${JSON.stringify(level.thumb).replace(/,/g, ", ").replace(/:/g, ": ")},\n` : "";
             const hidden = level.hidden === true ? `  "hidden": true,\n` : "";
             const world = typeof level.world === "string" && level.world !== "classic" ? `  "world": ${JSON.stringify(level.world)},\n` : "";
-            writeFileSync(file, `{\n  "id": ${JSON.stringify(level.id)},\n  "name": ${JSON.stringify(level.name)},\n${hidden}${world}${thumb}  "pieces": [\n${lines.join("\n")}\n  ]\n}\n`);
+            const floor = typeof level.floor === "string" ? `  "floor": ${JSON.stringify(level.floor)},\n` : "";
+            writeFileSync(file, `{\n  "id": ${JSON.stringify(level.id)},\n  "name": ${JSON.stringify(level.name)},\n${hidden}${world}${floor}${thumb}  "pieces": [\n${lines.join("\n")}\n  ]\n}\n`);
             res.setHeader("content-type", "application/json");
             res.end(JSON.stringify({ file }));
           } catch (err) {

@@ -22,7 +22,3 @@ export function clear(el: HTMLElement): void {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-export function fmtTime(s: number): string {
-  const m = Math.floor(s / 60), r = s - m * 60;
-  return `${m}:${r.toFixed(2).padStart(5, "0")}`;
-}

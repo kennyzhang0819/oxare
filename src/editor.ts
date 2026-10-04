@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
-import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
+import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, stylize, type Built, type SceneEnv } from "./scene.ts";
+import { decorStems } from "./decor.ts";
+import { buildDecor, disposeDecor } from "./decor.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs, saveThumb } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
@@ -15,18 +17,18 @@ const HITBOX_MAT = new THREE.LineBasicMaterial({ color: 0xff2bd6, transparent: t
 export function blankLevel(): Level {
   return { id: "new-level", name: "New Level", hidden: true, pieces: [
     newPiece("start", 0, 0, 0),
-    { ...newPiece("slab", 0, 0, 0), w: 8, d: 8 } as Piece,
-    newPiece("goal", 0, 0, -12),
-    { ...newPiece("slab", 0, 0, -12), w: 8, d: 8 } as Piece,
+    { ...newPiece("slab", 0, 0, 0), w: 24, d: 24 } as Piece,
   ] };
 }
 
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "gate", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "bumper", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
-  ["Misc", ["start", "goal", "support", "column"]],
+  ["Structures", ["gate", "arch", "support", "column", "lamp", "mast"]],
+  ["Nature", ["tree", "clearing"]],
+  ["Misc", ["start", "apple"]],
 ];
 // Still loaded from old level files, but no longer offered.
 const RETIRED: PieceType[] = ["spinner", "block"];
@@ -46,9 +48,14 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
   board: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 5], ["roll", 5]],
-  pangolin: [["w", 0.5], ["d", 0.5], ["rot", 15]],
+  pangolin: [["w", 0.5], ["rot", 15]],
   support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
   gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
+  arch: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
+  lamp: [["h", 0.5], ["rot", 15]],
+  mast: [["h", 0.5], ["rot", 15]],
+  tree: [["size", 0.1], ["rot", 15]],
+  clearing: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["rot", 15], ["tilt", 15], ["roll", 15]],
@@ -65,7 +72,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   bumper: [["rot", 15], ["tilt", 15], ["roll", 15]],
   magnet: [["rot", 15], ["tilt", 15], ["roll", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
-  goal: [],
+  apple: [],
   tube: [["rot", 15]],
   hoop: [["rot", 15], ["tilt", 15], ["roll", 15]],
   fence: [["rot", 15]],
@@ -74,9 +81,12 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)", curl: "curl (°)",
   rise: "rise (layers)", flat: "flat deck", inner: "inner radius", outer: "outer radius", r: "radius", length: "length",
-  track: "track length", offset: "start offset", reach: "reach (stem out)", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)",
+  track: "track length", offset: "start offset", reach: "reach (stem out)", speed: "speed", wait: "wait (s)", bend: "bend radius", top: "top width", turn: "turn (°)", size: "size",
 };
 const label = (key: string) => LABELS[key] ?? key;
+// What the editor calls each piece type; the level files keep the type ids.
+const PIECE_NAMES: Record<string, string> = { tube: "pipe", jump: "spring", plank: "metal plate", clearing: "no trees" };
+const pieceName = (t: string) => PIECE_NAMES[t] ?? t;
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered; platform
 // sizes and heights step and round to the platform snap too.
 const SNAP_KEY = "balling.snap.v3";
@@ -134,7 +144,9 @@ const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
 // Pull every curve point back inside its segment's box (see fitMid), after any path edit.
 const fitMids = (p: PathPiece) => p.path.forEach((n, k) => { if (n.mid) n.mid = fitMid(p, k, n.mid); });
 // How far above its nodes a path piece's handles sit: at the rail, the bean's centre or the tube's.
-const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : TUBE_R);
+const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : p.type === "pangolin" ? PANGOLIN_T : TUBE_R);
+// The bend a newly rounded corner gets: a pangolin's widest-safe one, else a tube's.
+const pathBend = (p: PathPiece): number => (p.type === "pangolin" ? pangolinBend(p.w) : TUBE_BEND);
 
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
@@ -142,6 +154,14 @@ function settle(level: Level, p: Piece) {
   if (p.type === "tube") {
     const y = surfaceAt(level, p.x, p.z);
     if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
+    return;
+  }
+  if (p.type === "pangolin") {
+    // Its snout and tail tip each land on the platform top nearest their height; the nodes between stay put.
+    const y = surfaceAt(level, p.x, p.z, p.y);
+    if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
+    const tail = p.path[p.path.length - 1], w = tubeNodeWorld(p, p.path.length), at = surfaceAt(level, w.x, w.z, w.y);
+    if (tail && at !== null) tail.y = r3(at - p.y);
     return;
   }
   if (p.type === "plank" && p.side) { attachToEdge(level, p); return; }
@@ -169,7 +189,8 @@ function settle(level: Level, p: Piece) {
   if (p.type === "column") return;
   // So does a rolled prop, or a turned hole: one stood out of a wall, or cut into it, is placed by hand.
   if (pieceRoll(p) % 360 !== 0 || pieceTilt(p) % 360 !== 0 || holeTurned(p)) return;
-  const y = surfaceAt(level, p.x, p.z);
+  // The platform top nearest its own height, so one dragged under an overhang stays on its floor.
+  const y = surfaceAt(level, p.x, p.z, p.y);
   if (y !== null) p.y = y;
 }
 
@@ -299,7 +320,7 @@ export class Editor implements Mode {
   private ghost = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true }));
   private hereBtn!: HTMLButtonElement;
   private grid: THREE.LineSegments | null = null;
-  private ground = new THREE.GridHelper(400, 200, 0x9fb4cc, 0xc7d6e6);
+  private ground = new THREE.GridHelper(200, 100, 0x9fb4cc, 0xc7d6e6);
   // Hitbox view (H): every collider of a fresh physics world for the level, drawn as lines. It is
   // rebuilt a moment after each change; `hitboxGen` drops a rebuild that a newer change overtook.
   private hitboxes = false;
@@ -308,12 +329,19 @@ export class Editor implements Mode {
   private hitboxGen = 0;
   private hitboxTimer = 0;
   private hitboxBtn!: HTMLButtonElement;
+  // The plants are left out of every edit's build: "Show plants" grows them once over the level as it
+  // stands (`plantsFor`), and the next change to the level clears them.
+  private plants: THREE.Group | null = null;
+  private plantsFor = "";
+  private plantsBtn!: HTMLButtonElement;
   // The selected tube's node handles and segment midpoint dots; `node` is the picked node and
   // `mid` the picked segment (by the node it arrives at), -1 for none; at most one is picked.
   private handles = new THREE.Group();
   private node = -1;
   private mid = -1;
   private nodeDrag: { plane: THREE.Plane; off: THREE.Vector3; before: string } | null = null;
+  // Dragging a flat slab's or ramp's side dot: `fx`/`fz` is the opposite side's middle, which stays put.
+  private edgeDrag: { plane: THREE.Plane; ax: "w" | "d"; u: { x: number; z: number }; fx: number; fz: number; off: number; before: string } | null = null;
   private undoStack: string[] = [];
   // What undo took back, newest last; any new edit clears it.
   private redoStack: string[] = [];
@@ -354,7 +382,7 @@ export class Editor implements Mode {
     this.scene = this.env.scene;
     this.ground.position.y = gridY;
     this.scene.add(this.ground);
-    this.built = buildLevel(level, true);
+    this.built = buildLevel(level, true, undefined, false);
     this.scene.add(this.built.group);
     fitSun(this.env.sun, this.built);
     this.ghost.visible = false;
@@ -378,12 +406,13 @@ export class Editor implements Mode {
         h("button", { class: "ghost", title: "Ctrl+Shift+Z", onclick: () => this.redo() }, "Redo"),
         h("button", { onclick: () => void this.save() }, "Save"),
         this.hitboxBtn = h("button", { class: "ghost", title: "Show every collider exactly as the physics has it (H)", onclick: () => this.toggleHitboxes() }, "Hitboxes") as HTMLButtonElement,
+        this.plantsBtn = h("button", { class: "ghost", title: "Grow the plants over the level as it is now; the next edit clears them", onclick: () => this.togglePlants() }, "Show plants") as HTMLButtonElement,
       ),
       h("div", { class: "bar snap" }, this.snapPicker("platform", "Platform snap"), this.snapPicker("structure", "Structure snap"), this.gridLevel()),
       h("div", { class: "bar add" }, ...paletteGroups().map(([title, types]) => h("div", { class: "group" }, h("div", { class: "group-title" }, title), ...types.flatMap((t) => [
         { name: t as string, make: (x: number, y: number, z: number) => newPiece(t, x, y, z) },
         ...PIECE_VARIANTS.filter((v) => v.base === t),
-      ]).map((e) => h("button", { class: "pick", title: e.name, onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: e.name })))))),
+      ]).map((e) => h("button", { class: "pick", title: pieceName(e.name), onclick: () => this.add(e.make) }, h("img", { src: thumbs.get(e.name), alt: pieceName(e.name) })))))),
       this.problems,
       this.notice,
     );
@@ -441,7 +470,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "gate" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "gate" || q.type === "arch" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
@@ -453,8 +482,9 @@ export class Editor implements Mode {
   }
 
   private refresh() {
+    if (this.plants && JSON.stringify(this.level) !== this.plantsFor) this.togglePlants(false);
     this.scene.remove(this.built.group);
-    this.built = buildLevel(this.level, true, this.built);
+    this.built = buildLevel(this.level, true, this.built, false);
     markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
     this.scene.add(this.built.group);
     fitSun(this.env.sun, this.built);
@@ -508,7 +538,12 @@ export class Editor implements Mode {
     clear(this.info);
     const name = h("input", { type: "text", value: this.level.name, oninput: () => { this.level.name = name.value; } });
     const id = h("input", { type: "text", value: this.level.id, oninput: () => { this.level.id = id.value.replace(/[^a-z0-9-]/g, "-"); } });
-    this.info.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id)));
+    const floor = h("select", { title: "What every platform's top is covered with, unless a platform picks its own", onchange: () => {
+      const before = JSON.stringify(this.level);
+      if (floor.value === "mixed") delete this.level.floor; else this.level.floor = floor.value as FloorKind;
+      this.commit(before);
+    } }, ...FLOORS.map((f) => h("option", { selected: f === (this.level.floor ?? "mixed") }, f))) as HTMLSelectElement;
+    this.info.append(h("h3", {}, "Level"), h("div", { class: "props" }, h("label", {}, "name", name), h("label", {}, "id", id), h("label", {}, "floor", floor)));
     this.inspector.hidden = !this.sel.size;
     if (this.sel.size > 1) {
       const raise = (dy: number) => { const before = JSON.stringify(this.level); for (const q of this.selectedPieces()) q.y = r3(q.y + dy); this.commit(before); };
@@ -558,6 +593,14 @@ export class Editor implements Mode {
       for (const [k, step] of NUM_FIELDS[p.type]) props.append(field(k, step));
       // How far a plank's hinge is raised; a side plank hangs on its wall instead.
       if (p.type === "plank" && !p.side) props.append(field("base", 0.1));
+      if (isPlatform(p)) {
+        const sel = h("select", { title: "What this platform's top is covered with; level uses the level's floor", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (sel.value === "level") delete p.floor; else p.floor = sel.value as FloorKind;
+          this.commit(before);
+        } }, h("option", { value: "level", selected: !p.floor }, `level (${this.level.floor ?? "mixed"})`), ...FLOORS.map((f) => h("option", { value: f, selected: f === p.floor }, f))) as HTMLSelectElement;
+        props.append(h("label", {}, "floor", sel));
+      }
       if (isPlatform(p) && !isTilted(p)) props.append(this.fencePanel(p));
       if (p.type === "plank") {
         const cb = h("input", { type: "checkbox", checked: !!p.side, onchange: () => {
@@ -653,6 +696,17 @@ export class Editor implements Mode {
         ) as HTMLSelectElement;
         props.append(h("label", {}, "dips", sel));
       }
+      if (p.type === "tree") {
+        const choose = <T extends string>(name: string, value: T, options: readonly T[], set: (v: T) => void, title: string) => {
+          const sel = h("select", { title, onchange: () => { const before = JSON.stringify(this.level); set(options[sel.selectedIndex]!); this.commit(before); } },
+            ...options.map((v) => h("option", { selected: v === value }, v))) as HTMLSelectElement;
+          return h("label", {}, name, sel);
+        };
+        props.append(
+          choose("crown", p.crown ?? "round", TREE_CROWNS, (v) => { if (v === "round") delete p.crown; else p.crown = v; }, "The crown's shape; a willow's strands hang past the trunk"),
+          choose("leaves", p.leaves ?? "green", TREE_LEAVES, (v) => { if (v === "green") delete p.leaves; else p.leaves = v; }, "The leaves' colour; lime grows on pale birch bark"),
+        );
+      }
       if (p.type === "rails") {
         const pick = <T extends string | number>(label: string, value: T, options: [T, string][], set: (v: T) => void) => {
           const sel = h("select", { onchange: () => { const before = JSON.stringify(this.level); set(options[sel.selectedIndex]![0]); this.commit(before); } },
@@ -686,8 +740,8 @@ export class Editor implements Mode {
         ) as HTMLSelectElement;
         props.append(h("label", {}, "facing", face));
       }
-      this.body.append(h("h3", {}, `${p.type} #${index}`), props);
-      if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") this.body.append(this.tubePanel(p));
+      this.body.append(h("h3", {}, `${pieceName(p.type)} #${index}`), props);
+      if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean" || p.type === "pangolin") this.body.append(this.tubePanel(p));
       if (p.type === "slab" && !p.belt && !p.twist && !p.curl && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
       if (p.type === "slab" && !p.belt && !p.curl && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
@@ -742,7 +796,7 @@ export class Editor implements Mode {
 
   private selectedTube(): PathPiece | null {
     const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" || p?.type === "bean" ? p : null;
+    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" || p?.type === "bean" || p?.type === "pangolin" ? p : null;
   }
 
   // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
@@ -750,7 +804,7 @@ export class Editor implements Mode {
   private drawHandles() {
     for (const c of [...this.handles.children]) { c.removeFromParent(); (c as THREE.Mesh).geometry.dispose(); }
     const p = this.selectedTube();
-    if (!p) { this.node = -1; this.mid = -1; return; }
+    if (!p) { this.node = -1; this.mid = -1; this.drawEdgeHandles(); return; }
     if (this.node > p.path.length) this.node = -1;
     if (this.mid > p.path.length) this.mid = -1;
     const ns = tubeWorld(p), lift = pathLift(p);
@@ -771,6 +825,28 @@ export class Editor implements Mode {
       m.position.set(at.x, at.y + lift, at.z);
       m.renderOrder = 10;
       m.userData.tubeMid = k;
+      this.handles.add(m);
+    }
+  }
+
+  private selectedSized(): Slab | Ramp | null {
+    const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
+    return p && (p.type === "ramp" || (p.type === "slab" && !isTilted(p))) ? p : null;
+  }
+
+  // A sky-blue cube at the middle of each side of the selected flat slab or ramp: dragging one moves that
+  // side alone, along its own axis. A curled slab's far end is its curl, so it gets none there.
+  private drawEdgeHandles() {
+    const p = this.selectedSized();
+    if (!p) return;
+    for (const [ax, sg] of [["w", 1], ["w", -1], ["d", 1], ["d", -1]] as const) {
+      if (ax === "d" && sg < 0 && isCurled(p)) continue;
+      const o = rotXZ(ax === "w" ? (sg * p.w) / 2 : 0, ax === "d" ? (sg * p.d) / 2 : 0, p.rot), x = p.x + o.x, z = p.z + o.z;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0x5ec8ff, depthTest: false, transparent: true, opacity: 0.95 }));
+      m.position.set(x, platformHeightAt(p, x, z) + 0.25, z);
+      m.rotation.y = (p.rot * Math.PI) / 180;
+      m.renderOrder = 10;
+      m.userData.edge = { ax, sg };
       this.handles.add(m);
     }
   }
@@ -818,6 +894,7 @@ export class Editor implements Mode {
         this.mid = -1;
         this.commit(before);
       } }, smoothPath ? "smooth curve" : "corners & arcs"))));
+    if (p.type === "pangolin") wrap.append(h("div", { class: "hint" }, `Unrolls ${pangolinTrack(p).L.toFixed(2)} long from its snout (the first node) to its tail tip (the last), round bends of at least ${pangolinBend(p.w)} and up or down slopes. The snout and tail tip land on the platform under them.`));
     const num = (n: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
       return h("label", {}, label(key), input);
@@ -852,7 +929,7 @@ export class Editor implements Mode {
         // World x y z, like the piece's own fields, but moving this end alone.
         const first = (axis: "x" | "y" | "z", step: number) => {
           const input = h("input", { type: "number", step, value: p[axis], onchange: () => this.editTube((ns) => { ns[0]![axis] = r3(Number(input.value)); }) }) as HTMLInputElement;
-          return h("label", { title: `Moves this ${p.type === "tube" ? "mouth" : "end"} alone; the piece's ${axis} above moves the whole ${p.type}` }, axis, input);
+          return h("label", { title: `Moves this ${p.type === "tube" ? "mouth" : "end"} alone; the piece's ${axis} above moves the whole ${pieceName(p.type)}` }, axis, input);
         };
         row.append(first("x", SNAP.platform), first("y", HEIGHT_STEP), first("z", SNAP.platform));
       } else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));
@@ -860,7 +937,7 @@ export class Editor implements Mode {
         const smooth = n.bend > 0;
         row.append(
           h("span", { class: "hint" }, `${turns[k]!.toFixed(0)}°`),
-          h("button", { class: smooth ? "" : "ghost", title: "Sharp elbow or smooth bend (B)", onclick: () => { const before = JSON.stringify(this.level); n.bend = smooth ? 0 : TUBE_BEND; this.commit(before); } }, smooth ? "smooth" : "sharp"),
+          h("button", { class: smooth ? "" : "ghost", title: "Sharp elbow or smooth bend (B)", onclick: () => { const before = JSON.stringify(this.level); n.bend = smooth ? 0 : pathBend(p); this.commit(before); } }, smooth ? "smooth" : "sharp"),
         );
         if (smooth) row.append(num(n as unknown as Record<string, number>, "bend", 0.5));
       }
@@ -943,7 +1020,7 @@ export class Editor implements Mode {
       // A curved segment splits at its curve point, into two straight halves.
       const at = b.mid ? { x: b.mid.x, y: b.mid.y, z: b.mid.z } : { x: snap((a.x + b.x) / 2), y: layerSnap((a.y + b.y) / 2), z: snap((a.z + b.z) / 2) };
       delete b.mid;
-      ns.splice(k + 1, 0, { ...at, bend: p.type === "fence" ? FENCE_RAIL_CORNER : TUBE_BEND });
+      ns.splice(k + 1, 0, { ...at, bend: p.type === "fence" ? FENCE_RAIL_CORNER : pathBend(p) });
     });
     this.node = k + 1;
     this.mid = -1;
@@ -966,7 +1043,7 @@ export class Editor implements Mode {
     this.editTube((ns) => {
       const a = ns[ns.length - 2]!, b = ns[ns.length - 1]!;
       const l = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) || 1;
-      b.bend = TUBE_BEND;
+      b.bend = pathBend(p);
       ns.push({ x: snap(b.x + ((b.x - a.x) / l) * 4), y: layerSnap(b.y + ((b.y - a.y) / l) * 4), z: snap(b.z + ((b.z - a.z) / l) * 4), bend: 0 });
     });
     this.node = p.path.length;
@@ -1144,7 +1221,7 @@ export class Editor implements Mode {
         ArrowDown: () => this.moveNode((n) => { n.z = snap(n.z + g); }),
         PageUp: () => this.moveNode((n) => { n.y += rise; }), KeyE: () => this.moveNode((n) => { n.y += rise; }),
         PageDown: () => this.moveNode((n) => { n.y -= rise; }), KeyQ: () => this.moveNode((n) => { n.y -= rise; }),
-        KeyB: () => this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : TUBE_BEND; }),
+        KeyB: () => { const tp = this.selectedTube()!; this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : pathBend(tp); }); },
         Delete: () => this.removeNode(), Backspace: () => this.removeNode(),
       };
       if (this.railsEnd()) ops.KeyR = () => this.turnEnd(e.shiftKey ? -15 : 15);
@@ -1235,6 +1312,18 @@ export class Editor implements Mode {
     if (this.handles.children.length) {
       this.castFrom(e.clientX, e.clientY);
       const hit = this.ray.intersectObjects(this.handles.children, false)[0];
+      const edge = hit?.object.userData.edge as { ax: "w" | "d"; sg: number } | undefined, sp = this.selectedSized();
+      if (hit && edge && sp) {
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -hit.object.position.y), pt = new THREE.Vector3();
+        if (this.ray.ray.intersectPlane(plane, pt)) {
+          const u = rotXZ(edge.ax === "w" ? edge.sg : 0, edge.ax === "d" ? edge.sg : 0, sp.rot), size = sp[edge.ax];
+          const fx = sp.x - (u.x * size) / 2, fz = sp.z - (u.z * size) / 2;
+          this.edgeDrag = { plane, ax: edge.ax, u, fx, fz, off: size - ((pt.x - fx) * u.x + (pt.z - fz) * u.z), before: JSON.stringify(this.level) };
+          this.controls.enabled = false;
+          this.ctx.canvas.setPointerCapture(e.pointerId);
+        }
+        return;
+      }
       const tp = this.selectedTube();
       if (hit && tp?.smooth && hit.object.userData.tubeMid !== undefined) {
         // Smooth path: pull a new node out of the segment and drag it, all one undo.
@@ -1287,13 +1376,38 @@ export class Editor implements Mode {
     this.ctx.canvas.setPointerCapture(e.pointerId);
   };
 
+  // A mouse can report several moves a frame and a drag step may rebuild the level, so moves are
+  // handled once a frame, the latest one; letting go flushes the last first.
+  private queuedMove: PointerEvent | null = null;
   private move = (e: PointerEvent) => {
+    if (!this.queuedMove) requestAnimationFrame(this.flushMove);
+    this.queuedMove = e;
+  };
+  private flushMove = () => {
+    const e = this.queuedMove;
+    this.queuedMove = null;
+    if (e) this.moveNow(e);
+  };
+
+  private moveNow = (e: PointerEvent) => {
     this.cursor = { x: e.clientX, y: e.clientY };
     if (this.dropping) { this.aimDrop(e.clientX, e.clientY); return; }
     if (this.marquee) {
       const m = this.marquee;
       const x = Math.min(m.x0, e.clientX), y = Math.min(m.y0, e.clientY);
       m.el.style.cssText = `left:${x}px;top:${y}px;width:${Math.abs(e.clientX - m.x0)}px;height:${Math.abs(e.clientY - m.y0)}px`;
+      return;
+    }
+    if (this.edgeDrag) {
+      const ed = this.edgeDrag, p = this.selectedSized(), pt = new THREE.Vector3();
+      this.castFrom(e.clientX, e.clientY);
+      if (!p || !this.ray.ray.intersectPlane(ed.plane, pt)) return;
+      const size = Math.max(SNAP.platform, snap((pt.x - ed.fx) * ed.u.x + (pt.z - ed.fz) * ed.u.z + ed.off));
+      if (size === p[ed.ax]) return;
+      const before = this.undoStack.length && this.undoStack[this.undoStack.length - 1] === ed.before ? this.undoStack.pop()! : ed.before;
+      p[ed.ax] = size;
+      p.x = r3(ed.fx + (ed.u.x * size) / 2); p.z = r3(ed.fz + (ed.u.z * size) / 2);
+      this.commit(before);
       return;
     }
     if (this.nodeDrag) {
@@ -1332,11 +1446,13 @@ export class Editor implements Mode {
       if (g) { g.position.set(q.x, isProp(q) ? q.y + propLift(q) + 0.02 : q.y, q.z); g.rotation.y = (pieceRot(q) * Math.PI) / 180; }
     }
     for (const hl of this.helpers) hl.update();
+    if (!d.moved) this.togglePlants(false);
     d.moved = true;
     markOverlapping(this.built, new Set(platformOverlaps(this.level).flat()));
   };
 
   private up = (e: PointerEvent) => {
+    this.flushMove();
     if (e.button === 2 && this.rightDown) {
       const rd = this.rightDown;
       this.rightDown = null;
@@ -1359,6 +1475,13 @@ export class Editor implements Mode {
       return;
     }
     if (this.nodeDrag) { this.nodeDrag = null; this.controls.enabled = true; return; }
+    if (this.edgeDrag) {
+      const moved = JSON.stringify(this.level) !== this.edgeDrag.before;
+      this.edgeDrag = null;
+      this.controls.enabled = true;
+      if (moved) this.refresh();
+      return;
+    }
     if (!this.drag) return;
     const d = this.drag;
     this.drag = null;
@@ -1427,6 +1550,13 @@ export class Editor implements Mode {
     }
   }
 
+  private togglePlants(on = !this.plants) {
+    if (this.plants) { this.plants.removeFromParent(); disposeDecor(this.plants); this.plants = null; }
+    if (on) { this.plants = buildDecor(this.level); stylize(this.plants); this.plantsFor = JSON.stringify(this.level); this.scene.add(this.plants); }
+    this.plantsBtn.className = this.plants ? "" : "ghost";
+    this.plantsBtn.textContent = this.plants ? "Hide plants" : "Show plants";
+  }
+
   private toggleHitboxes(on = !this.hitboxes) {
     this.hitboxes = on;
     try { localStorage.setItem(HITBOX_KEY, on ? "1" : "0"); } catch { /* per session only */ }
@@ -1451,7 +1581,7 @@ export class Editor implements Mode {
     this.hitboxTimer = window.setTimeout(async () => {
       let sim: Awaited<ReturnType<typeof createSim>> | null = null;
       try {
-        sim = await createSim(cloneLevel(this.level));
+        sim = await createSim(cloneLevel(this.level), undefined, decorStems(this.built.decor));
         if (gen !== this.hitboxGen) return;
         const { vertices } = sim.world.debugRender();
         const geo = new THREE.BufferGeometry();
@@ -1468,6 +1598,8 @@ export class Editor implements Mode {
 
   dispose() {
     this.drawn();
+    this.queuedMove = null;
+    if (this.plants) disposeDecor(this.plants);
     clearTimeout(this.hitboxTimer);
     this.hitboxGen++;
     this.ctx.canvas.style.cursor = "";

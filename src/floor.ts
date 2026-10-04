@@ -1,4 +1,4 @@
-import { beltRods, curlPoint, isCurled, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_SEAM_DROP, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
+import { beltRods, curlPoint, isCurled, isShaped, slabOutline, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_THICKNESS, curveSegments, curveStations, curveStrip, holesOn, isMoving, isTilted, pieceRot, twistPoint, rampHeight, rotXZ, type Level } from "./level.ts";
 import earcut from "earcut";
 import { cutRegion, edgeGaps, polyArea } from "./poly.ts";
 
@@ -14,13 +14,13 @@ type V3 = [number, number, number];
 // `warped`: its corners are not in one plane (a twisted slab's strip), so its solid is built per triangle.
 // `warp`: the poly is laid out flat here and only bent where its vertices are emitted (a curled slab's
 // strip, which may stand up or hang over), so welding, seams and lips are worked out on the flat layout.
-interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean; warped?: boolean; warp?: (x: number, y: number, z: number) => V3 }
+interface Poly { loops: V[][]; rim: (m: XZ) => boolean; narrow: boolean; piece: number; warped?: boolean; warp?: (x: number, y: number, z: number) => V3 }
 const snapXZ = (q: XZ[]) => q.map(([x, z]): XZ => [snap(x), snap(z)]).filter((v, i, a) => { const l = a[(i + a.length - 1) % a.length]!; return a.length < 2 || v[0] !== l[0] || v[1] !== l[1]; });
 const oriented = (q: V[]) => polyArea(q.map((w) => w.v)) < 0 ? q : q.slice().reverse();
 // See docs/platforms.md. Must stay free of three: check.ts runs it in Node.
 function topPolys(level: Level): Poly[] {
   const out: Poly[] = [];
-  for (const p of level.pieces) {
+  for (const [piece, p] of level.pieces.entries()) {
     if (isTilted(p) || isMoving(p)) continue;
     const rot = pieceRot(p);
     const W = (x: number, z: number): XZ => { const o = rotXZ(x, z, rot); return [snap(p.x + o.x), snap(p.z + o.z)]; };
@@ -39,7 +39,7 @@ function topPolys(level: Level): Poly[] {
         };
         const grid = zs.map((z) => xs.map((x): V => ({ v: W(x, z), y: p.y })));
         for (let i = 0; i < n; i++) for (let j = 0; j < k; j++) {
-          out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(outline, m), narrow: false, warped: true, warp });
+          out.push({ loops: [oriented([grid[i]![j]!, grid[i]![j + 1]!, grid[i + 1]![j + 1]!, grid[i + 1]![j]!])], rim: (m) => onOutline(outline, m), narrow: false, piece, warped: true, warp });
         }
       } else if (isCurled(p)) {
         // Half-unit strips along the flat layout; the curl bends each at emission. The near edge
@@ -52,20 +52,20 @@ function topPolys(level: Level): Poly[] {
         };
         for (let i = 0; i < n; i++) {
           const q: V[] = [{ v: W(-hx, zs[i]!), y: p.y }, { v: W(hx, zs[i]!), y: p.y }, { v: W(hx, zs[i + 1]!), y: p.y }, { v: W(-hx, zs[i + 1]!), y: p.y }];
-          out.push({ loops: [oriented(q)], rim: (m) => onOutline(rim, m), narrow: false, warped: true, warp });
+          out.push({ loops: [oriented(q)], rim: (m) => onOutline(rim, m), narrow: false, piece, warped: true, warp });
         }
       } else if (p.type === "slab" && p.belt) {
         // A treadmill's frame: the opening's edge drops square into the recess, with no lip.
         const { ox, oz } = beltRods(p);
         for (const region of cutRegion(outline, [[W(-ox, -oz), W(ox, -oz), W(ox, oz), W(-ox, oz)]])) {
-          out.push({ loops: region.map(snapXZ).map((q) => q.map((v) => ({ v, y: p.y }))), rim: (m) => onOutline(outline, m), narrow: false });
+          out.push({ loops: region.map(snapXZ).map((q) => q.map((v) => ({ v, y: p.y }))), rim: (m) => onOutline(outline, m), narrow: false, piece });
         }
       } else if (p.type === "slab") {
         for (const region of cutRegion(outline, holesOn(level, p))) {
           const snapped = region.map(snapXZ);
           if (snapped[0]!.length < 3) continue;
           const loops = snapped.filter((q) => q.length >= 3);
-          out.push({ loops: loops.map((q) => q.map((v) => ({ v, y: p.y }))), rim: () => true, narrow: true });
+          out.push({ loops: loops.map((q) => q.map((v) => ({ v, y: p.y }))), rim: () => true, narrow: true, piece });
         }
       } else {
         const n = Math.max(1, Math.ceil(p.d));
@@ -74,7 +74,7 @@ function topPolys(level: Level): Poly[] {
           const z0 = p.d / 2 - t0 * p.d, z1 = p.d / 2 - t1 * p.d;
           const y0 = snap(p.y + rampHeight(p, t0)), y1 = snap(p.y + rampHeight(p, t1));
           const q: V[] = [{ v: W(-hx, z0), y: y0 }, { v: W(hx, z0), y: y0 }, { v: W(hx, z1), y: y1 }, { v: W(-hx, z1), y: y1 }];
-          out.push({ loops: [oriented(q)], rim: (m) => onOutline(outline, m), narrow: false });
+          out.push({ loops: [oriented(q)], rim: (m) => onOutline(outline, m), narrow: false, piece });
         }
       }
     } else if (p.type === "curve") {
@@ -83,7 +83,7 @@ function topPolys(level: Level): Poly[] {
       const outline = [...outer, ...inner.slice().reverse()];
       for (let i = 0; i < us.length - 1; i++) {
         const q = [inner[i]!, outer[i]!, outer[i + 1]!, inner[i + 1]!].map((v) => ({ v, y: p.y }));
-        out.push({ loops: [oriented(q)], rim: (m) => onOutline(outline, m), narrow: false });
+        out.push({ loops: [oriented(q)], rim: (m) => onOutline(outline, m), narrow: false, piece });
       }
     }
   }
@@ -93,8 +93,8 @@ function topPolys(level: Level): Poly[] {
 function onSegment(v: XZ, a: XZ, b: XZ): number | null {
   const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz;
   if (L2 < EPS) return null;
-  const t = ((v[0] - a[0]) * dx + (v[1] - a[1]) * dz) / L2;
-  if (t <= EPS || t >= 1 - EPS) return null;
+  const t = ((v[0] - a[0]) * dx + (v[1] - a[1]) * dz) / L2, len = Math.sqrt(L2);
+  if (t * len <= EPS / 2 || (1 - t) * len <= EPS / 2) return null;
   const px = a[0] + dx * t, pz = a[1] + dz * t;
   return Math.hypot(px - v[0], pz - v[1]) < EPS ? t : null;
 }
@@ -119,11 +119,29 @@ export interface Mesh { positions: Float32Array; indices: Uint32Array }
 export interface Floor extends Mesh { body: Mesh; solids: Float32Array[] }
 const SOLID_GAP = 0.03;
 
-export function floorMesh(level: Level): Floor {
+const edgeKey = (a: V, b: V) => { const ka = `${a.v[0]},${a.y},${a.v[1]}`, kb = `${b.v[0]},${b.y},${b.v[1]}`; return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`; };
+const mid = (a: V, b: V): XZ => [(a.v[0] + b.v[0]) / 2, (a.v[1] + b.v[1]) / 2];
+
+// Every platform top, each edge split where another top's corner lands on it, and how many tops use each edge.
+function weldedPolys(level: Level) {
   const polys = topPolys(level);
+  splitEdges(polys);
+  const uses = new Map<string, number>();
+  const countUses = () => {
+    uses.clear();
+    for (const q of polys) for (const loop of q.loops) for (let i = 0; i < loop.length; i++) {
+      const k = edgeKey(loop[i]!, loop[(i + 1) % loop.length]!);
+      uses.set(k, (uses.get(k) ?? 0) + 1);
+    }
+  };
+  countUses();
+  return { polys, uses, countUses };
+}
+
+// Split every edge at each other top's corner that lands on it, at the same height.
+function splitEdges(polys: Poly[]) {
   const byY = new Map<number, XZ[]>();
   for (const q of polys) for (const loop of q.loops) for (const w of loop) { if (!byY.has(w.y)) byY.set(w.y, []); byY.get(w.y)!.push(w.v); }
-
   for (const q of polys) q.loops = q.loops.map((loop) => {
     const out: V[] = [];
     for (let e = 0; e < loop.length; e++) {
@@ -137,17 +155,24 @@ export function floorMesh(level: Level): Floor {
     }
     return out;
   });
-  const edgeKey = (a: V, b: V) => { const ka = `${a.v[0]},${a.y},${a.v[1]}`, kb = `${b.v[0]},${b.y},${b.v[1]}`; return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`; };
-  const uses = new Map<string, number>();
-  const countUses = () => {
-    uses.clear();
-    for (const q of polys) for (const loop of q.loops) for (let i = 0; i < loop.length; i++) {
-      const k = edgeKey(loop[i]!, loop[(i + 1) % loop.length]!);
-      uses.set(k, (uses.get(k) ?? 0) + 1);
-    }
-  };
-  countUses();
-  const mid = (a: V, b: V): XZ => [(a.v[0] + b.v[0]) / 2, (a.v[1] + b.v[1]) / 2];
+}
+
+// Each platform's edges where another platform top carries straight on, in world XZ: the drawn
+// mesh leaves them flat and square. A warped strip's edge counts only where the warp leaves it.
+export function platformSeams(level: Level): Map<number, XZ[][]> {
+  const { polys, uses } = weldedPolys(level), out = new Map<number, XZ[][]>();
+  const still = (q: Poly, w: V) => { if (!q.warp) return true; const [x, y, z] = q.warp(w.v[0], w.y, w.v[1]); return Math.abs(x - w.v[0]) + Math.abs(y - w.y) + Math.abs(z - w.v[1]) < 3e-3; };
+  for (const q of polys) for (const loop of q.loops) loop.forEach((a, i) => {
+    const b = loop[(i + 1) % loop.length]!;
+    if (!q.rim(mid(a, b)) || (uses.get(edgeKey(a, b)) ?? 0) < 2 || !still(q, a) || !still(q, b)) return;
+    if (!out.has(q.piece)) out.set(q.piece, []);
+    out.get(q.piece)!.push([a.v, b.v]);
+  });
+  return out;
+}
+
+export function floorMesh(level: Level): Floor {
+  const { polys, uses, countUses } = weldedPolys(level);
   for (const q of polys) q.loops = q.loops.map((loop) => {
     const n = loop.length;
     const kind = loop.map((a, i) => {
@@ -155,19 +180,29 @@ export function floorMesh(level: Level): Floor {
       return !q.rim(mid(a, b)) ? "inner" : (uses.get(edgeKey(a, b)) ?? 0) > 1 ? "seam" : "open";
     });
     const out: V[] = [];
+    const dir = (u: V, w: V): XZ => { const l = Math.hypot(w.v[0] - u.v[0], w.v[1] - u.v[1]) || 1; return [(w.v[0] - u.v[0]) / l, (w.v[1] - u.v[1]) / l]; };
+    const nrm = (d: XZ): XZ => [d[1], -d[0]];
+    // How far along the seam the inset corner with an open edge lands: BX at a square corner, more at a slanted one.
+    const reach = (open: XZ, seam: XZ, back: boolean) => {
+      const no = nrm(open), ns = nrm(seam), d = back ? -(no[0] * seam[0] + no[1] * seam[1]) : no[0] * seam[0] + no[1] * seam[1];
+      return d > 1e-6 ? (BX * (1 - (no[0] * ns[0] + no[1] * ns[1]))) / d : BX;
+    };
     for (let i = 0; i < n; i++) {
       const a = loop[i]!, b = loop[(i + 1) % n]!;
       out.push(a);
       if (kind[i] !== "seam") continue;
-      const len = Math.hypot(b.v[0] - a.v[0], b.v[1] - a.v[1]);
-      if (len <= 2 * BX + EPS) continue;
+      const len = Math.hypot(b.v[0] - a.v[0], b.v[1] - a.v[1]), d = dir(a, b);
       const at = (t: number): V => ({ v: [snap(a.v[0] + (b.v[0] - a.v[0]) * t), snap(a.v[1] + (b.v[1] - a.v[1]) * t)], y: snap(a.y + (b.y - a.y) * t) });
-      // The piece across the seam adds the same point; if they differ the weld breaks.
-      if (kind[(i + n - 1) % n] === "open") out.push(at(BX / len));
-      if (kind[(i + 1) % n] === "open") out.push(at(1 - BX / len));
+      const r0 = kind[(i + n - 1) % n] === "open" ? reach(dir(loop[(i + n - 1) % n]!, a), d, false) : 0;
+      const r1 = kind[(i + 1) % n] === "open" ? reach(dir(b, loop[(i + 2) % n]!), d, true) : 0;
+      if (r0 + r1 >= len - EPS) continue;
+      // The piece across the seam has its own; splitEdges below gives each piece the other's, or the weld breaks.
+      if (r0) out.push(at(r0 / len));
+      if (r1) out.push(at(1 - r1 / len));
     }
     return out;
   });
+  splitEdges(polys);
   countUses();
 
   const mesh = () => {
@@ -235,12 +270,24 @@ export function floorMesh(level: Level): Floor {
         };
         return { v: [snap(x), snap(z)], y: w.y + along(prev) + along(next) };
       });
+      // Along a straight run the inset points keep their order between the run's two corners, or a
+      // slanted corner folds the strip back over itself.
+      const straight = (i: number) => { const la = lines[(i + n - 1) % n]!, lb = lines[i]!; return la.rim && lb.rim && Math.abs(la.dx * lb.dz - la.dz * lb.dx) < 1e-9 && la.dx * lb.dx + la.dz * lb.dz > 0; };
+      if (!loop.every((_, i) => straight(i))) for (let i = 0; i < n; i++) {
+        if (!straight(i)) continue;
+        let s = i, e = i;
+        while (straight(s)) s = (s + n - 1) % n;
+        while (straight(e)) e = (e + 1) % n;
+        const l = lines[i]!, w = inner[i]!, at = (u: V) => (u.v[0] - w.v[0]) * l.dx + (u.v[1] - w.v[1]) * l.dz;
+        const lo = at(inner[s]!), hi = at(inner[e]!), t = Math.max(Math.min(lo, hi), Math.min(Math.max(lo, hi), 0));
+        if (t !== 0) inner[i] = { v: [snap(w.v[0] + l.dx * t), snap(w.v[1] + l.dz * t)], y: w.y };
+      }
       insets.push(inner);
 
-      // At a corner shared with an open edge both strips must use full depth, or the mesh stops welding.
+      // A seam is flat, but at a corner shared with an open edge both strips must use full depth, or the mesh stops welding.
       const depthAt = (i: number) => {
         const la = lines[(i + n - 1) % n]!, lb = lines[i]!;
-        return (la.rim && !la.seam) || (lb.rim && !lb.seam) ? BY : PLATFORM_SEAM_DROP;
+        return (la.rim && !la.seam) || (lb.rim && !lb.seam) ? BY : 0;
       };
       for (let i = 0; i < n; i++) {
         if (!lines[i]!.rim) continue;

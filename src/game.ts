@@ -1,22 +1,24 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { BALL_RADIUS, GOAL_DISC_H, GOAL_PULL, GOAL_REACH, giraffeStretch, moverAt, moverShift, pangolinUnrolled, type Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
+import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, startOf, takesApple, moverShift, pangolinUnrolled, type Level } from "./level.ts";
+import { buildLevel, createScene, fitSun, hideHullsAround, makeBall, posePlank, turnBelts, type Built, type SceneEnv } from "./scene.ts";
+import { disposeDecor } from "./decor.ts";
+import { NEAR_ON } from "./fade.ts";
 import { STEP, createSim, type Sim } from "./sim.ts";
+import { decorStems } from "./decor.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { slider } from "./slider.ts";
+import { UI_SCALE, setUiScale, uiScale } from "./uiscale.ts";
 import { Stats } from "./stats.ts";
 import { toggle } from "./toggle.ts";
-import { clear, fmtTime, h } from "./ui.ts";
+import { clear, h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
 
-const PROGRESS_KEY = "balling.progress";
-// Seconds the goal portal takes to swallow the ball before the level-complete card.
+// Seconds the wormhole takes to swallow the ball before the level-complete card.
 const SINK_TIME = 0.9;
-type Progress = Record<string, { best: number }>;
-export function loadProgress(): Progress {
-  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
-}
+// Seconds a taken apple takes to pop and vanish, and the wormhole to open once the last is taken.
+const POP_TIME = 0.3, OPEN_TIME = 1.2;
+const APPLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-2-1.6-6.5-1.4-7.6 2.6C3.3 13.7 6 21 9.3 21c1.2 0 1.7-.6 2.7-.6s1.5.6 2.7.6c3.3 0 6-7.3 4.9-11.4C18.5 5.6 14 5.4 12 7z" fill="#e8423a" stroke="#3a2a22" stroke-width="1.3"/><path d="M12 7.2c0-1.6.4-3 1.3-4" stroke="#3a2a22" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M13.2 4.6c1.5-1.4 3.6-1.5 4.8-.9-.9 1.5-3 2.3-4.8.9z" fill="#5cbf4f" stroke="#3a2a22" stroke-width="1.1"/></svg>`;
 
 export interface PlayFrom { x: number; y: number; z: number; yaw: number }
 // `admin` (played from the admin panel or the editor) adds the feel-tuning panel: a Tune button and T.
@@ -42,13 +44,19 @@ export class Game implements Mode {
   private time = 0;
   private falls = 0;
   private done = false;
-  // Set once the ball enters the goal portal: where it went in and how long it has been sinking.
+  // Each taken apple's piece index and the run time it was taken at; how many the level has; when the
+  // last was taken (the wormhole opens from then); whether the ball has left the origin since it last
+  // started there; and the HUD's apple count.
+  private taken = new Map<number, number>();
+  private total = 0;
+  private openAt: number | null = null;
+  private left = false;
+  private count: HTMLElement | null = null;
+  // Set once the ball goes back into the wormhole: where it went in and how long it has been sinking.
   private sink: { from: THREE.Vector3; to: THREE.Vector3; t: number; ended: boolean } | null = null;
   private frames = 0;
   // How far each pangolin was last drawn unrolled, by piece index.
   private unrolled = new Map<number, number>();
-  // How far each giraffe's neck was last drawn stretched, by piece index.
-  private stretched = new Map<number, number>();
   ready: Promise<void>;
   private drawn!: () => void;
   private hud: HTMLElement;
@@ -86,7 +94,9 @@ export class Game implements Mode {
     this.built = buildLevel(level, false);
     this.scene.add(this.built.group, this.ball.mesh);
     fitSun(this.sun, this.built);
+    this.total = this.built.apples.size;
     this.hud = h("div", { class: "hud" },
+      this.total ? h("div", { class: "pill apples" }, h("span", { class: "apple-icon", innerHTML: APPLE_ICON }), (this.count = h("span", {}, `0 / ${this.total}`))) : null,
       h("span", { class: "spacer" }),
       opts.admin ? h("button", { class: "ghost", onclick: () => this.toggleTune() }, "Tune (T)") : null,
       h("button", { class: "ghost", onclick: () => { if (!this.done) this.togglePause(); } }, "Menu"),
@@ -104,7 +114,7 @@ export class Game implements Mode {
 
   private async boot() {
     if (this.opts.from) this.yaw = this.opts.from.yaw;
-    this.sim = await createSim(this.level, this.opts.from);
+    this.sim = await createSim(this.level, this.opts.from, decorStems(this.built.decor));
     if (this.raf === -1) { this.sim.free(); return; }
     this.savePrev();
     this.snapCamera();
@@ -188,30 +198,23 @@ export class Game implements Mode {
     }
     for (const pg of sim.pangolins) {
       const pose = this.built.pangolins.get(pg.index);
-      const a = pangolinUnrolled(pg.piece, pg.at === null ? 0 : sim.time - STEP * (1 - alpha) - pg.at, TUNING.unrollSpeed);
+      const a = pangolinUnrolled(pg.track, pg.at === null ? 0 : sim.time - STEP * (1 - alpha) - pg.at, TUNING.unrollSpeed);
       if (pose && a !== this.unrolled.get(pg.index)) { this.unrolled.set(pg.index, a); pose(a); }
-    }
-    for (const gf of sim.giraffes) {
-      const pose = this.built.giraffes.get(gf.index);
-      const e = gf.at === null ? 0 : giraffeStretch(sim.time - STEP * (1 - alpha) - gf.at, TUNING.giraffeGrow, TUNING.giraffeTime);
-      if (pose && e !== (this.stretched.get(gf.index) ?? 0)) { this.stretched.set(gf.index, e); pose(e); }
     }
     if (!this.done) {
       if (p.y < sim.respawnY) this.fall();
-      const goal = this.built.goal;
-      if (goal) {
-        const gp = this.level.pieces[goal.index]!;
-        if (gp.type === "goal" && Math.hypot(p.x - gp.x, p.z - gp.z) < GOAL_PULL && p.y > gp.y && p.y < gp.y + GOAL_DISC_H + GOAL_REACH) {
-          this.done = true;
-          this.sink = { from: this.shown.clone(), to: new THREE.Vector3(gp.x, gp.y + GOAL_DISC_H, gp.z), t: 0, ended: false };
-        }
-      }
+      this.collect(p);
+      this.homecoming(p);
     }
+    this.poseApples();
     this.updateCamera();
     // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
     // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
     if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
+    hideHullsAround(this.built, this.camera.position);
+    NEAR_ON.value = 1;
     this.env.render(this.ctx.renderer, this.camera);
+    NEAR_ON.value = 0;
     this.drawn();
     this.stats.end(simMs);
     this.raf = requestAnimationFrame(this.frame);
@@ -247,8 +250,54 @@ export class Game implements Mode {
     this.aim(p);
   }
 
+  // The ball takes every apple it touches (takesApple); the last one opens the wormhole.
+  private collect(p: { x: number; y: number; z: number }) {
+    for (const i of this.built.apples.keys()) {
+      const a = this.level.pieces[i];
+      if (!a || this.taken.has(i) || !takesApple(a, p)) continue;
+      this.taken.set(i, this.time);
+      if (this.count) this.count.textContent = `${this.taken.size} / ${this.total}`;
+      if (this.taken.size === this.total) { this.openAt = this.time; this.count?.parentElement?.classList.add("done"); }
+    }
+  }
+
+  // The level ends when the ball, every apple taken, rolls back into the open wormhole at the origin,
+  // having left it first. A level with no apples is open from the start.
+  private homecoming(p: { x: number; y: number; z: number }) {
+    const o = startOf(this.level);
+    if (Math.hypot(p.x - o.x, p.z - o.z) > ORIGIN_LEAVE) this.left = true;
+    if (!this.left || this.taken.size < this.total || !inOrigin(this.level, p)) return;
+    this.done = true;
+    this.sink = { from: this.shown.clone(), to: new THREE.Vector3(o.x, o.y + START_PAD_H - 0.02, o.z), t: 0, ended: false };
+  }
+
+  // Apples spin and bob until taken, then pop and vanish; the wormhole opens over OPEN_TIME.
+  private poseApples() {
+    const t = this.time;
+    for (const [i, a] of this.built.apples) {
+      const at = this.taken.get(i);
+      if (at === undefined) {
+        a.rotation.y = t * 1.6 + i;
+        a.position.y = APPLE.float + Math.sin(t * 2.2 + i) * 0.08;
+        continue;
+      }
+      const k = (t - at) / POP_TIME;
+      a.visible = k < 1;
+      a.scale.setScalar(Math.max(1e-3, (1 + 0.8 * k) * (1 - k * k)));
+    }
+    const k = this.total === 0 ? 1 : this.openAt === null ? 0 : Math.min(1, (t - this.openAt) / OPEN_TIME);
+    this.built.origin?.(k * k * (3 - 2 * k));
+  }
+
+  // A fall (or R) loses every apple taken: they float back where they were and the wormhole shuts, so
+  // all of them have to be carried home in one run.
   private fall() {
+    this.left = false;
     this.falls++;
+    this.taken.clear();
+    this.openAt = null;
+    for (const a of this.built.apples.values()) { a.visible = true; a.scale.setScalar(1); }
+    if (this.count) { this.count.textContent = `0 / ${this.total}`; this.count.parentElement?.classList.remove("done"); }
     this.sim!.respawn();
     this.savePrev();
   }
@@ -278,15 +327,10 @@ export class Game implements Mode {
   private finish() {
     this.done = true;
     this.releaseMouse();
-    const progress = loadProgress();
-    const prev = progress[this.level.id]?.best;
-    const best = prev == null || this.time < prev;
-    if (best) { progress[this.level.id] = { best: this.time }; localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }
     this.ctx.overlay.append(
       h("div", { class: "banner" },
         h("div", { class: "card" },
           h("h2", {}, "Level complete"),
-          h("div", {}, `Time ${fmtTime(this.time)}${best ? " · new best" : ""}`),
           h("div", {}, `Falls ${this.falls}`),
           h("div", { class: "row" },
             h("button", { onclick: () => this.opts.onRetry() }, "Retry"),
@@ -355,6 +399,7 @@ export class Game implements Mode {
     this.raf = -1;
     this.sim?.free();
     this.ball.dispose();
+    disposeDecor(this.built.decor);
     this.stats.dispose();
     this.releaseMouse();
     document.removeEventListener("pointerlockchange", this.onLock);
@@ -378,16 +423,31 @@ export function playerSettings(): HTMLElement {
   };
   const on = (label: string, title: string, checked: boolean, set: (on: boolean) => void) =>
     h("label", { class: "toggle", title }, h("span", {}, label), toggle({ checked, label, onChange: set }));
-  return h("div", { class: "settings" },
+  // UI size shows as you drag but is applied once the slider is let go, so the slider doesn't move under the pointer.
+  const size = () => {
+    const show = (v: number) => `${Math.round(v * 100)}%`;
+    const val = h("span", {}, show(uiScale()));
+    return h("div", { class: "field" }, h("span", {}, "UI size"), val,
+      slider({ ...UI_SCALE, value: uiScale(), mark: UI_SCALE.default, label: "UI size", text: show, onInput: (v) => { val.textContent = show(v); }, onChange: setUiScale }));
+  };
+  const game = () => [
     row("Turn speed (keys)", "yawRate"),
     row("Mouse sensitivity", "mouseSens"),
     on("Lock mouse to camera", "On: click the game to capture the mouse, which then turns the camera as far as you like; Esc lets it go. Off: drag to turn",
       Input.mouseLockEnabled(), (v) => Input.setMouseLock(v)),
     row("Camera distance", "camDist", true),
     row("Camera height", "camHeight", true),
-    on("Touch slider", "On a touch screen: a slider on the left throttles (up forward, down back) and a drag anywhere else turns. Off: a drag is a joystick",
-      Input.touchSliderEnabled(), (v) => Input.setTouchSlider(v)),
+  ];
+  const other = () => [
     on("Performance stats", "While playing, in the top right: frame rate, frame, script and physics time, draw calls and triangles, resolution and memory",
       Stats.enabled(), (v) => Stats.setEnabled(v)),
-  );
+  ];
+  const pages: [string, () => HTMLElement[]][] = [["Game", game], ["Interface", () => [size()]], ["Other", other]];
+  const body = h("div", {}), tabs = h("div", { class: "settings-tabs", role: "tablist" });
+  const show = (k: number) => {
+    tabs.replaceChildren(...pages.map(([name], i) => h("button", { class: i === k ? "active" : "", role: "tab", "aria-selected": String(i === k), onclick: () => show(i) }, name)));
+    body.replaceChildren(...pages[k]![1]());
+  };
+  show(0);
+  return h("div", { class: "settings" }, tabs, body);
 }

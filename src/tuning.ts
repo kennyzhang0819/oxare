@@ -11,8 +11,6 @@ export const TUNING = {
   camDist: 4,
   camHeight: 2,
   camBallGap: 0.9,
-  // Share of the ball's weight a steep wall can carry while the ball is pressed against it in the air.
-  wallGrip: 1,
   // Stools and sliding kickers: their mass (the ball's is 1), then, once the ball has let go, a drag against
   // their speed (per second) plus a steady friction (units/s²) that stops them dead.
   slideMass: 0.75,
@@ -34,9 +32,6 @@ export const TUNING = {
   beltSpeed: 3,
   // Pangolin: units per second it unrolls at, on average; it eases in and out, so its top speed is about 1.5 times this.
   unrollSpeed: 3.5,
-  // Giraffe: how far its neck stretches up when the ball bumps it, and the seconds until it is back down.
-  giraffeGrow: 1.2,
-  giraffeTime: 1.6,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -53,7 +48,6 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   camDist: [3, 7, 0.25],
   camHeight: [1, 4, 0.25],
   camBallGap: [0, 3, 0.1],
-  wallGrip: [0, 1, 0.05],
   slideMass: [0.1, 3, 0.05],
   slideDrag: [0, 10, 0.25],
   slideFriction: [0, 15, 0.25],
@@ -65,8 +59,6 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   magnetFalloff: [1, 4, 0.25],
   beltSpeed: [0, 25, 0.5],
   unrollSpeed: [0.5, 12, 0.25],
-  giraffeGrow: [0, 1.9, 0.1],
-  giraffeTime: [0.4, 5, 0.1],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

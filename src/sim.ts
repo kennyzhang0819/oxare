@@ -1,8 +1,8 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
-import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, torusMesh, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, beltRods, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, GOAL_RING, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, snakeHead, SNAKE_HEAD, softProps, ringHead, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceBalls, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, pangolinCuts, pangolinLine, pangolinRest, pangolinRing, pangolinUnrolled, type Pangolin, giraffeStretch, GIRAFFE, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
+import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, tubeWallBlocks } from "./geometry.ts";
+import { BALL_RADIUS, beltRods, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_CHAIN_R, GATE_CUBE, GATE_LINK, GATE_ROUND, gateHang, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, gateLinks, BUMPER_H, BUMPER_R, bumperProfile, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, softProps, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCapsules, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, PANGOLIN_SEG, pangolinCuts, pangolinLine, pangolinPoint, pangolinRest, pangolinRing, pangolinTrack, pangolinUnrolled, type Pangolin, type PangolinTrack, pangolinSlices, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -60,9 +60,8 @@ export interface SimPlank { index: number; body: RAPIER.RigidBody; frozen?: RAPI
 export interface SimTube { index: number; centre: [number, number, number][]; chord: [number, number] }
 export interface SimMover { index: number; body: RAPIER.RigidBody; piece: Mover }
 // `at` is the sim time it was first touched, null while it lies curled.
-export interface SimPangolin { index: number; piece: Pangolin; at: number | null }
+export interface SimPangolin { index: number; piece: Pangolin; track: PangolinTrack; at: number | null }
 // `at` is the sim time the ball last bumped it into stretching, null until then.
-export interface SimGiraffe { index: number; at: number | null }
 export interface Sim {
   world: RAPIER.World;
   // Pieces carried by a moving platform (see riders in level.ts), by index.
@@ -73,7 +72,6 @@ export interface Sim {
   bridges: SimBridge[];
   planks: SimPlank[];
   pangolins: SimPangolin[];
-  giraffes: SimGiraffe[];
   tubes: SimTube[];
   movers: SimMover[];
   // Seconds of play stepped so far: the clock moving platforms run their schedules on.
@@ -112,7 +110,8 @@ export function initPhysics(): Promise<void> {
 }
 
 // `from` overrides the spawn: the ball starts (and respawns) resting on the surface at that point.
-export async function createSim(level: Level, from?: { x: number; y: number; z: number }): Promise<Sim> {
+// `stems`: the trees' stems as the scene grew them (decor.ts decorStems), each a solid capsule.
+export async function createSim(level: Level, from?: { x: number; y: number; z: number }, stems: { a: [number, number, number]; b: [number, number, number]; r: number }[] = []): Promise<Sim> {
   await initPhysics();
   const world = new RAPIER.World({ x: 0, y: -TUNING.gravity, z: 0 });
   world.timestep = STEP;
@@ -135,13 +134,11 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // carried along each step.
   const movers: SimMover[] = [];
   const moverOf = new Map<number, SimMover>();
-  // Tilted slabs: wall grip works only on their big faces, never their edges.
-  const walls = new Set<number>();
   level.pieces.forEach((p, index) => {
     if (!isMoving(p)) return;
     const at = moverAt(p, 0);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y, at.z));
-    walls.add(world.createCollider(platformHull(p.w, p.d).setRotation(qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)))).setFriction(1), body).handle);
+    world.createCollider(platformHull(p.w, p.d).setRotation(qmul(yQuat(p.rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)))).setFriction(1), body);
     const m = { index, body, piece: p };
     movers.push(m);
     moverOf.set(index, m);
@@ -187,11 +184,16 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     carried.push({ body: pl.body, base: { x: t.x - d.x, y: t.y - d.y, z: t.z - d.z }, mover: m, active: () => !!pl.frozen });
   };
 
+  // A solid capsule from a to b in world space: a tree's stem, or a part of a piece that lists them (pieceCapsules).
+  function capsule(a: [number, number, number], b: [number, number, number], r: number) {
+    const d = { x: b[0] - a[0], y: b[1] - a[1], z: b[2] - a[2] }, l = Math.hypot(d.x, d.y, d.z);
+    if (l < 1e-6) { fixed(RAPIER.ColliderDesc.ball(r).setTranslation(...a).setFriction(0.8)); return; }
+    fixed(RAPIER.ColliderDesc.capsule(l / 2, r).setTranslation((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2).setRotation(yTo(d.x / l, d.y / l, d.z / l)).setFriction(0.8));
+  }
+  for (const { a, b, r } of stems) capsule(a, b, r);
   // A fence's rail is exactly the tube that is drawn: a capsule of the rail's radius along each
-  // stretch of its centre line, with nothing above or below it; a snake's head is a ball as drawn.
+  // stretch of its centre line, with nothing above or below it.
   const fenceColliders = (p: Piece & { type: "fence" }) => {
-    const head = softProps() ? snakeHead(p) : null;
-    if (head) { const o = rotXZ(head.c[0], head.c[2], p.rot); fixed(RAPIER.ColliderDesc.ball(SNAKE_HEAD.r).setTranslation(p.x + o.x, p.y + head.c[1], p.z + o.z).setFriction(1)); }
     const pts = fenceRings(p).map((q) => { const o = rotXZ(q.c[0], q.c[2], p.rot); return { x: p.x + o.x, y: p.y + q.c[1], z: p.z + o.z }; });
     for (let i = 0; i + 1 < pts.length; i++) {
       const a = pts[i]!, b = pts[i + 1]!, d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }, l = Math.hypot(d.x, d.y, d.z);
@@ -202,7 +204,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     }
   };
   const bumpers: RAPIER.Collider[] = [], magnets: RAPIER.Collider[] = [];
-  const giraffeNecks = new Map<number, RAPIER.Collider>();
   const rods: { body: RAPIER.RigidBody; axis: { x: number; z: number }; r: number }[] = [];
   // Each rod's collider and the way its treadmill carries (local -z).
   const belts = new Map<number, { x: number; z: number }>();
@@ -234,7 +235,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         return out;
       };
       const mesh = (m: { positions: Float32Array; indices: Uint32Array }) => RAPIER.ColliderDesc.trimesh(roll(m.positions), m.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES);
-      walls.add(fixed(mesh(flat).setFriction(1)).handle);
+      fixed(mesh(flat).setFriction(1));
       fixed(mesh(flat.body).setFriction(0.6));
       for (const pts of flat.solids) { const desc = RAPIER.ColliderDesc.convexHull(roll(pts)); if (desc) fixed(desc.setFriction(0.6)); }
       return;
@@ -257,7 +258,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         return out;
       };
       const mesh = (m: { positions: Float32Array; indices: Uint32Array }) => RAPIER.ColliderDesc.trimesh(turn(m.positions), m.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES);
-      walls.add(fixed(mesh(flat).setFriction(1)).handle);
+      fixed(mesh(flat).setFriction(1));
       fixed(mesh(flat.body).setFriction(0.6));
       for (const pts of flat.solids) { const desc = RAPIER.ColliderDesc.convexHull(turn(pts)); if (desc) fixed(desc.setFriction(0.6)); }
       return;
@@ -265,7 +266,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     if (p.type === "slab" && isTilted(p) && !isMoving(p)) {
       // Roll about local z, tilt about local x, then yaw.
       const q = qmul(yQuat(rot), qmul(xQuat(p.tilt), zQuat(p.roll ?? 0)));
-      walls.add(fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1)).handle);
+      fixed(platformHull(p.w, p.d).setTranslation(p.x, p.y, p.z).setRotation(q).setFriction(1));
       return;
     }
     for (const b of pieceBoxes(p)) {
@@ -278,7 +279,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           .setFriction(1),
       );
     }
-    if (p.type === "support" && !softProps()) {
+    if (p.type === "support") {
       for (const pts of supportHulls(p)) {
         const desc = RAPIER.ColliderDesc.convexHull(new Float32Array(pts.flat()));
         if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setRotation(yQuat(rot)).setFriction(1));
@@ -288,7 +289,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setRotation(yQuat(rot)).setFriction(1));
       }
     }
-    if (p.type === "gate") {
+    if (p.type === "gate" || p.type === "arch") {
       for (const pts of gateHulls(p)) {
         const desc = RAPIER.ColliderDesc.roundConvexHull(new Float32Array(pts.flat()), GATE_ROUND);
         if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setRotation(yQuat(rot)).setFriction(0.6).setCollisionGroups(ARCH_GROUPS));
@@ -298,7 +299,7 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         if (desc) fixed(desc.setTranslation(p.x, p.y, p.z).setRotation(yQuat(rot)).setFriction(0.6).setCollisionGroups(ARCH_GROUPS));
       }
       // The bar is the drawn rod, its rounded ends hidden in the beams.
-      fixed(RAPIER.ColliderDesc.capsule(p.d / 2, RAIL_R).setTranslation(p.x, p.y + gateHang(p).pivot, p.z).setRotation(qmul(yQuat(rot), X90)).setFriction(0.6).setCollisionGroups(BAR_GROUPS));
+      if (p.type === "gate") fixed(RAPIER.ColliderDesc.capsule(p.d / 2, RAIL_R).setTranslation(p.x, p.y + gateHang(p).pivot, p.z).setRotation(qmul(yQuat(rot), X90)).setFriction(0.6).setCollisionGroups(BAR_GROUPS));
     }
     if (p.type === "fence") fenceColliders(p);
     if (p.type === "rails") {
@@ -310,21 +311,17 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
           RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES).setFriction(1),
         );
       }
-      // A soft rails' closed end wears a snake's head.
-      for (const c of caps) fixed(RAPIER.ColliderDesc.ball(softProps() ? SNAKE_HEAD.r : RAIL_R).setTranslation(...c).setFriction(1));
+      for (const c of caps) fixed(RAPIER.ColliderDesc.ball(RAIL_R).setTranslation(...c).setFriction(1));
+    }
+    for (const c of pieceCapsules(p)) {
+      const a = rotXZ(c.a[0], c.a[2], rot), b = rotXZ(c.b[0], c.b[2], rot);
+      capsule([p.x + a.x, p.y + c.a[1], p.z + a.z], [p.x + b.x, p.y + c.b[1], p.z + b.z], (c.r + (c.end ?? c.r)) / 2);
     }
     for (const c of pieceCylinders(p)) {
       const o = rotXZ(c.x ?? 0, c.z ?? 0, rot);
-      const neck = fixed(RAPIER.ColliderDesc.cylinder(c.h / 2, c.r).setTranslation(p.x + o.x, p.y + (c.y0 ?? 0) + c.h / 2, p.z + o.z).setFriction(1));
-      if (p.type === "pillar") giraffeNecks.set(index, neck);
+      fixed(RAPIER.ColliderDesc.cylinder(c.h / 2, c.r).setTranslation(p.x + o.x, p.y + (c.y0 ?? 0) + c.h / 2, p.z + o.z).setFriction(1));
     }
-    // Kickers add their balls where their own hulls are built, in their own frames; stools and the
-    // pushable props carry theirs on their own bodies, giraffes on their heads.
-    if (p.type !== "kicker" && p.type !== "stool" && p.type !== "pillar" && !isProp(p)) for (const b of pieceBalls(p)) {
-      const o = rotXZ(b.x, b.z, rot);
-      fixed(RAPIER.ColliderDesc.ball(b.r).setTranslation(p.x + o.x, p.y + b.y, p.z + o.z).setFriction(1));
-    }
-    if (p.type === "pillar" && !softProps()) {
+    if (p.type === "pillar") {
       // The dome is the hull of the drawn half-sphere's own points, squashed the same way.
       const R = PILLAR_R + PILLAR_COLLAR.r, top = PILLAR_H - PILLAR_CAP + PILLAR_COLLAR.h, k = (PILLAR_CAP - PILLAR_COLLAR.h) / R;
       const prof: [number, number][] = [];
@@ -345,10 +342,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         RAPIER.ColliderDesc.trimesh(new Float32Array(m.positions), new Uint32Array(m.indices), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES)
           .setTranslation(p.x, p.y, p.z).setFriction(1),
       ));
-    }
-    if (p.type === "goal") {
-      const t = torusMesh(p.r + GOAL_RING.gap, GOAL_RING.tube);
-      fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setTranslation(p.x, p.y + GOAL_RING.y, p.z).setFriction(1));
     }
     for (const sec of pieceSectors(p)) {
       if (sec.kind === "platform") continue;
@@ -394,7 +387,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       : p.type === "cube" ? RAPIER.ColliderDesc.roundCuboid(CUBE_S / 2 - cr, CUBE_S / 2 - cr, CUBE_S / 2 - cr, cr)
       : RAPIER.ColliderDesc.roundCylinder(p.h / 2 - cr, p.r - cr, cr);
     world.createCollider(desc.setMass(PROP_MASS).setFriction(PROP_FRICTION).setRestitution(PROP_RESTITUTION), body);
-    for (const b of pieceBalls(p)) world.createCollider(RAPIER.ColliderDesc.ball(b.r).setTranslation(b.x, b.y, b.z).setMass(0).setFriction(PROP_FRICTION), body);
     crates.push({ index, body });
   });
 
@@ -552,58 +544,55 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
 
   // A pangolin is a chain of slices along its belly line (pangolinLine), each a kinematic body set to
   // its pose each step while it unrolls; laid flat, each slice's shape is the drawn body's between its
-  // cuts. The part already laid down is one convex hull on a fixed body instead, its slices switched off,
-  // so the ball rolls onto it and across with no seams.
-  const pangolins: (SimPangolin & { slices: RAPIER.Collider[]; bodies: RAPIER.RigidBody[]; laid: RAPIER.Collider | null; down: number; base: RAPIER.RigidBody })[] = [];
-  const pangolinPoses = (p: Pangolin, cuts: number[], a: number) => {
-    const line = pangolinLine(p, a, cuts), yaw = yQuat(p.rot);
-    return line.slice(0, -1).map((b, j) => {
-      const c = line[j + 1]!, o = rotXZ(0, b.z, p.rot), psi = Math.atan2(c.y - b.y, b.z - c.z);
-      return { t: { x: p.x + o.x, y: p.y + b.y, z: p.z + o.z }, q: qmul(yaw, xQuat((psi * 180) / Math.PI)) };
-    });
+  // cuts. The part already laid down is one welded trimesh on a fixed body instead, its slices switched
+  // off, so the ball rolls onto it and across, round its bends and over its slopes, with no seams.
+  const pangolins: (SimPangolin & { cuts: number[]; slices: RAPIER.Collider[]; bodies: RAPIER.RigidBody[]; laid: RAPIER.Collider | null; down: number; base: RAPIER.RigidBody })[] = [];
+  const pangolinPoses = (p: Pangolin, tr: PangolinTrack, cuts: number[], a: number) => {
+    const yaw = yQuat(p.rot);
+    return pangolinSlices(tr, a, cuts).map(({ c, q }) => { const o = rotXZ(c[0], c[2], p.rot); return { t: { x: p.x + o.x, y: p.y + c[1], z: p.z + o.z }, q: qmul(yaw, q) }; });
   };
-  // The drawn body's cross-sections at s, laid flat with s = z0 at z = 0.
-  const pangolinRings = (p: Pangolin, from: number, to: number, z0: number) =>
-    [from, to].flatMap((s) => pangolinRing(p, s).flatMap(([x, t]) => [x, t, z0 - s]));
+  // The drawn body's cross-sections at s, laid straight with s = z0 at z = 0.
+  const pangolinRings = (tr: PangolinTrack, from: number, to: number, z0: number) =>
+    [from, to].flatMap((s) => pangolinRing(tr, s).flatMap(([x, t]) => [x, t, z0 - s]));
   level.pieces.forEach((p, index) => {
     if (p.type !== "pangolin") return;
-    const cuts = pangolinCuts(p), poses = pangolinPoses(p, cuts, pangolinRest(p)), slices: RAPIER.Collider[] = [], bodies: RAPIER.RigidBody[] = [];
+    const track = pangolinTrack(p);
+    if (track.L < PANGOLIN_SEG) return;
+    const cuts = pangolinCuts(track), poses = pangolinPoses(p, track, cuts, pangolinRest(track)), slices: RAPIER.Collider[] = [], bodies: RAPIER.RigidBody[] = [];
     poses.forEach((at, j) => {
       const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.t.x, at.t.y, at.t.z).setRotation(at.q));
-      slices.push(world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pangolinRings(p, cuts[j]!, cuts[j + 1]!, cuts[j]!)))!.setFriction(1), body));
+      slices.push(world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pangolinRings(track, cuts[j]!, cuts[j + 1]!, cuts[j]!)))!.setFriction(1), body));
       bodies.push(body);
     });
     const base = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y, p.z).setRotation(yQuat(p.rot)));
-    pangolins.push({ index, piece: p, at: null, slices, bodies, laid: null, down: 0, base });
+    pangolins.push({ index, piece: p, track, at: null, cuts, slices, bodies, laid: null, down: 0, base });
   });
-  // Lay down the slices fully unrolled at `a`: the laid hull grows over them and they switch off.
+  // Lay down the slices fully unrolled at `a`: the laid trimesh grows over them and they switch off.
+  // Its rings and caps wind outward, as the internal edge fix needs.
   const layPangolin = (pg: (typeof pangolins)[number], a: number) => {
-    const p = pg.piece, cuts = pangolinCuts(p);
+    const tr = pg.track, cuts = pg.cuts;
     let k = pg.down;
     while (k < pg.slices.length && cuts[k + 1]! <= a + 1e-9) k++;
     if (k === pg.down) return;
-    const pts = new Float32Array(cuts.slice(0, k + 1).flatMap((s) => pangolinRing(p, s).flatMap(([x, t]) => [x, t, p.d / 2 - s])));
-    const shape = RAPIER.ColliderDesc.convexHull(pts)!;
+    const ss = cuts.slice(0, k + 1), line = pangolinLine(tr, tr.L, ss), pos: number[] = [], idx: number[] = [];
+    ss.forEach((s, i) => { for (const [x, t] of pangolinRing(tr, s)) pos.push(...pangolinPoint(line[i]!, x, t)); });
+    const R = pos.length / 3 / ss.length;
+    for (let i = 0; i < k; i++) for (let j = 0; j < R; j++) { const a0 = i * R + j, b0 = i * R + ((j + 1) % R); idx.push(a0, a0 + R, b0, b0, a0 + R, b0 + R); }
+    for (const [i, out] of [[0, 1], [k, -1]] as const) {
+      const c = pos.length / 3;
+      let mx = 0, my = 0, mz = 0;
+      for (let j = 0; j < R; j++) { mx += pos[(i * R + j) * 3]!; my += pos[(i * R + j) * 3 + 1]!; mz += pos[(i * R + j) * 3 + 2]!; }
+      pos.push(mx / R, my / R, mz / R);
+      for (let j = 0; j < R; j++) { const a0 = i * R + j, b0 = i * R + ((j + 1) % R); if (out > 0) idx.push(c, a0, b0); else idx.push(c, b0, a0); }
+    }
+    const shape = RAPIER.ColliderDesc.trimesh(new Float32Array(pos), new Uint32Array(idx), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES);
     if (pg.laid) pg.laid.setShape(shape.shape);
     else pg.laid = world.createCollider(shape.setFriction(1), pg.base);
     for (let j = pg.down; j < k; j++) pg.slices[j]!.setEnabled(false);
     pg.down = k;
   };
-  for (const pg of pangolins) layPangolin(pg, pangolinRest(pg.piece));
+  for (const pg of pangolins) layPangolin(pg, pangolinRest(pg.track));
 
-  // A giraffe's head is a kinematic body carrying the head's balls and a second neck as long as the
-  // fixed one, so lifted up to GIRAFFE.neck the two necks are one stretched neck, as drawn.
-  const giraffes: (SimGiraffe & { body: RAPIER.RigidBody; parts: RAPIER.Collider[]; base: { x: number; y: number; z: number }; up: { x: number; y: number; z: number }; ride?: SimMover; touching: boolean })[] = [];
-  if (softProps()) level.pieces.forEach((p, index) => {
-    if (p.type !== "pillar") return;
-    const f = rollFrame(p), q = f ? qmul(f.q, yQuat(pieceRot(p))) : yQuat(pieceRot(p)), ride = rides.get(index), d = ride ? moverShift(ride.piece, 0) : { x: 0, y: 0, z: 0 };
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x + d.x, p.y + d.y, p.z + d.z).setRotation(q));
-    const parts = [world.createCollider(RAPIER.ColliderDesc.cylinder(GIRAFFE.neck / 2, PILLAR_R).setTranslation(0, GIRAFFE.neck / 2, 0).setFriction(1), body)];
-    for (const b of pieceBalls(p)) parts.push(world.createCollider(RAPIER.ColliderDesc.ball(b.r).setTranslation(b.x, b.y, b.z).setFriction(1), body));
-    const neck = giraffeNecks.get(index);
-    if (neck) parts.push(neck);
-    giraffes.push({ index, at: null, body, parts, base: { x: p.x, y: p.y, z: p.z }, up: qrot(q, { x: 0, y: 1, z: 0 }), ride, touching: false });
-  });
 
   // A gate's chain is a body per link, each on an exact joint (multibody, which cannot drift apart
   // under a push) to the next, the top one to a runner on the bar and the cube to the bottom one.
@@ -676,7 +665,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     sliders.push(body);
     const r = propRound(p.w, p.h, p.d);
     world.createCollider(RAPIER.ColliderDesc.roundCuboid(p.w / 2 - r, p.h / 2 - r, p.d / 2 - r, r).setMass(TUNING.slideMass).setFriction(0.4).setRestitution(0.05), body);
-    for (const b of pieceBalls(p)) world.createCollider(RAPIER.ColliderDesc.ball(b.r).setTranslation(b.x, b.y, b.z).setMass(0).setFriction(0.4), body);
     const joint = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, alongZ ? { x: 0, y: 0, z: 1 } : { x: 1, y: 0, z: 0 });
     joint.limitsEnabled = true;
     joint.limits = [slide.lo - slide.at, slide.hi - slide.at];
@@ -723,7 +711,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       sliders.push(body);
       const hull = kickerHull(p), desc = RAPIER.ColliderDesc.roundConvexHull(new Float32Array(hull.corners.flat()), hull.r);
       if (desc) world.createCollider(desc.setMass(TUNING.slideMass).setFriction(1).setCollisionGroups(OFF_FLOOR_GROUPS), body);
-      for (const b of pieceBalls(p)) world.createCollider(RAPIER.ColliderDesc.ball(b.r).setTranslation(b.x, b.y, b.z).setMass(0).setFriction(1).setCollisionGroups(OFF_FLOOR_GROUPS), body);
       const joint = RAPIER.JointData.prismatic({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
       joint.limitsEnabled = true;
       joint.limits = [slide.lo - slide.at, slide.hi - slide.at];
@@ -736,7 +723,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     const pts = new Float32Array(hull.corners.flatMap((c) => frameToWorld(p, c)));
     const desc = RAPIER.ColliderDesc.roundConvexHull(pts, hull.r);
     if (desc) fixed(desc.setFriction(1));
-    for (const b of pieceBalls(p)) fixed(RAPIER.ColliderDesc.ball(b.r).setTranslation(...frameToWorld(p, [b.x, b.y, b.z])).setFriction(1));
   });
   riding = undefined;
 
@@ -744,11 +730,10 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
   // convex blocks: a zero-thickness surface only pushes from its front face, so a ball could slip
   // in from outside where a block never lets it. A ring of rail sits round each mouth. The blocks
   // start a little outside the skin so their flat inner faces never narrow the bore.
-  // A ring of rail (a tube mouth's, or a hoop): the drawn torus as it is, and a soft ring's snake head.
+  // A ring of rail (a tube mouth's, or a hoop): the drawn torus as it is.
   const railRing = (m: { c: [number, number, number]; d: [number, number, number] }) => {
     const t = ringMesh(m.c, m.d, RING_R, RING_T, RING_SIDES, RING_SEGMENTS);
     fixed(RAPIER.ColliderDesc.trimesh(new Float32Array(t.positions), new Uint32Array(t.indices)).setFriction(1));
-    if (softProps()) fixed(RAPIER.ColliderDesc.ball(SNAKE_HEAD.r).setTranslation(...ringHead(m).c).setFriction(1));
   };
   const tubes: SimTube[] = [];
   level.pieces.forEach((p, index) => {
@@ -824,7 +809,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     bridges,
     planks,
     pangolins,
-    giraffes,
     tubes,
     movers,
     riders: rides,
@@ -901,24 +885,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       const wx = rx + push[0] * STEP, wz = rz + push[2] * STEP, wh = Math.hypot(wx, wz);
       if (wh > cap) push = [(wx * (cap / wh) - rx) / STEP, push[1], (wz * (cap / wh) - rz) / STEP];
       push = [push[0] + extra[0], push[1] + extra[1], push[2] + extra[2]];
-      // Wall grip: off the ground, an upright slab's big face the ball is pressed against carries up to
-      // wallGrip of its weight, no more than the press (friction 1) allows.
-      if (TUNING.wallGrip > 0) {
-        let press = 0, grounded = false;
-        world.contactPairsWith(ballCollider, (other) => {
-          world.contactPair(ballCollider, other, (m, flipped) => {
-            const n = m.normal(), ny = flipped ? n.y : -n.y;
-            const face = walls.has(other.handle) ? qrot(other.rotation(), { x: 0, y: 1, z: 0 }) : null;
-            const big = !!face && Math.abs(n.x * face.x + n.y * face.y + n.z * face.z) > 0.9;
-            for (let i = 0; i < m.numContacts(); i++) {
-              if (m.contactDist(i) > 0.02) continue;
-              if (ny > 0.3) grounded = true;
-              else if (big && Math.abs(ny) < 0.3) press += m.contactImpulse(i) / STEP;
-            }
-          });
-        });
-        if (!grounded) push[1] += Math.min(TUNING.wallGrip * TUNING.gravity, press);
-      }
       // Magnets: a pull toward each one's axis, full with the ball against it and fading out by
       // magnetFalloff to nothing at its reach; its level part is capped below the throttle so the ball can always be driven off.
       for (const c of magnets) {
@@ -941,15 +907,9 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       }
       for (const pg of pangolins) {
         if (pg.at === null || pg.down === pg.slices.length) continue;
-        const a = pangolinUnrolled(pg.piece, time + STEP - pg.at, TUNING.unrollSpeed);
-        pangolinPoses(pg.piece, pangolinCuts(pg.piece), a).forEach((at, j) => { pg.bodies[j]!.setNextKinematicTranslation(at.t); pg.bodies[j]!.setNextKinematicRotation(at.q); });
+        const a = pangolinUnrolled(pg.track, time + STEP - pg.at, TUNING.unrollSpeed);
+        pangolinPoses(pg.piece, pg.track, pg.cuts, a).forEach((at, j) => { pg.bodies[j]!.setNextKinematicTranslation(at.t); pg.bodies[j]!.setNextKinematicRotation(at.q); });
         layPangolin(pg, a);
-      }
-      for (const gf of giraffes) {
-        const e = gf.at === null ? 0 : giraffeStretch(time + STEP - gf.at, TUNING.giraffeGrow, TUNING.giraffeTime);
-        if (e === 0 && !gf.ride) continue;
-        const d = gf.ride ? moverShift(gf.ride.piece, time + STEP) : { x: 0, y: 0, z: 0 };
-        gf.body.setNextKinematicTranslation({ x: gf.base.x + gf.up.x * e + d.x, y: gf.base.y + gf.up.y * e + d.y, z: gf.base.z + gf.up.z * e + d.z });
       }
       for (const c of carried) {
         if (c.active && !c.active()) continue;
@@ -1011,12 +971,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
       for (const pg of pangolins) if (pg.at === null && pg.slices.some((c) => touchedByMover(world, c))) pg.at = time;
-      // A giraffe stretches when the ball bumps it fresh while it stands at rest.
-      for (const gf of giraffes) {
-        const now = gf.parts.some((c) => touching(world, ballCollider, c));
-        if (now && !gf.touching && (gf.at === null || time - gf.at >= TUNING.giraffeTime)) gf.at = time;
-        gf.touching = now;
-      }
       // Jump pads: in a launch zone the ball's speed out of the pad (straight up, or along a rolled or
       // tilted pad's own up) becomes what carries it the pad's rise above its top from where it is, so
       // setting it again on the way up adds nothing; its speed across the pad is left as it is.

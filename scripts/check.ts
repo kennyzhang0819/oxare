@@ -1,18 +1,15 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, beltRods, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { BARRIER_W, beanAt, beanDist, beanTrack, rotXZ, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
 import { DEFAULT_TUNING, TUNING, TUNING_RANGES } from "../src/tuning.ts";
 
-// A hand-built test level: its goal is solid like everything else, so it is moved far off to the
-// side, out of the path the test rolls the ball along.
+// A hand-built test level. Its old `goal` pieces are dropped on loading, as every level's are.
 function testLevel(raw: unknown): Level {
-  const level = validateLevel(raw);
-  for (const p of level.pieces) if (p.type === "goal") p.x += 1000;
-  return level;
+  return validateLevel(raw);
 }
 const dir = new URL("../src/levels/", import.meta.url);
 const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
@@ -40,7 +37,7 @@ for (const f of files) {
   if (problems.length) { failed = true; console.error(`FAIL ${f}: ${problems.join("; ")}`); }
   else console.log(`ok ${f}: ${level.pieces.length} pieces, peak ${peak.toFixed(2)} m/s over ${(2 * 120 * STEP).toFixed(0)}s`);
 }
-// The ball must cross platform seams with only a small hop and roll around a curve flat.
+// The ball must cross platform joins and roll around a curve flat.
 const seamLevel = testLevel({ id: "seam", name: "seam", pieces: [
   { type: "start", x: 0, y: 0, z: 0 },
   { type: "slab", x: 0, y: 0, z: 0, w: 10, d: 10, rot: 0, fences: {} },
@@ -81,7 +78,7 @@ const teeLevel = testLevel({ id: "tee", name: "tee", pieces: [
   { type: "goal", x: 5, y: 0, z: -30, r: 2 },
 ] });
 // The floor is checked under fixed physics, so the result is about the floor's shape and not the
-// feel tuning: a faster or lighter ball skims the seam grooves without settling into them.
+// feel tuning: a faster or lighter ball could skim a bump without settling into it.
 const FLOOR_CHECK = { gravity: 5, throttleForce: 9, maxSpeed: 6.5 };
 // An arc is steered round a centre at a radius until the ball has turned `until` radians about it.
 for (const [level, steer, cx, cz, rad, until] of [[seamLevel, "line", 0, 0, 0, 0], [teeLevel, "line", 0, 0, 0, 0], [shapedLevel, "line", 0, 0, 0, 0], [curveLevel, "arc", 0, 0, 15, 1.45], [cLevel, "arc", 2, -2, 13, 3.0], [qLevel, "arc", 2, -2, 13, 4.5]] as const) {
@@ -108,12 +105,9 @@ for (const [level, steer, cx, cz, rad, until] of [[seamLevel, "line", 0, 0, 0, 0
     dip = Math.max(dip, -dy);
   }
   sim.free();
-  // The ball settles a little into the groove at each seam; a single curve has none and stays flat.
-  const hasSeams = steer === "line";
-  // Seams are a faint groove (PLATFORM_SEAM_DROP): the ball must dip into it, but never hop or
-  // sink more than a few hundredths, which is what costs it speed.
-  if (maxDy > 0.05 || (hasSeams ? dip < 0.01 : maxDy > 0.02)) { failed = true; console.error(`FAIL ${level.id}: floor deviation ${maxDy.toFixed(3)}, dip ${dip.toFixed(3)} (${hasSeams ? "expected a seam groove" : "expected flat"})`); }
-  else console.log(`ok ${level.id}: floor deviation ${maxDy.toFixed(4)}, groove dip ${dip.toFixed(3)}`);
+  // Platforms that meet have no seam: the ball never sinks at a join, never hops, and round a curve stays flat.
+  if (dip > 0.005 || maxDy > (steer === "line" ? 0.05 : 0.02)) { failed = true; console.error(`FAIL ${level.id}: floor deviation ${maxDy.toFixed(3)}, dip ${dip.toFixed(3)} (expected flat)`); }
+  else console.log(`ok ${level.id}: floor deviation ${maxDy.toFixed(4)}, dip ${dip.toFixed(3)}`);
 }
 Object.assign(TUNING, { gravity: DEFAULT_TUNING.gravity, throttleForce: DEFAULT_TUNING.throttleForce, maxSpeed: DEFAULT_TUNING.maxSpeed });
 // A fence is exactly its drawn rail: straight down onto a fenced span's rail line the first hit is
@@ -957,7 +951,7 @@ for (const [name, lines, end, mid] of [
   const level = testLevel({ id: "pangolin", name: "pangolin", pieces: [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "pangolin", x: 0, y: 0, z: -10.5, w: 2.5, d: 8, rot: 0 },
+    { type: "pangolin", x: 0, y: 0, z: -6.5, w: 2.5, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: 0 }] },
     { type: "slab", x: 0, y: 0, z: -19, w: 10, d: 10, rot: 0, fences: {} },
     { type: "goal", x: 0, y: 0, z: -22, r: 2 },
   ] });
@@ -982,29 +976,52 @@ for (const [name, lines, end, mid] of [
   else if (Math.abs(lo - top) > 0.02 || Math.abs(hi - top) > 0.02) { failed = true; console.error(`FAIL pangolin: laid out, the ball rolled over the gap at y ${lo.toFixed(3)} to ${hi.toFixed(3)} (want ${top.toFixed(3)})`); }
   else console.log(`ok pangolin: waited, touched at ${touched.toFixed(2)}s, unrolled under the ball; laid out it rolls flat over the gap (y ${lo.toFixed(3)} to ${hi.toFixed(3)})`);
 }
-// A giraffe's solid neck stretches up giraffeGrow when the ball bumps it and comes back down; a ball still
-// leaning on it does not set it off again.
+// A pangolin's path may turn and climb: unrolled round a rounded corner that also rises a layer, its
+// solid's top is the drawn body's back everywhere along it and across it; and a ball steered along a
+// turning, climbing one rides it over the gap onto the higher platform.
 {
-  const level = testLevel({ id: "giraffe", name: "giraffe", pieces: [
+  const pieces = (path: unknown[]) => [
     { type: "start", x: 0, y: 0, z: -2 },
     { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "pillar", x: 0, y: 0, z: -6 },
-    { type: "goal", x: 0, y: 0, z: -8.5, r: 1 },
-  ] });
-  const sim = await createSim(level), gf = sim.giraffes[0];
-  const top = () => { const hit = sim.world.castRay(new RAPIER_RT.Ray({ x: 0, y: 10, z: -6 }, { x: 0, y: -1, z: 0 }), 20, true); return hit ? 10 - hit.timeOfImpact : -Infinity; };
-  sim.step(0, 0, -1);
-  const rest = top();
-  for (let i = 0; i < 120 * 4 && gf && gf.at === null; i++) sim.step(1, 0, -1);
-  const at = gf?.at ?? null;
-  let peak = -Infinity;
-  for (let i = 0; i < (TUNING.giraffeTime + 1) / STEP; i++) { sim.step(1, 0, -1); peak = Math.max(peak, top()); }
-  const end = top(), again = gf?.at !== at;
+    { type: "pangolin", x: 0, y: 0, z: -7, w: 2.5, rot: 0, path },
+    { type: "slab", x: -12, y: 1, z: -14, w: 8, d: 8, rot: 0, fences: {} },
+    { type: "goal", x: -14, y: 1, z: -14, r: 1 },
+  ];
+  const level = testLevel({ id: "pangolin-path", name: "pangolin path", pieces: pieces([{ x: 0, y: 0, z: -7, bend: 2 }, { x: -7, y: 1, z: -7, bend: 2 }, { x: -11, y: 1, z: -7, bend: 0 }]) });
+  const problems = levelProblems(level).filter((m) => m.includes("pangolin"));
+  const refused = (path: unknown[]) => { try { testLevel({ id: "pangolin-bad", name: "pangolin bad", pieces: pieces(path) }); return ""; } catch (e) { return String(e); } };
+  const sharp = refused([{ x: 0, y: 0, z: -7, bend: 0 }, { x: -11, y: 1, z: -7, bend: 0 }]).includes("sharp");
+  const tight = refused([{ x: 0, y: 0, z: -7, bend: 0.5 }, { x: -11, y: 1, z: -7, bend: 0 }]).includes("tight");
+  const p = level.pieces[2] as Piece & { type: "pangolin" }, track = pangolinTrack(p);
+  let sim = await createSim(level);
+  sim.pangolins[0]!.at = 0;
+  for (let i = 0; i < 120 * 10; i++) sim.step(0, 0, -1);
+  let worst = 0, at = "";
+  for (let s = 0.6; s < track.L - 0.6; s += 0.3) for (const x of [-0.6, 0, 0.6]) {
+    const q = pangolinAt(track, s), top = pangolinPoint(q, x, pangolinSize(track, s).t), o = [p.x + top[0], p.y + top[1], p.z + top[2]];
+    const hit = sim.world.castRay(new RAPIER_RT.Ray({ x: o[0]!, y: o[1]! + 3, z: o[2]! }, { x: 0, y: -1, z: 0 }), 6, true, undefined, undefined, undefined, sim.ball);
+    const err = hit ? Math.abs(o[1]! + 3 - hit.timeOfImpact - o[1]!) : Infinity;
+    if (err > worst) { worst = err; at = `s ${s.toFixed(2)} x ${x}`; }
+  }
   sim.free();
-  if (!gf || at === null) { failed = true; console.error(`FAIL giraffe: the ball's bump did not set it off`); }
-  else if (Math.abs(peak - rest - TUNING.giraffeGrow) > 0.02 || Math.abs(end - rest) > 0.001) { failed = true; console.error(`FAIL giraffe: head from ${rest.toFixed(3)} up to ${peak.toFixed(3)}, back to ${end.toFixed(3)} (want up ${TUNING.giraffeGrow})`); }
-  else if (again) { failed = true; console.error(`FAIL giraffe: the leaning ball set it off again`); }
-  else console.log(`ok giraffe: bumped at ${at.toFixed(2)}s, head from ${rest.toFixed(2)} up to ${peak.toFixed(2)} and back down, not set off again by the leaning ball`);
+  sim = await createSim(level);
+  let b = sim.ball.translation(), best = Infinity;
+  for (let i = 0; i < 120 * 20 && !(b.x < -10 && Math.abs(b.y - 1 - BALL_RADIUS) < 0.1); i++) {
+    // Steer at the track 1.5 ahead of the nearest point on it, holding about 3 a second.
+    let near = 0;
+    for (let s = 0; s <= track.L; s += 0.1) { const c = pangolinAt(track, s).c, d = Math.hypot(p.x + c[0] - b.x, p.z + c[2] - b.z); if (d < best || s === 0) { best = d; near = s; } }
+    best = Infinity;
+    const c = pangolinAt(track, Math.min(track.L, near + 1.5)).c, dx = p.x + c[0] - b.x, dz = p.z + c[2] - b.z, l = Math.hypot(dx, dz) || 1;
+    const v = sim.ball.linvel(), ex = (dx / l) * 3 - v.x, ez = (dz / l) * 3 - v.z, e = Math.hypot(ex, ez) || 1;
+    sim.step(Math.min(1, e), ex / e, ez / e); b = sim.ball.translation();
+  }
+  sim.free();
+  const rode = b.x < -10 && Math.abs(b.y - 1 - BALL_RADIUS) < 0.1;
+  if (problems.length) { failed = true; console.error(`FAIL pangolin path: ${problems.join("; ")}`); }
+  else if (!sharp || !tight) { failed = true; console.error(`FAIL pangolin path: a sharp corner (${sharp}) or one tighter than its width allows (${tight}) was not flagged`); }
+  else if (worst > 0.02) { failed = true; console.error(`FAIL pangolin path: unrolled, its solid's top is ${worst.toFixed(3)} off the drawn back at ${at}`); }
+  else if (!rode) { failed = true; console.error(`FAIL pangolin path: steered along it, the ball did not reach the higher platform (x ${b.x.toFixed(2)} y ${b.y.toFixed(2)} z ${b.z.toFixed(2)})`); }
+  else console.log(`ok pangolin path: ${track.L.toFixed(2)} long round a rising corner, its solid within ${worst.toFixed(3)} of the drawn back; the ball rode it onto the higher platform`);
 }
 // A point on a body, from its local frame to world.
 function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {
@@ -1761,5 +1778,60 @@ for (const reversed of [false, true]) {
   }
   if (bad.length) { failed = true; console.error(`FAIL phasing: ${bad.length} of ${runs} shots ended inside a platform: ${bad.slice(0, 8).join("; ")}`); }
   else console.log(`ok phasing: ${runs} shots at raised slab, holed slab, curve and ramp edges, none got inside`);
+}
+// Apples and the origin: rolled straight down a slab the ball takes an apple placed on its line, and
+// steered back it rolls into the origin's wormhole.
+{
+  const level = testLevel({ id: "apple", name: "apple", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 24, rot: 0, tilt: 0 },
+    { type: "apple", x: 0, y: 0, z: -6 },
+  ] });
+  const apple = level.pieces[2]!, sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let took = false, left = false, home = false, steps = 0;
+  for (; steps < 120 * 12 && !home; steps++) {
+    const p = sim.ball.translation(), o = startOf(level), back = took && p.z < -9;
+    if (takesApple(apple, p)) took = true;
+    if (Math.hypot(p.x - o.x, p.z - o.z) > ORIGIN_LEAVE) left = true;
+    if (left && took && inOrigin(level, p)) home = true;
+    if (back || (took && left && p.z > -9)) { const d = Math.hypot(o.x - p.x, o.z - p.z) || 1; sim.step(1, (o.x - p.x) / d, (o.z - p.z) / d); }
+    else sim.step(1, 0, -1);
+  }
+  sim.free();
+  if (!took || !home) { failed = true; console.error(`FAIL apple: took the apple ${took}, back in the origin ${home} after ${steps} steps`); }
+  else console.log(`ok apple: took the apple on the way out and rolled back into the origin in ${(steps * STEP).toFixed(1)}s`);
+}
+// A tree's stem, handed to the physics as the scene grew it, is solid: rolled at one standing on the
+// slab, the ball stops against it.
+{
+  const level = testLevel({ id: "stem", name: "stem", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 24, rot: 0, tilt: 0 },
+  ] });
+  const sim = await createSim(level, undefined, [{ a: [0, 0, -6], b: [0, 1.5, -6], r: 0.07 }]);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let far = 0;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(1, 0, -1); far = Math.min(far, sim.ball.translation().z); }
+  sim.free();
+  if (far < -6) { failed = true; console.error(`FAIL stem: the ball got past a tree's stem (z ${far.toFixed(2)})`); }
+  else console.log(`ok stem: the ball stopped against a tree's stem at z ${far.toFixed(2)}`);
+}
+// A placed tree's trunk, a lamp post and a signal mast are solid as drawn (pieceCapsules): rolled straight
+// at one, the ball's centre never comes closer to its middle than its radius and the part's allow (it may
+// slide round a trunk); the mast's first ring keeps it from rolling in under the lattice.
+for (const [piece, near] of [[{ type: "tree", x: 0, y: 0, z: -6, rot: 0, size: 1 }, 0.72], [{ type: "lamp", x: 0, y: 0, z: -6, h: 5, rot: 0 }, 0.55], [{ type: "mast", x: 0, y: 0, z: -6, h: 9, rot: 0 }, 1.2]] as const) {
+  const level = testLevel({ id: piece.type, name: piece.type, pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -8, w: 8, d: 24, rot: 0, tilt: 0 },
+    piece,
+  ] });
+  const sim = await createSim(level);
+  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
+  let closest = Infinity;
+  for (let i = 0; i < 120 * 3; i++) { sim.step(1, 0, -1); const b = sim.ball.translation(); if (b.y < 1.5) closest = Math.min(closest, Math.hypot(b.x, b.z + 6)); }
+  sim.free();
+  if (closest < near) { failed = true; console.error(`FAIL ${piece.type}: the ball came ${closest.toFixed(2)} from its middle, inside it`); }
+  else console.log(`ok ${piece.type}: the ball kept ${closest.toFixed(2)} from its middle`);
 }
 if (failed) process.exit(1);

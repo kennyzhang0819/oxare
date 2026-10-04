@@ -10,6 +10,8 @@ export interface SliderOpts {
   mark?: number;
   text?: (v: number) => string;
   onInput: (v: number) => void;
+  // Once the value is let go: the drag released, or a key press.
+  onChange?: (v: number) => void;
 }
 
 export function slider(o: SliderOpts): HTMLElement {
@@ -54,7 +56,11 @@ export function slider(o: SliderOpts): HTMLElement {
     input(fromX(e.clientX));
   });
   el.addEventListener("pointermove", (e) => { if (el.hasPointerCapture(e.pointerId)) input(fromX(e.clientX)); });
-  const end = () => el.classList.remove("dragging");
+  const end = (e: PointerEvent) => {
+    if (!el.classList.contains("dragging")) return;
+    el.classList.remove("dragging");
+    if (e.type === "pointerup") o.onChange?.(value);
+  };
   el.addEventListener("pointerup", end);
   el.addEventListener("pointercancel", end);
   el.addEventListener("keydown", (e) => {
@@ -67,6 +73,7 @@ export function slider(o: SliderOpts): HTMLElement {
     e.preventDefault();
     e.stopPropagation();
     input(to[e.key]!);
+    o.onChange?.(value);
   });
   return el;
 }

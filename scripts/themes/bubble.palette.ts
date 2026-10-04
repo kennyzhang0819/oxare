@@ -33,37 +33,41 @@ export const RAILS = { rail: WHITE, stripe: CYAN };
 export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: GREEN };
 export const TREADMILL = { rod: LIGHT_GREY, groove: DARK_GREY, arrow: ORANGE, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };
-// The soft look's animals (docs/animals.md): the blockade a bunny, the barrier a fish, the pillar a
-// giraffe, fences, rails and rings snakes, the kicker a turtle, the jump pad a frog, the bumper a
-// ladybug, the magnet an octopus, the stool a pig, the bean a caterpillar, the crate a cow, the barrel
-// an owl, the cube a chick, the plank a butterfly, the board a flounder, the seesaw a crocodile, the
-// column a penguin and the support a whale with a spout, each in its own colours, their eyes in ink.
-export const ANIMALS = {
-  eye: 0x1b2f52,
-  // The green dome hovering over every animal the ball can push.
-  push: 0x74e6bb,
-  bunny: { fur: 0xfaf3ea, ear: 0xf8aebd, nose: 0xf8aebd, tooth: 0xffffff },
-  fish: { body: 0xff9b7a, fin: 0xffe566, lip: 0xfff3d1 },
-  giraffe: { hide: 0xffdd6b, spot: 0xff9f4a, muzzle: 0xfff3d1, horn: 0xff9f4a },
-  snake: { skin: 0x9be3b8, band: 0x4caf7d },
-  turtle: { shell: 0x7ccfc4, skin: 0xcde9b8, plate: 0xffe566 },
-  frog: { skin: 0xa9db5e, spot: 0x6fae45 },
-  ladybug: { shell: 0xff6b6b, head: 0xfff3d1 },
-  octopus: { skin: 0xb9a3f0, spot: 0xff6b6b },
-  pig: { skin: 0xf7b5c8, snout: 0xe98aa6 },
-  caterpillar: { skin: 0xff8c8c, band: 0xc9484f },
-  cow: { hide: 0xfaf7f2, patch: 0x1b2f52, muzzle: 0xf2b8c6, horn: 0xf3e6cc },
-  owl: { feather: 0xd8b48e, wing: 0xb08c66, belly: 0xf3e6cc, beak: 0xffa24a },
-  chick: { down: 0xfff0a0, wing: 0xf3d96e, beak: 0xffa24a, blush: 0xf7b5c8 },
-  butterfly: { panel: 0xfff4e6, wing: 0xffa24a, spot: 0xffe566 },
-  flounder: { skin: 0xe8c89a, spot: 0x9c7a56 },
-  pangolin: { body: 0xe9c29b, scale: 0xb98557, plate: 0xf3d3ad, face: 0xfbe6d2, tip: 0xffa24a },
-  crocodile: { skin: 0x5fb3a3, scute: 0x2f6f66, tooth: 0xffffff },
-  penguin: { coat: 0x2f3f5c, flipper: 0x1f2b40, belly: 0xf3f0e6, beak: 0xffa24a },
-  whale: { skin: 0x6f98d6, fin: 0x5a84c4, belly: 0xf3f0e6, water: 0xcfeaff, splash: 0xffffff },
-};
 // The grassy floor (ENV.grass): the turf, the blades over it in two shades, and the odd daisy.
 export const GRASS = { turf: 0x93d07f, dark: 0x6ab45f, light: 0xa3da8c, petal: 0xffffff, pollen: 0xffe566 };
+// The other floors a level or platform can have (level.ts FLOORS), each flat fills only: old steel plates
+// with rivets and rust; soil with mud, dry patches, pebbles and sprouts; flagstones with moss in the joints.
+export const FLOOR = {
+  metal: { plate: [0x8fb0a8, 0x86a8a0, 0x7f9f98], seam: 0x6a8a84, rivet: 0xb2cbc3, rust: 0xc07a4c, rustDark: 0x96573a },
+  soil: { base: 0x9a6b47, mud: 0x7a5236, dry: 0xb5845a, pebble: 0xc9bfae, sprout: 0x6ab45f },
+  stone: { slab: [0xc3c1b0, 0xb5b3a2, 0xcdcbbb], joint: 0x7fb85e, moss: 0x8cc46a },
+};
+// The old structure (column, support): steel painted `paint`, with `seam` lines and `rivet` heads, its
+// paint flaking to `rust` and `rustDark`.
+export const RUIN = { paint: 0x86a8a0, seam: 0x6a8a84, rivet: 0xb2cbc3, rust: 0xc07a4c, rustDark: 0x96573a, lamp: 0xffe3a3, beacon: 0xff5a47 };
+// The apples a level is played for: a red body on a brown stem with a green leaf.
+export const APPLE = { body: 0xe8423a, stem: 0x7a5232, leaf: 0x5cbf4f };
+// Odd things left lying about among the plants, rarely (decor.ts CURIOS): a rubber duck, a soda can, a mug, a
+// traffic cone, a beach ball, a garden gnome. Each list is picked from.
+export const CURIO = {
+  duck: [0xffd84a], beak: [0xff8a2a], eye: [0x2c3b36],
+  can: [0xe8423a, 0x3fb6c9, 0x9b6fd6, 0x5cbf4f], tin: [0xd9e2e6],
+  mug: [0xf6f2ea, 0xf79ac0, 0x6f9fd8, 0xffd86e], coffee: [0x6a4127],
+  cone: [0xff7a2e], stripe: [0xf6f2ea],
+  ballA: [0xe8423a], ballB: [0xffd84a], ballC: [0x3f8fd6],
+  gnome: [0x3f6fc4], hat: [0xe8423a], beard: [0xf6f2ea], face: [0xf2c09a],
+};
+// Decor (decor.ts): the overgrowth scattered along platform edges, columns and supports. Each list is picked from at random.
+export const DECOR = {
+  fern: [0x6fae5a, 0x7cbc63, 0x5f9f58], rust: 0xc9793f, tuft: [0x6ab45f, 0x7cc16a, 0x88c870],
+  stem: 0x5f9f58, flower: [0xb79be0, 0xf2a6c0, 0xf6f2ea, 0xffd86e, 0x8f7fd6],
+  vine: [0x5f9f58, 0x6fae5a, 0x78b562], bloom: [0xc6a9ec, 0xf6f2ea, 0xf2a6c0],
+  bark: [0x8a6a52, 0x6f5442], birch: 0xe6ded0, canopy: [0x4fae4a, 0x5cbf4f, 0x6fcb55], willow: [0x8fd45a, 0xa2dc5e, 0x7cc94e],
+  autumn: [0xf08a2a, 0xe8562e, 0xf5b52e], blossom: [0xf79ac0, 0xff8fb6, 0xf2a6d6], lime: [0xa6d943, 0xb8e04a], deep: [0x2f8a4e, 0x3a9a58], moss: [0x7fb85e, 0x8cc46a],
+  wheat: [0xd9b46a, 0xc89c52, 0xe6c784], straw: 0xb3b872, spire: [0x8f7fd6, 0x6f86d8, 0xc79be0, 0xf2a6c0],
+  heather: [0xb07ccf, 0xc68fd8, 0xe0a3c8], mound: 0x5f9a5a, leaf: [0x4f9a5a, 0x5fae63, 0x69b56a],
+  cap: [0xf08a7a, 0xf6efe3, 0xc9a07a], stalk: 0xf6efe3, clover: [0x8acb6e, 0x9ad47c], ivy: [0x4f8f55, 0x5f9f58, 0x6aab5e],
+};
 
 // Effects, not pieces, keep their own colours: the jump pad's rising squares, the magnet's aura and
 // the ball. (The goal's beam is drawn in its own shader.)
@@ -76,7 +80,7 @@ export const EFFECTS = {
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
 // numbers scene.ts and textures.ts read, so a look is one file.
 export const ENV = {
-  style: "cute" as "lab" | "ice" | "cute",
+  style: "cute" as "lab" | "ice" | "cute" | "ruin",
   props: "soft",
   faces: false,
   floes: false,
@@ -86,6 +90,9 @@ export const ENV = {
   bubbles: 0,
   cloudCover: 0.14,
   fog: 1,
+  mist: false,
+  mistTop: 0xeef2e4,
+  mistBottom: 0x8fbcc0,
   floorRoughness: 0.8,
   toon: true,
   outline: 0.035,

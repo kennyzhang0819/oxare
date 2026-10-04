@@ -2,8 +2,10 @@
 // for a headless browser to frame a camera and read the canvas. Not part of the game.
 import * as THREE from "three";
 import type { Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, initMaterials, makeBall } from "./scene.ts";
+import { buildLevel, createScene, fitSun, hideHullsAround, initMaterials, makeBall, unfadeAll } from "./scene.ts";
+import { NEAR_ON } from "./fade.ts";
 import showcase from "./showcase.json";
+import { LEVELS } from "./levels/index.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -12,13 +14,16 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 initMaterials(renderer);
 const env = createScene();
-const built = buildLevel(showcase as Level, false);
+// `?level=<id>` builds that level in place of the showcase.
+const pick = new URLSearchParams(location.search).get("level");
+const built = buildLevel(LEVELS.find((l) => l.id === pick) ?? (showcase as Level), false);
 const ball = makeBall();
 env.scene.add(built.group, ball.mesh);
 fitSun(env.sun, built);
 const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 500);
 
-interface Shot { w: number; h: number; pos: [number, number, number]; look: [number, number, number]; fov?: number; ball?: [number, number, number] }
+// `play` draws it as the game's own view does: props and plants near the camera see-through.
+interface Shot { w: number; h: number; pos: [number, number, number]; look: [number, number, number]; fov?: number; ball?: [number, number, number]; play?: boolean }
 (window as unknown as { shoot: (s: Shot) => boolean }).shoot = (s) => {
   renderer.setSize(s.w, s.h, false);
   camera.aspect = s.w / s.h;
@@ -30,7 +35,15 @@ interface Shot { w: number; h: number; pos: [number, number, number]; look: [num
   renderer.shadowMap.needsUpdate = true;
   ball.reflect(renderer, env);
   ball.reflect(renderer, env);
+  camera.updateMatrixWorld();
+  unfadeAll(built);
+  if (s.play) {
+    built.group.updateMatrixWorld(true);
+    hideHullsAround(built, camera.position);
+    NEAR_ON.value = 1;
+  }
   env.render(renderer, camera);
+  NEAR_ON.value = 0;
   return true;
 };
 (window as unknown as { ready: boolean; built: unknown; showcase: unknown }).built = built;
