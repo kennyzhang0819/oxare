@@ -255,7 +255,7 @@ function buildBridge(g: THREE.Group, p: Bridge): THREE.Group[] {
     m.castShadow = true;
     return m;
   };
-  const frameGeo = rimFrame(W - 0.08, chain.planks[0]!.len - 0.08, STRIP, LIP);
+  const frameGeo = rimFrame(W - 0.08, chain.planks[0]!.len - 0.08, ENV.props === "soft" ? Math.min(0.3, W * 0.12) : STRIP, LIP);
   frameGeo.rotateX(-Math.PI / 2);
   const out: THREE.Group[] = [];
   for (const pl of chain.planks) {
@@ -327,6 +327,16 @@ function supportBody(top: number, reach: number, ri: number): THREE.BufferGeomet
   return geo;
 }
 
+// The soft stem: one round tube down the middle of the J the lab stem makes, as thick as fits in it.
+const SOFT_STEM_R = Math.min(SUPPORT_W, SUPPORT_D) / 2 - 0.02;
+function softSupportBody(top: number, reach: number, ri: number): THREE.BufferGeometry {
+  const D = SUPPORT_D, T = PLATFORM_THICKNESS, yl1 = -T / 2 + D / 2, zc = -D / 2 - ri, yc = yl1 + ri, rm = ri + D / 2;
+  const pts: THREE.Vector3[] = [new THREE.Vector3(0, top - 0.02, 0), new THREE.Vector3(0, yc, 0)];
+  for (let k = 1; k <= 8; k++) { const a = -(k / 8) * (Math.PI / 2); pts.push(new THREE.Vector3(0, yc + rm * Math.sin(a), zc + rm * Math.cos(a))); }
+  pts.push(new THREE.Vector3(0, -T / 2, -reach - 0.05));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.1), 48, SOFT_STEM_R, 20, false);
+}
+
 // Support pillars: a white column per pillar wearing supportTrim, its foot curving straight into the
 // lower platform's wall. The stem collides as the box from pieceBoxes, the foot and bend as
 // supportHulls and the ears as supportEarHulls.
@@ -368,7 +378,7 @@ function buildSupport(parent: THREE.Group, p: Piece & { type: "support" }) {
   for (const c of supportPillars(p)) {
     const col = new THREE.Group();
     col.position.set(c.x, 0, c.z);
-    const body = new THREE.Mesh(supportBody(c.y1, supportReach(p), supportBend(p)), st.body);
+    const body = new THREE.Mesh(ENV.props === "soft" ? softSupportBody(c.y1, supportReach(p), supportBend(p)) : supportBody(c.y1, supportReach(p), supportBend(p)), st.body);
     body.castShadow = body.receiveShadow = true;
     col.add(body);
     supportTrim(col, c.y1, supportBend(p));
@@ -443,7 +453,7 @@ function softSupportTrim(col: THREE.Group, top: number, bend: number) {
     for (const dy of [-ph * 0.32, ph * 0.32]) {
       const ring = new THREE.Mesh(ringGeo, st.glow);
       ring.rotation.x = Math.PI / 2;
-      ring.scale.set(W / 2 + 0.02, D / 2 + 0.02, 1);
+      ring.scale.set(SOFT_STEM_R + 0.03, SOFT_STEM_R + 0.03, 1);
       ring.position.y = ym + dy;
       col.add(ring);
     }
@@ -486,6 +496,11 @@ class LinkPath extends THREE.Curve<THREE.Vector3> {
 }
 const linkGeometry = () => new THREE.TubeGeometry(new LinkPath(), 64, GATE_LINK.t, 10, true);
 
+// The soft arch: one round tube along the middle of the strip, as thick as fits in it.
+function archTube(strip: [[number, number], [number, number]][]): THREE.BufferGeometry {
+  const pts = strip.map(([o, i]) => new THREE.Vector3((o[0] + i[0]) / 2, (o[1] + i[1]) / 2, 0));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.1), 96, SOFT_STEM_R, 20, false);
+}
 function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   const st = STRUCT!, b = GATE_ROUND, W = SUPPORT_W, D = SUPPORT_D;
   const strip = gateStrip(p, b), shape = new THREE.Shape();
@@ -498,7 +513,7 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   for (const z of [p.d / 2, -p.d / 2]) {
     const arch = new THREE.Group();
     arch.position.z = z;
-    const body = new THREE.Mesh(geo, st.body);
+    const body = new THREE.Mesh(ENV.props === "soft" ? archTube(strip) : geo, st.body);
     body.castShadow = body.receiveShadow = true;
     arch.add(body);
     for (const side of [1, -1]) {
@@ -535,8 +550,12 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
   gateLinks(p).forEach((y, k) => {
     const lg = new THREE.Group();
     lg.position.y = hang.pivot + y;
-    const m = new THREE.Mesh(link, st.body);
+    // Soft: a bead chain, round beads alternating the tint and the light colour.
+    const m = ENV.props === "soft"
+      ? new THREE.Mesh(new THREE.SphereGeometry(GATE_LINK.r + GATE_LINK.t * 0.5, 20, 14), k % 2 ? softMats().tint : st.glow)
+      : new THREE.Mesh(link, st.body);
     m.rotation.y = (k % 2) * (Math.PI / 2);
+    m.castShadow = true;
     lg.add(m);
     g.add(lg);
     out.push(lg);
@@ -601,13 +620,37 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   if (sliding) { g = new THREE.Group(); g.position.x = slide.at; outer.add(g); }
   const stripMat = sliding ? st.plankGlow : KICKER_ORANGE;
   // The rounded solid: the hull of a small sphere at each pulled-in corner.
-  const hull = kickerHull(p), ball = new THREE.SphereGeometry(hull.r, 16, 8).getAttribute("position");
+  const soft = ENV.props === "soft";
+  // Soft: the same wedge drawn with fatter rounding (kickerHull insets it, so it stays inside the solid).
+  const hull = kickerHull(p, soft ? Math.min(0.2, p.h * 0.28, p.w * 0.28, D * 0.28) : undefined), ball = new THREE.SphereGeometry(hull.r, 16, 8).getAttribute("position");
   const pts: THREE.Vector3[] = [];
   for (const [x, y, z] of hull.corners) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
-  const soft = ENV.props === "soft";
-  const body = new THREE.Mesh(new ConvexGeometry(pts), st.body);
+  const body = new THREE.Mesh(new ConvexGeometry(pts), soft ? softMats().tint : st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
+  if (soft) {
+    // A fat rounded tongue in the thrust colour down the slope, standing a little proud, with a
+    // row of round white dots along it.
+    const along = Math.hypot(p.d, p.h), [a0, b0] = kickerSpan(p, 0.5), tw = Math.max(0.3, (b0 - a0) * 0.62), tl = along * 0.74;
+    const tongue = new THREE.Group();
+    tongue.position.set((a0 + b0) / 2, p.h / 2, f / 2);
+    tongue.rotation.x = Math.atan2(p.h, p.d);
+    tongue.add(cushion(tw, tl, 0.05, stripMat));
+    const n = Math.max(2, Math.round(tl / 0.55)), dot = new THREE.CircleGeometry(Math.min(0.09, tw * 0.14), 20).rotateX(-Math.PI / 2);
+    for (let i = 0; i < n; i++) {
+      const d = new THREE.Mesh(dot, st.body);
+      d.position.set(0, 0.052, -tl / 2 + (i + 0.5) * (tl / n));
+      tongue.add(d);
+    }
+    g.add(tongue);
+    if (f > 0.5) {
+      const deck = new THREE.Group();
+      deck.position.set((a0 + b0) / 2, p.h, -p.d / 2);
+      deck.add(cushion(tw, f * 0.8, 0.05, stripMat));
+      g.add(deck);
+    }
+    return sliding ? g : undefined;
+  }
   // A tread `len` long down a group's local z. Stacked within PAINT so paint() keeps the dark
   // plate in view: plate, then stripes, then strips. `at(z)` is the height fraction (see kickerSpan)
   // of the slope at tread z, so on a side kicker it narrows with the solid. The orange strips run the
@@ -1183,23 +1226,24 @@ function cornerDecal(shape: THREE.Shape, mat: THREE.Material, cx: number, cz: nu
 function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   const st = STRUCT!, H = JUMP_H;
   const tw = p.w - 2 * JUMP_RUN, td = p.d - 2 * JUMP_RUN, s = jumpPadSize(p), rt = jumpCorner(p) - JUMP_RUN;
-  const hull = jumpHull(p), ball = new THREE.SphereGeometry(hull.r, 12, 6).getAttribute("position");
+  const soft = ENV.props === "soft";
+  const hull = jumpHull(p, soft ? 0.15 : undefined), ball = new THREE.SphereGeometry(hull.r, 12, 6).getAttribute("position");
   const pts: THREE.Vector3[] = [];
   for (const [x, y, z] of hull.corners) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
-  const body = new THREE.Mesh(new ConvexGeometry(pts), st.body);
+  const body = new THREE.Mesh(new ConvexGeometry(pts), soft ? softMats().tint : st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
   const deck = new THREE.Group();
   deck.position.y = H;
   g.add(deck);
-  if (ENV.props === "soft") {
-    // The launch pad as a round cushion: a coloured disc with a white middle, painted on the top.
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(s * 0.62, 48).rotateX(-Math.PI / 2), KICKER_ORANGE);
-    pad.position.y = LAYER;
-    const mid = new THREE.Mesh(new THREE.CircleGeometry(s * 0.3, 32).rotateX(-Math.PI / 2), st.body);
-    mid.position.y = 2 * LAYER;
+  if (soft) {
+    // The launch pad as a domed button: a squashed sphere in the thrust colour with a white dot on top.
+    const pad = new THREE.Mesh(new THREE.SphereGeometry(s * 0.62, 40, 20), KICKER_ORANGE);
+    pad.scale.y = 0.12;
+    pad.castShadow = true;
+    const mid = new THREE.Mesh(new THREE.CircleGeometry(s * 0.26, 32).rotateX(-Math.PI / 2), st.body);
+    mid.position.y = s * 0.62 * 0.12 + 0.003;
     deck.add(pad, mid);
-    paint(deck, "y");
     const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.035, 8, 48).rotateX(Math.PI / 2);
     for (let k = 1; k <= 3; k++) {
       const ring = new THREE.Mesh(ringGeo, JUMP_HOLO);
@@ -1478,14 +1522,12 @@ function softBarrier(g: THREE.Group) {
     g.add(m);
   }
   if (faced()) { const f = faceDecal(0.8); f.position.set(0, 0.8, D / 2 - 0.02); g.add(f); }
-  const legGeo = new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, y0 + 0.5, 20);
-  for (const [k, x] of [BARRIER_LEG_X, -BARRIER_LEG_X].entries()) {
-    const leg = new THREE.Mesh(legGeo, k ? sm.glaze : st.glow);
-    leg.position.set(x, (y0 + 0.5) / 2, 0);
-    leg.castShadow = true;
-    g.add(leg);
-  }
-  g.add(new THREE.Mesh(new THREE.BoxGeometry(W - 0.6, 0.06, D - 0.2), st.body)).position.y = y0 + 0.2;
+  // One stick from the cloud into the ground, like a lollipop's.
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.9, 20), sm.glaze);
+  stick.position.y = 0.45;
+  stick.castShadow = true;
+  g.add(stick);
+  void W; void y0;
 }
 // Barrel: a pill capsule, white below and tinted above, with a light ring round its middle.
 function softPill(g: THREE.Group, r: number, h: number) {
@@ -1520,6 +1562,16 @@ function softSugar(g: THREE.Group, C: number) {
     d.position.set(x * C * 0.46, y * C * 0.46, z * C * 0.46);
     g.add(d);
   }
+}
+
+// A fat rounded pad lying in the xz plane, `w` by `d`, `t` thick, in `mat`: an extruded rounded
+// rectangle with a bevel all round, so its edge is soft.
+function cushion(w: number, d: number, t: number, mat: THREE.Material): THREE.Mesh {
+  const r = Math.min(w, d) * 0.35, shape = roundRect(new THREE.Shape(), w - 2 * t, d - 2 * t, Math.max(0.01, r - t));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.001, bevelEnabled: true, bevelThickness: t, bevelSize: t, bevelSegments: 4, curveSegments: 10 }).rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = m.receiveShadow = true;
+  return m;
 }
 
 // Sinks details built on a face (the group's local `axis` pointing out of it, 0 on the face) until

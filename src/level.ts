@@ -66,8 +66,8 @@ export const JUMP_REACH = 0.5;
 // radius stays past JUMP_RUN so the top keeps round corners and each ramp corner is a true cone.
 export const JUMP_CORNER = 0.28;
 export const jumpCorner = (p: Piece & { type: "jump" }): number => Math.max(Math.min(p.w, p.d) * JUMP_CORNER, JUMP_RUN + 0.12);
-export function jumpHull(p: Piece & { type: "jump" }): { corners: [number, number, number][]; r: number } {
-  const r = propRound(p.w, JUMP_H, p.d), rb = jumpCorner(p), len = Math.hypot(JUMP_H, JUMP_RUN), n = 12;
+export function jumpHull(p: Piece & { type: "jump" }, round?: number): { corners: [number, number, number][]; r: number } {
+  const r = round ?? propRound(p.w, JUMP_H, p.d), rb = jumpCorner(p), len = Math.hypot(JUMP_H, JUMP_RUN), n = 12;
   // The top outline moved out by u, at height y.
   const ring = (u: number, y: number): [number, number, number][] => {
     const w = p.w - 2 * JUMP_RUN + 2 * u, d = p.d - 2 * JUMP_RUN + 2 * u, rr = Math.max(0, rb - JUMP_RUN + u), out: [number, number, number][] = [];
@@ -248,8 +248,9 @@ export function kickerSpan(p: Piece & { type: "kicker" }, s: number): [number, n
   const width = p.w + ((p.top ?? p.w) - p.w) * Math.max(0, Math.min(1, s));
   return p.mirror ? [-p.w / 2, -p.w / 2 + width] : [p.w / 2 - width, p.w / 2];
 }
-export function kickerHull(p: Piece & { type: "kicker" }): { corners: [number, number, number][]; r: number } {
-  const r = propRound(p.w, p.h, p.d), f = p.flat ?? 0, front = (p.d + f) / 2, back = -front, toe = front + (KICKER_SINK * p.d) / p.h;
+// `round` draws the same wedge with fatter rounding, inset so it stays inside the solid (scene.ts).
+export function kickerHull(p: Piece & { type: "kicker" }, round?: number): { corners: [number, number, number][]; r: number } {
+  const r = round ?? propRound(p.w, p.h, p.d), f = p.flat ?? 0, front = (p.d + f) / 2, back = -front, toe = front + (KICKER_SINK * p.d) / p.h;
   const prof: [number, number][] = f > 0 ? [[toe, -KICKER_SINK], [front - p.d, p.h], [back, p.h], [back, -KICKER_SINK]] : [[toe, -KICKER_SINK], [back, p.h], [back, -KICKER_SINK]];
   let area = 0;
   prof.forEach(([z, y], i) => { const [z2, y2] = prof[(i + 1) % prof.length]!; area += z * y2 - z2 * y; });

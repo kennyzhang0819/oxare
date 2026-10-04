@@ -34,4 +34,6 @@ interface Shot { w: number; h: number; pos: [number, number, number]; look: [num
   env.render(renderer, camera);
   return true;
 };
+(window as unknown as { ready: boolean; built: unknown; showcase: unknown }).built = built;
+(window as unknown as { showcase: unknown }).showcase = showcase;
 (window as unknown as { ready: boolean }).ready = true;
