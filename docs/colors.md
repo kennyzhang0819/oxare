@@ -1,19 +1,19 @@
 # Colors
 
-Every color a level's pieces are drawn in lives in `src/palette.ts`. The pieces use only these, and each piece's group there (`PROPS`, `PLATFORM`, `BOARD`, `CRATE`, ...) just says which of them it wears. Change one and everything wearing it follows.
+Every color a level's pieces are drawn in lives in `src/palette.ts`. The game currently wears the `bubble-emo` look (`scripts/themes/bubble-emo.palette.ts`: the cute pattern family on soft prop bodies, cel shaded with an ink outline, under the deep polar sky); the slot names below keep their lab-era names, so `CYAN` is the lemon light and `BLACK` the blue side strip. The pieces use only these, and each piece's group there (`PROPS`, `PLATFORM`, `BOARD`, `CRATE`, ...) just says which of them it wears. Change one and everything wearing it follows.
 
 | Color | Value | Worn by |
 |---|---|---|
-| `WHITE` | #e9eef3 | platform lips, rims and tiles, the bodies of nearly every prop, pillars, supports, columns, gates and their links, barriers, rings, fences and rails, the start pad, circuit-board pads, the crate's plate and the shine on its screen, the cube's top plate, a bean's bands and dots |
-| `BLACK` | #343b43 | reserved: the goal disc, the platforms' side strip and the magnet (groove and upper disc), and nothing else |
-| `LIGHT_GREY` | #b4bdc5 | light accents: circuit-board traces and chips, the line under a platform's lip and along it, pillar rings and support bars, blockade plates, barrier grilles, goal spokes and hub, plank tint, the crate's screen, the cube's rims and octagon plates, treadmill rods, a bean's rounded ends |
-| `DARK_GREY` | #5f6975 | dark accents: the circuit board itself, prop trim and panel edges, every kicker's tread (sliding ones too), the stool's screens, jump pad vents, hinges, pillar slats and support trim, the crate's cross and screen frame, the cube's faces (on its own and under a gate), the treadmill rods' grooves and its opening's walls, a bean's dotted body |
-| `CYAN` | #2fe6ff | the light strip on everything that glows, and the rails' stripe |
-| `GREEN` | #3fe87a | planks', bridges' and sliding pieces' light, the crate's corners, the cube's rim lines and octagon borders |
-| `ORANGE` | #ff7a2e | the kicker's strips, the treadmill's chevrons |
-| `RED` | #ff2b2b | the bumper's band, the magnet's light, a bean's stripes |
-| `DARK_RED` | #6e2630 | the magnet's lower disc |
-| `TUBE_GLASS` | #5ad2e6 | tubes, hoops and the pane of a glass slab |
+| `WHITE` | #fdfeff | platform lips, rims and tiles, the bodies of nearly every prop, pillars, supports, columns, gates and their links, barriers, rings, fences and rails, the start pad, circuit-board pads, the crate's plate and the shine on its screen, the cube's top plate, a bean's bands and dots |
+| `BLACK` | #3f74c4 | reserved: the goal disc, the platforms' side strip and the magnet (groove and upper disc), and nothing else |
+| `LIGHT_GREY` | #e3f0ff | light accents: circuit-board traces and chips, the line under a platform's lip and along it, pillar rings and support bars, blockade plates, barrier grilles, goal spokes and hub, plank tint, the crate's screen, the cube's rims and octagon plates, treadmill rods, a bean's rounded ends |
+| `DARK_GREY` | #86b1ea | dark accents: the circuit board itself, prop trim and panel edges, every kicker's tread (sliding ones too), the stool's screens, jump pad vents, hinges, pillar slats and support trim, the crate's cross and screen frame, the cube's faces (on its own and under a gate), the treadmill rods' grooves and its opening's walls, a bean's dotted body |
+| `CYAN` | #ffe566 | the light strip on everything that glows, and the rails' stripe |
+| `GREEN` | #74e6bb | planks', bridges' and sliding pieces' light, the crate's corners, the cube's rim lines and octagon borders |
+| `ORANGE` | #ffa24a | the kicker's strips, the treadmill's chevrons |
+| `RED` | #ff6b6b | the bumper's band, the magnet's light, a bean's stripes |
+| `DARK_RED` | #d14a4a | the magnet's lower disc |
+| `TUBE_GLASS` | #cfeaff | tubes, hoops and the pane of a glass slab |
 
 Floor tiles are `WHITE` in `TILE_SHADES` (5) fixed shades, each `TILE_STEP` (1.2%) darker; every tile takes one, its top and left edge two steps lighter, bottom and right two darker. Planks use the same tiles tinted `LIGHT_GREY`.
 
