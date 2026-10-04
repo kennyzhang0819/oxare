@@ -561,6 +561,7 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   const hull = kickerHull(p), ball = new THREE.SphereGeometry(hull.r, 16, 8).getAttribute("position");
   const pts: THREE.Vector3[] = [];
   for (const [x, y, z] of hull.corners) for (let i = 0; i < ball.count; i++) pts.push(new THREE.Vector3(x + ball.getX(i), y + ball.getY(i), z + ball.getZ(i)));
+  const soft = ENV.props === "soft";
   const body = new THREE.Mesh(new ConvexGeometry(pts), st.body);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
@@ -584,9 +585,20 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
       shape.quadraticCurveTo(c.x, c.y, to.x, to.y);
     });
     shape.closePath();
-    const plate = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), sliding ? SLIDE_TREAD : st.tread);
+    const plate = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), soft ? stripMat : sliding ? SLIDE_TREAD : st.tread);
     plate.position.y = LAYER;
     t.add(plate);
+    if (soft) {
+      // The tongue: the coloured plate alone, with a row of round white dots down its middle.
+      const n = Math.max(2, Math.round(pl / 0.5));
+      for (let i = 0; i < n; i++) {
+        const z = -pl / 2 + (i + 0.5) * (pl / n), [a, b] = edge(z, M + 0.05);
+        const dot = new THREE.Mesh(new THREE.CircleGeometry(Math.min(0.1, (b - a) * 0.15), 20).rotateX(-Math.PI / 2), st.body);
+        dot.position.set((a + b) / 2, 2 * LAYER, z);
+        t.add(dot);
+      }
+      return t;
+    }
     // Light stripes as thick as the dark between them, each kept inside the plate's rounded corners.
     const sl = pl - ml - 0.1, n = Math.max(3, Math.round(sl / 0.22)), pitch = sl / n;
     for (let i = 0; i < n; i++) {
@@ -632,7 +644,7 @@ function buildKicker(g: THREE.Group, p: Piece & { type: "kicker" }, editor: bool
   }
   // The back panel fits the back face where it is narrowest, under the top edge.
   const [ba, bb] = kickerSpan(p, (p.h - 0.15) / p.h);
-  if (bb - ba > 0.6) {
+  if (bb - ba > 0.6 && !soft) {
     const back = new THREE.Mesh(new THREE.BoxGeometry(bb - ba - 0.4, Math.max(0.1, p.h - 0.3), 0.08), [st.top, st.top, st.top, st.top, st.barrierPanel, st.barrierPanel]);
     back.position.set((ba + bb) / 2, p.h / 2, -(D / 2 - 0.04 + PAINT));
     g.add(back);
@@ -898,10 +910,21 @@ function buildStool(g: THREE.Group, p: Piece & { type: "stool" }, editor: boolea
   }
   const block = new THREE.Group();
   block.position.set(on(slide.at)[0], h / 2 + 0.02, on(slide.at)[1]);
-  const sr = propRound(w, h, d);
-  const body = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, sr), st.body);
+  const sr = ENV.props === "soft" ? Math.min(w, h, d) * 0.3 : propRound(w, h, d);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, ENV.props === "soft" ? 6 : 3, sr), st.body);
   body.castShadow = body.receiveShadow = true;
   block.add(body);
+  if (ENV.props === "soft") {
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * sr, 0.02, d - 2 * sr), [st.top, st.top, st.stoolTop, st.top, st.top, st.top]);
+    top.position.y = h / 2 - 0.01 + PAINT;
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(Math.min(w, d) * 0.5, 0.05, 10, 48), st.plankGlow);
+    belt.rotation.x = Math.PI / 2;
+    belt.position.y = -h / 2 + sr * 0.6;
+    belt.scale.set(w / Math.min(w, d), d / Math.min(w, d), 1);
+    block.add(top, belt);
+    g.add(block);
+    return block;
+  }
   // The base ring and top board are painted on the block's flat faces, clear of its rounding.
   const ring = new THREE.Mesh(new THREE.BoxGeometry(w - 2 * sr, 0.1, d + 2 * PAINT), st.plankGlow);
   ring.position.y = -h / 2 + sr + 0.06;
@@ -1076,6 +1099,22 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
   const deck = new THREE.Group();
   deck.position.y = H;
   g.add(deck);
+  if (ENV.props === "soft") {
+    // The launch pad as a round cushion: a coloured disc with a white middle, painted on the top.
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(s * 0.62, 48).rotateX(-Math.PI / 2), KICKER_ORANGE);
+    pad.position.y = LAYER;
+    const mid = new THREE.Mesh(new THREE.CircleGeometry(s * 0.3, 32).rotateX(-Math.PI / 2), st.body);
+    mid.position.y = 2 * LAYER;
+    deck.add(pad, mid);
+    paint(deck, "y");
+    const ringGeo = new THREE.TorusGeometry(s * 0.62, 0.035, 8, 48).rotateX(Math.PI / 2);
+    for (let k = 1; k <= 3; k++) {
+      const ring = new THREE.Mesh(ringGeo, JUMP_HOLO);
+      ring.position.y = (k * JUMP_REACH) / 3;
+      deck.add(ring);
+    }
+    return;
+  }
   // Launch square: a light frame, the dark grille, an orange rim, all painted on the top, their
   // corners rounded alike.
   const square = new THREE.Group(), rs = ventRound(s, s);
@@ -1139,18 +1178,18 @@ function buildJump(g: THREE.Group, p: Piece & { type: "jump" }) {
 
 const BEAM_MAT = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-  uniforms: { height: { value: GOAL_BEAM_H }, time: { value: 0 } },
+  uniforms: { height: { value: GOAL_BEAM_H }, time: { value: 0 }, tint: { value: new THREE.Color(PROPS.cyan) } },
   vertexShader: `varying float vY; varying vec3 vN, vV;
     void main(){ vY = position.y; vec4 wp = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - wp.xyz);
       gl_Position = projectionMatrix * viewMatrix * wp; }`,
-  fragmentShader: `uniform float height, time; varying float vY; varying vec3 vN, vV;
+  fragmentShader: `uniform float height, time; uniform vec3 tint; varying float vY; varying vec3 vN, vV;
     void main(){
       // Bright at the disc, thinning quickly with height.
       float t = clamp(vY / height, 0.0, 1.0);
       float fade = pow(1.0 - t, 3.0);
       float rim = abs(dot(vN, vV));
       float a = fade * (0.035 + 0.2 * pow(rim, 1.5));
-      vec3 col = mix(vec3(0.18, 0.85, 1.0), vec3(0.8, 1.0, 1.0), rim * 0.6);
+      vec3 col = mix(tint, vec3(1.0), rim * 0.6);
       gl_FragColor = vec4(col * a, a);
       #include <colorspace_fragment>
     }`,
@@ -1915,7 +1954,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     if (p.type === "fence") buildFence(p, g);
     if (p.type === "rails") buildRailsPiece(p, g, level);
     if (p.type === "spinner") {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
+      const bar = new THREE.Mesh(ENV.props === "soft" ? new RoundedBoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH, 6, SPINNER_WIDTH * 0.48) : new THREE.BoxGeometry(p.length, SPINNER_HEIGHT, SPINNER_WIDTH), SPINNER_MAT);
       bar.position.y = SPINNER_HEIGHT / 2;
       bar.castShadow = true;
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(SPINNER_HUB_R, SPINNER_HUB_R, SPINNER_HEIGHT + 0.05, 48), mat.block);
@@ -1960,18 +1999,21 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
 let TOON_RAMP: THREE.DataTexture | null = null;
 const TOON_CACHE = new Map<THREE.Material, THREE.Material>();
 let OUTLINE_MAT: THREE.MeshBasicMaterial | null = null;
-function toonOf(m: THREE.Material): THREE.Material {
-  if (!(m instanceof THREE.MeshStandardMaterial) || m instanceof THREE.MeshPhysicalMaterial) return m;
-  const hit = TOON_CACHE.get(m);
-  if (hit) return hit;
+function toonRamp(): THREE.DataTexture {
   if (!TOON_RAMP) {
     TOON_RAMP = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1);
     TOON_RAMP.minFilter = TOON_RAMP.magFilter = THREE.NearestFilter;
     TOON_RAMP.needsUpdate = true;
   }
+  return TOON_RAMP;
+}
+function toonOf(m: THREE.Material): THREE.Material {
+  if (!(m instanceof THREE.MeshStandardMaterial) || m instanceof THREE.MeshPhysicalMaterial) return m;
+  const hit = TOON_CACHE.get(m);
+  if (hit) return hit;
   const t = new THREE.MeshToonMaterial({
     color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
-    transparent: m.transparent, opacity: m.opacity, side: m.side, depthWrite: m.depthWrite, gradientMap: TOON_RAMP,
+    transparent: m.transparent, opacity: m.opacity, side: m.side, depthWrite: m.depthWrite, gradientMap: toonRamp(),
   });
   TOON_CACHE.set(m, t);
   return t;
@@ -2042,18 +2084,29 @@ export function makeBall(): Ball {
   const maps = ballTextures();
   const target = new THREE.WebGLCubeRenderTarget(128);
   const cube = new THREE.CubeCamera(0.2, 400, target);
+  const geo = new THREE.SphereGeometry(BALL_RADIUS, 48, 24);
+  // The toy ball is lit in steps like the pieces and wears the ink outline; it mirrors nothing.
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(BALL_RADIUS, 48, 24),
-    new THREE.MeshPhysicalMaterial({
-      map: maps.map, roughnessMap: maps.roughness, roughness: 1, metalness: 1,
-      emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1 * ENV.glow,
-      envMap: target.texture, envMapIntensity: 1.2, clearcoat: 0.6, clearcoatRoughness: 0.15,
-    }),
+    geo,
+    EFFECTS.ball.cute && ENV.toon
+      ? new THREE.MeshToonMaterial({ map: maps.map, gradientMap: toonRamp() })
+      : new THREE.MeshPhysicalMaterial({
+        map: maps.map, roughnessMap: maps.roughness, roughness: 1, metalness: 1,
+        emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1 * ENV.glow,
+        envMap: target.texture, envMapIntensity: 1.2, clearcoat: 0.6, clearcoatRoughness: 0.15,
+      }),
   );
   mesh.castShadow = true;
+  if (EFFECTS.ball.cute && ENV.outline > 0) {
+    OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor);
+    const hull = new THREE.Mesh(geo, OUTLINE_MAT);
+    hull.userData.outline = true;
+    mesh.add(hull);
+  }
   return {
     mesh,
     reflect(renderer, env) {
+      if (EFFECTS.ball.cute && ENV.toon) return;
       cube.position.copy(mesh.position);
       mesh.visible = false;
       const auto = renderer.shadowMap.autoUpdate;

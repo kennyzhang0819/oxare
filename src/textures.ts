@@ -17,6 +17,7 @@ function seeded(seed: number): () => number {
 
 export function tileTexture(anisotropy: number): THREE.Texture {
   if (ENV.floes) return iceTileTexture(anisotropy);
+  if (ENV.style === "cute") return padTileTexture(anisotropy);
   const n = 16, px = 64;
   const tints = ENV.tileTints;
   const mixc = (a: number, b: number, t: number) => [16, 8, 0].reduce((o, sh) => o | (Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t) << sh), 0);
@@ -44,6 +45,34 @@ export function tileTexture(anisotropy: number): THREE.Texture {
       ctx.lineWidth = 3;
       ctx.strokeRect(x * px + 1.5, y * px + 1.5, w * px - 3, px - 3);
     }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
+// Pads: the floor as big soft rounded squares, two to a side of the repeat, each a hair lighter
+// than the shallow groove between them and shaded softly toward its edge, so the surface reads as
+// quilted sections rather than tiles. Pads pick from the pastel tints when there are any.
+function padTileTexture(anisotropy: number): THREE.Texture {
+  const S = 1024, N = 2, cell = S / N, gap = 36, r = 120;
+  const [c, ctx] = canvas(S, S);
+  const rnd = seeded(41);
+  const mixc = (a: number, b: number, t: number) => [16, 8, 0].reduce((o, sh) => o | (Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t) << sh), 0);
+  ctx.fillStyle = css(shade(PLATFORM.tile, 0.955)); ctx.fillRect(0, 0, S, S);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const tints = ENV.tileTints, base = tints ? mixc(PLATFORM.tile, tints[(i + j * N + Math.floor(rnd() * 2)) % tints.length]!, 0.5) : PLATFORM.tile;
+    const x = i * cell + gap / 2, y = j * cell + gap / 2, w = cell - gap;
+    // Soft edge: a slightly darker pad under a slightly smaller lighter one, blurred.
+    ctx.save();
+    ctx.shadowColor = "rgba(40,60,90,0.18)"; ctx.shadowBlur = 28; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = css(shade(base, 0.985)); ctx.beginPath(); ctx.roundRect(x, y, w, w, r); ctx.fill();
+    ctx.restore();
+    const g = ctx.createRadialGradient(x + w * 0.4, y + w * 0.35, w * 0.1, x + w / 2, y + w / 2, w * 0.75);
+    g.addColorStop(0, css(shade(base, 1.01))); g.addColorStop(1, css(shade(base, 0.975)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 2, y + 2, w - 4, w - 4, r - 2); ctx.fill();
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -109,14 +138,17 @@ export function beltTextures(): { map: THREE.Texture; glow: THREE.Texture } {
     const [c, ctx] = canvas(U, V);
     ctx.fillStyle = glow ? "#000" : css(TREADMILL.rod);
     ctx.fillRect(0, 0, U, V);
-    if (!glow) {
+    const cute = ENV.style === "cute";
+    if (!glow && !cute) {
       ctx.fillStyle = css(TREADMILL.groove);
       for (let k = 0; k < 8; k++) ctx.fillRect((k * U) / 8, 0, 3, V);
     }
     ctx.strokeStyle = css(TREADMILL.arrow);
+    ctx.fillStyle = css(TREADMILL.arrow);
     ctx.lineWidth = 10;
     ctx.lineJoin = "miter";
     for (const [cx, cy] of [[U * 0.25, V * 0.25], [U * 0.75, V * 0.75]] as const) {
+      if (cute) { ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill(); continue; }
       const dx = 44, dy = 70, t = 34;
       ctx.beginPath();
       ctx.moveTo(cx + dx, cy - dy); ctx.lineTo(cx - dx, cy); ctx.lineTo(cx + dx, cy + dy);
@@ -209,14 +241,18 @@ function cuteEdgeTextures(): EdgeMaps {
   const [c, ctx] = canvas(W, H);
   const [e, ectx] = canvas(W, H);
   const Y = (v: number) => Math.round((1 - v) * H);
-  const band = (t: CanvasRenderingContext2D, v0: number, v1: number, col: string) => { t.fillStyle = col; t.fillRect(0, Y(v1), W, Y(v0) - Y(v1)); };
   ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, H);
-  band(ctx, 0, 1, css(PLATFORM.lip));
-  band(ctx, 0.3, 0.72, css(PLATFORM.recess));
-  ctx.fillStyle = css(shade(PLATFORM.recess, 1.12));
-  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc((i + 0.5) * (W / 4), (Y(0.3) + Y(0.72)) / 2, 22, 0, Math.PI * 2); ctx.fill(); }
+  // White top lip; everything below it one blue slab, so the side is a single soft wall.
+  ctx.fillStyle = css(PLATFORM.lip); ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = css(PLATFORM.recess); ctx.fillRect(0, Y(0.74), W, H - Y(0.74));
+  // Scallops hanging from the top of the wall, one a unit, in a lighter blue; a soft dot under each.
+  const pitch = W / 4, sr = pitch * 0.5;
+  ctx.fillStyle = css(shade(PLATFORM.recess, 1.22));
+  ctx.fillRect(0, Y(0.74), W, Y(0.6) - Y(0.74));
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc((i + 0.5) * pitch, Y(0.6), sr, 0, Math.PI); ctx.fill(); }
   for (const t of [ctx, ectx]) {
-    t.fillStyle = css(PROPS.cyan); t.beginPath(); t.roundRect(-10, Y(0.56), W + 20, Y(0.46) - Y(0.56), 8); t.fill();
+    t.fillStyle = css(PROPS.cyan);
+    for (let i = 0; i < 4; i++) { t.beginPath(); t.arc((i + 0.5) * pitch, Y(0.27), 9, 0, Math.PI * 2); t.fill(); }
   }
   const mk = (cv: HTMLCanvasElement) => {
     const t = new THREE.CanvasTexture(cv);
@@ -322,11 +358,11 @@ function drawKawaii(ctx: Ctx, px: number, py: number, pw: number, ph: number, se
   ctx.fillStyle = C.shine; ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(ox, oy, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
   if (ENV.faces) kawaii(ctx, ox, oy, s, C.eye, C.blush, C.shine);
   else { star(ctx, ox, oy, s * 0.7, C.shine); star(ctx, ox, oy, s * 0.42, C.blush); }
-  if (pw / ph > 2.2) for (const f of [0.14, 0.86]) heart(ctx, px + pw * f, oy, s * 0.5, C.blush);
+  if (pw / ph > 2.2) for (const f of [0.14, 0.86]) { ctx.fillStyle = C.blush; ctx.beginPath(); ctx.arc(px + pw * f, oy, s * 0.4, 0, Math.PI * 2); ctx.fill(); }
   for (let i = 0, tries = 0; i < 7 && tries < 60; tries++) {
     const x = px + 8 + rnd() * (pw - 16), y = py + 8 + rnd() * (ph - 16), r = 2.5 + rnd() * 3;
     if (Math.hypot(x - ox, y - oy) < s * 1.5 || (round && Math.hypot(x - ox, y - oy) > R - 9)) continue;
-    if (rnd() < 0.5) heart(ctx, x, y, r, C.blush); else star(ctx, x, y, r, C.shine);
+    if (rnd() < 0.5) { ctx.fillStyle = C.blush; ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, Math.PI * 2); ctx.fill(); } else star(ctx, x, y, r, C.shine);
     i++;
   }
   ctx.fillStyle = C.blush;
@@ -593,7 +629,10 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
   ring(g, rim(0.3), rim(0.55), css(PROPS.cyan));
   const [centre, cc] = canvas(S, S);
   cc.fillStyle = css(START_PAD.centre); cc.fillRect(0, 0, S, S);
-  for (let i = 5; i >= 1; i--) {
+  if (ENV.style === "cute") {
+    cc.fillStyle = css(START_PAD.centreLight); cc.beginPath(); cc.arc(c0, c0, R * 0.6, 0, Math.PI * 2); cc.fill();
+    star(cc, c0, c0, R * 0.36, css(START_PAD.groove));
+  } else for (let i = 5; i >= 1; i--) {
     cc.fillStyle = css(i % 2 ? START_PAD.centreDark : START_PAD.centreLight);
     cc.beginPath(); cc.arc(c0, c0, R * (i / 5) * 0.96, 0, Math.PI * 2); cc.fill();
     cc.strokeStyle = css(START_PAD.groove); cc.lineWidth = 4; cc.stroke();
@@ -773,7 +812,8 @@ function cutePillar(ctx: Ctx, PW: number, PH: number) {
     ctx.fillStyle = css(PILLAR.slate); ctx.beginPath(); ctx.roundRect(-10, y, PW + 20, 30, 10); ctx.fill();
     ctx.fillStyle = css(PROPS.cyan); ctx.beginPath(); ctx.roundRect(-10, y + 11, PW + 20, 8, 4); ctx.fill();
   }
-  for (let k = 0; k < 6; k++) heart(ctx, (k + 0.5) * (PW / 6), 106, 13, css(PILLAR.slate));
+  ctx.fillStyle = css(PILLAR.slate);
+  for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.arc((k + 0.5) * (PW / 6), 106, 11, 0, Math.PI * 2); ctx.fill(); }
 }
 
 // A kawaii face on a clear background, for a decal on a soft prop.
@@ -794,6 +834,13 @@ function goalDisc(): THREE.Texture {
   const [c, ctx] = canvas(S, S);
   ctx.fillStyle = css(GOAL.disc);
   ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.fill();
+  if (ENV.style === "cute") {
+    ctx.fillStyle = css(GOAL.spokes); ctx.beginPath(); ctx.arc(S / 2, S / 2, S * 0.38, 0, Math.PI * 2); ctx.fill();
+    star(ctx, S / 2, S / 2, S * 0.3, css(GOAL.hub));
+    const tx = new THREE.CanvasTexture(c);
+    tx.colorSpace = THREE.SRGBColorSpace;
+    return tx;
+  }
   ctx.strokeStyle = css(GOAL.spokes);
   ctx.lineWidth = 3;
   for (let k = 0; k < 8; k++) {
@@ -825,12 +872,14 @@ export function beanTexture(r: number, len: number): THREE.Texture {
     ctx.fillRect(0, px(a), W, px(b) - px(a));
     ctx.fillRect(0, px(len - b), W, px(b) - px(a));
   };
-  const in0 = r + 0.17;
+  const in0 = r + 0.17, cute = ENV.style === "cute";
   band(0, len / 2, BEAN.cap);
   band(in0, len / 2, BEAN.body);
-  band(r - 0.05, r, BEAN.stripe);
-  band(r, r + 0.12, BEAN.band);
-  band(r + 0.12, in0, BEAN.stripe);
+  if (!cute) {
+    band(r - 0.05, r, BEAN.stripe);
+    band(r, r + 0.12, BEAN.band);
+    band(r + 0.12, in0, BEAN.stripe);
+  }
   // Dots: rows centred on the middle, columns an even share of the way round, every other row
   // shifted half a column, each dot drawn again a turn either side so one crossing the seam joins up.
   const cols = Math.max(4, Math.round(circ / BEAN_COL)), colW = circ / cols, mid = len / 2;
@@ -840,7 +889,7 @@ export function beanTexture(r: number, len: number): THREE.Texture {
     const y = mid + (i - (rows - 1) / 2) * BEAN_ROW, off = i % 2 ? colW / 2 : 0;
     for (let j = 0; j < cols; j++) for (const turn of [-circ, 0, circ]) {
       ctx.beginPath();
-      ctx.arc(px(j * colW + off + turn), px(y), px(BEAN_DOT), 0, 2 * Math.PI);
+      ctx.arc(px(j * colW + off + turn), px(y), px(cute ? BEAN_DOT * 1.7 : BEAN_DOT), 0, 2 * Math.PI);
       ctx.fill();
     }
   }
@@ -969,7 +1018,19 @@ export function ballTextures(): BallMaps {
       }
     });
   };
-  if (EFFECTS.ball.chrome) {
+  if (EFFECTS.ball.cute) {
+    // A toy ball: one pastel colour with big white spots, six round the middle and one at each pole,
+    // each drawn as the ellipse a round spot becomes on the unwrapped sphere.
+    ctx.fillStyle = css(EFFECTS.ball.mid); ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = css(EFFECTS.ball.dash);
+    const spot = (lon: number, lat: number, ang: number) => {
+      const x = ((lon + Math.PI) / (2 * Math.PI)) * W, y = (0.5 - lat / Math.PI) * H, ry = (ang / Math.PI) * H, rx = ry / Math.max(0.2, Math.cos(lat));
+      for (const wrap of [-W, 0, W]) { ctx.beginPath(); ctx.ellipse(x + wrap, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
+    };
+    for (let k = 0; k < 6; k++) spot((k / 6) * 2 * Math.PI, (k % 2 ? 1 : -1) * 0.42, 0.34);
+    ctx.fillRect(0, 0, W, (0.34 / Math.PI) * H * 0.55); ctx.fillRect(0, H - (0.34 / Math.PI) * H * 0.55, W, (0.34 / Math.PI) * H * 0.55);
+    rctx.fillStyle = "#909090"; rctx.fillRect(0, 0, W, H);
+  } else if (EFFECTS.ball.chrome) {
     // A plain polished ball: one colour, mirror-smooth, no lines or lights.
     ctx.fillStyle = css(EFFECTS.ball.mid); ctx.fillRect(0, 0, W, H);
     rctx.fillStyle = "#141414"; rctx.fillRect(0, 0, W, H);

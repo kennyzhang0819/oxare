@@ -39,7 +39,7 @@ export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY
 export const EFFECTS = {
   jumpHolo: 0xffd27a,
   magnetAura: 0xff2a4a,
-  ball: { light: 0xd3dde8, mid: 0xd3dde8, dark: 0xd3dde8, bevel: 0xd3dde8, groove: 0xd3dde8, dash: 0xd3dde8, chrome: true },
+  ball: { light: 0xd3dde8, mid: 0xd3dde8, dark: 0xd3dde8, bevel: 0xd3dde8, groove: 0xd3dde8, dash: 0xd3dde8, chrome: true, cute: false },
 };
 
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
