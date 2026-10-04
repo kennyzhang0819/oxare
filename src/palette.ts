@@ -59,9 +59,15 @@ export const ENV = {
   tileWide: 2, tileGrout: null as number | null,
   // Which family of drawn patterns the pieces wear: the lab's mosaic, slats and circuit boards, or
   // the ice pack's floes, frost and snowflakes.
-  style: "lab" as "lab" | "ice",
-  // Weather: rain streaks (how many; 0 for none), extra cloud cover, a fog multiplier, the floor's finish.
-  rain: 0, cloudCover: 0, fog: 1, floorRoughness: 0.85,
+  style: "lab" as "lab" | "ice" | "cute",
+  // The ice pack's floes on the floor (off: the smooth mosaic), and pastel tints the mosaic's tiles
+  // pick from (null: shades of the tile colour).
+  floes: false, tileTints: null as number[] | null,
+  // Weather: rain streaks and bubbles (how many; 0 for none), extra cloud cover, a fog multiplier,
+  // the floor's finish.
+  rain: 0, bubbles: 0, cloudCover: 0, fog: 1, floorRoughness: 0.85,
+  // Cel shading (stepped light) and an ink outline this wide round every solid, in this colour.
+  toon: false, outline: 0, outlineColor: 0x000000,
 };
 
 // As a CSS colour, for canvas textures.

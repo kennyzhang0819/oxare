@@ -16,8 +16,10 @@ function seeded(seed: number): () => number {
 }
 
 export function tileTexture(anisotropy: number): THREE.Texture {
-  if (ENV.style === "ice") return iceTileTexture(anisotropy);
+  if (ENV.floes) return iceTileTexture(anisotropy);
   const n = 16, px = 64;
+  const tints = ENV.tileTints;
+  const mixc = (a: number, b: number, t: number) => [16, 8, 0].reduce((o, sh) => o | (Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t) << sh), 0);
   const [c, ctx] = canvas(n * px, n * px);
   const rnd = seeded(7);
   const taken = new Set<number>();
@@ -28,12 +30,13 @@ export function tileTexture(anisotropy: number): THREE.Texture {
     if (wide) for (let i = 1; i < ENV.tileWide; i++) taken.add(y * n + x + i);
     const w = wide ? ENV.tileWide : 1;
     const k = 1 - (1 + Math.floor(rnd() * TILE_SHADES)) * TILE_STEP;
-    ctx.fillStyle = css(shade(PLATFORM.tile, k));
+    const base = tints ? mixc(PLATFORM.tile, tints[Math.floor(rnd() * tints.length)]!, 0.6) : PLATFORM.tile;
+    ctx.fillStyle = css(shade(base, k));
     ctx.fillRect(x * px, y * px, w * px, px);
-    ctx.fillStyle = css(shade(PLATFORM.tile, k + 2 * TILE_STEP));
+    ctx.fillStyle = css(shade(base, k + 2 * TILE_STEP));
     ctx.fillRect(x * px, y * px, w * px, 2);
     ctx.fillRect(x * px, y * px, 2, px);
-    ctx.fillStyle = css(shade(PLATFORM.tile, k - 2 * TILE_STEP));
+    ctx.fillStyle = css(shade(base, k - 2 * TILE_STEP));
     ctx.fillRect(x * px, y * px + px - 2, w * px, 2);
     ctx.fillRect((x + w) * px - 2, y * px, 2, px);
     if (ENV.tileGrout !== null) {
@@ -137,6 +140,7 @@ export interface EdgeMaps { map: THREE.Texture; glow: THREE.Texture }
 // line each side of the dark recess. Holes use the same strip on their inner walls.
 export function edgeTextures(): EdgeMaps {
   if (ENV.style === "ice") return iceEdgeTextures();
+  if (ENV.style === "cute") return cuteEdgeTextures();
   const W = 8, H = 256;
   const [c, ctx] = canvas(W, H);
   const [e, ectx] = canvas(W, H);
@@ -182,12 +186,38 @@ function iceEdgeTextures(): EdgeMaps {
   // Icicles: translucent streaks from the top of the water band, and a few short ones up from the bottom.
   for (let i = 0; i < 22; i++) {
     const x = rnd() * W, w = 4 + rnd() * 10, len = (0.2 + rnd() * 0.45) * (0.72 - 0.3);
-    ctx.fillStyle = css(shade(PLATFORM.recess, 3.2)); ctx.globalAlpha = 0.45 + rnd() * 0.35;
+    ctx.fillStyle = css(shade(PLATFORM.recess, 2.6)); ctx.globalAlpha = 0.3 + rnd() * 0.3;
     ctx.beginPath(); ctx.moveTo(x - w / 2, Y(0.72)); ctx.lineTo(x + w / 2, Y(0.72)); ctx.lineTo(x, Y(0.72 - len)); ctx.closePath(); ctx.fill();
   }
   ctx.globalAlpha = 1;
   band(ctx, 0.28, 0.3, line); band(ctx, 0.72, 0.74, line);
   band(ctx, 0.495, 0.525, core); band(ectx, 0.495, 0.525, core);
+  const mk = (cv: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.LinearFilter;
+    return t;
+  };
+  return { map: mk(c), glow: mk(e) };
+}
+
+// Cute edge: pale lips over one soft pastel band carrying a single fat rounded light line and a
+// row of big faint polka dots; nothing thin, nothing sharp.
+function cuteEdgeTextures(): EdgeMaps {
+  const W = 256, H = 256;
+  const [c, ctx] = canvas(W, H);
+  const [e, ectx] = canvas(W, H);
+  const Y = (v: number) => Math.round((1 - v) * H);
+  const band = (t: CanvasRenderingContext2D, v0: number, v1: number, col: string) => { t.fillStyle = col; t.fillRect(0, Y(v1), W, Y(v0) - Y(v1)); };
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, H);
+  band(ctx, 0, 1, css(PLATFORM.lip));
+  band(ctx, 0.3, 0.72, css(PLATFORM.recess));
+  ctx.fillStyle = css(shade(PLATFORM.recess, 1.12));
+  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc((i + 0.5) * (W / 4), (Y(0.3) + Y(0.72)) / 2, 22, 0, Math.PI * 2); ctx.fill(); }
+  for (const t of [ctx, ectx]) {
+    t.fillStyle = css(PROPS.cyan); t.beginPath(); t.roundRect(-10, Y(0.56), W + 20, Y(0.46) - Y(0.56), 8); t.fill();
+  }
   const mk = (cv: HTMLCanvasElement) => {
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -222,6 +252,7 @@ function canvas2x(w: number, h: number): [HTMLCanvasElement, Ctx] {
 function circuitPanel(ctx: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, K = 2.7, round = false) {
   ctx.save(); ctx.translate(px, py); ctx.scale(K, K);
   if (ENV.style === "ice") drawFrost(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
+  else if (ENV.style === "cute") drawKawaii(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
   else drawBoard(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
   ctx.restore();
 }
@@ -241,6 +272,65 @@ function flake(ctx: Ctx, cx: number, cy: number, r: number, col: string, lw: num
   ctx.beginPath();
   for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3 + Math.PI / 6; ctx.lineTo(r * 0.16 * Math.cos(a), r * 0.16 * Math.sin(a)); }
   ctx.closePath(); ctx.stroke();
+  ctx.restore();
+}
+
+// A heart, point down, r tall about (cx, cy).
+function heart(ctx: Ctx, cx: number, cy: number, r: number, col: string) {
+  ctx.fillStyle = col; ctx.beginPath();
+  ctx.moveTo(cx, cy + r * 0.55);
+  ctx.bezierCurveTo(cx - r * 1.1, cy - r * 0.25, cx - r * 0.55, cy - r * 0.95, cx, cy - r * 0.35);
+  ctx.bezierCurveTo(cx + r * 0.55, cy - r * 0.95, cx + r * 1.1, cy - r * 0.25, cx, cy + r * 0.55);
+  ctx.fill();
+}
+// A five-point star of radius r.
+function star(ctx: Ctx, cx: number, cy: number, r: number, col: string) {
+  ctx.fillStyle = col; ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r; ctx.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); }
+  ctx.closePath(); ctx.fill();
+}
+// A kawaii face: two big round eyes with a highlight, round blush, a small open smile.
+function kawaii(ctx: Ctx, cx: number, cy: number, s: number, eye: string, blush: string, shine: string) {
+  const ex = s * 0.42, ey = -s * 0.08, er = s * 0.17;
+  for (const sgn of [-1, 1]) {
+    ctx.fillStyle = eye; ctx.beginPath(); ctx.ellipse(cx + sgn * ex, cy + ey, er, er * 1.25, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shine; ctx.beginPath(); ctx.arc(cx + sgn * ex - er * 0.3, cy + ey - er * 0.45, er * 0.32, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = blush; ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.ellipse(cx + sgn * s * 0.62, cy + s * 0.3, s * 0.17, s * 0.1, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = eye; ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(cx, cy + s * 0.22, s * 0.16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+}
+
+// The cute panel in place of the circuit board: a rounded pastel plate with a kawaii face in the
+// middle, hearts and stars around it, and two round pips. A wide panel gets a heart at each end.
+function drawKawaii(ctx: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, round = false) {
+  const rnd = seeded(seed);
+  const C = { edge: css(BOARD.edge), board: css(BOARD.board), blush: css(BOARD.trace), shine: css(BOARD.pad), eye: css(BOARD.chip) };
+  const ox = px + pw / 2, oy = py + ph / 2, R = Math.min(pw, ph) / 2;
+  ctx.save();
+  if (round) {
+    ctx.fillStyle = C.edge; ctx.beginPath(); ctx.arc(ox, oy, R + 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.board; ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.clip();
+  } else {
+    ctx.fillStyle = C.edge; ctx.fillRect(px - 4, py - 4, pw + 8, ph + 8);
+    ctx.fillStyle = C.board; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, Math.min(10, R * 0.4)); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(px, py, pw, ph, Math.min(10, R * 0.4)); ctx.clip();
+  }
+  const s = cpu * 1.1;
+  // A soft lighter disc behind the face.
+  ctx.fillStyle = C.shine; ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.arc(ox, oy, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  kawaii(ctx, ox, oy, s, C.eye, C.blush, C.shine);
+  if (pw / ph > 2.2) for (const f of [0.14, 0.86]) heart(ctx, px + pw * f, oy, s * 0.5, C.blush);
+  for (let i = 0, tries = 0; i < 7 && tries < 60; tries++) {
+    const x = px + 8 + rnd() * (pw - 16), y = py + 8 + rnd() * (ph - 16), r = 2.5 + rnd() * 3;
+    if (Math.hypot(x - ox, y - oy) < s * 1.5 || (round && Math.hypot(x - ox, y - oy) > R - 9)) continue;
+    if (rnd() < 0.5) heart(ctx, x, y, r, C.blush); else star(ctx, x, y, r, C.shine);
+    i++;
+  }
+  ctx.fillStyle = C.blush;
+  const pxp = round ? ox - 5 : px + 8, pyp = round ? oy + R - 12 : py + ph - 8;
+  for (const dx of [0, 8]) { ctx.beginPath(); ctx.arc(pxp + dx, pyp, 2.2, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();
 }
 
@@ -519,6 +609,7 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
 // round each corner, right at the edge so it wraps the rounded corner.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
   if (ENV.style === "ice") return iceCrateFaces();
+  if (ENV.style === "cute") return cuteCrateFaces();
   const S = 256;
   const [c, ctx] = canvas2x(S, S);
   const [e, ectx] = canvas2x(S, S);
@@ -588,6 +679,31 @@ function iceCrateFaces(): [THREE.Texture, THREE.Texture] {
   return [mk(c), mk(e)];
 }
 
+// Cute crate face: a macaron: a pastel body, a big rounded plate with a kawaii face, polka dots
+// round it, and fat rounded glowing brackets on the corners.
+function cuteCrateFaces(): [THREE.Texture, THREE.Texture] {
+  const S = 256;
+  const [c, ctx] = canvas2x(S, S);
+  const [e, ectx] = canvas2x(S, S);
+  const rnd = seeded(37);
+  ctx.fillStyle = css(CRATE.body); ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = css(CRATE.screen); ctx.globalAlpha = 0.9;
+  for (let i = 0; i < 14; i++) { const x = rnd() * S, y = rnd() * S; if (Math.hypot(x - S / 2, y - S / 2) > 112) { ctx.beginPath(); ctx.arc(x, y, 5 + rnd() * 5, 0, Math.PI * 2); ctx.fill(); } }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = css(CRATE.cross); ctx.beginPath(); ctx.roundRect(44, 44, 168, 168, 54); ctx.fill();
+  ctx.fillStyle = css(CRATE.shine); ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.roundRect(56, 54, 144, 60, 30); ctx.fill(); ctx.globalAlpha = 1;
+  kawaii(ctx, S / 2, S / 2 + 6, 62, css(CRATE.screen), css(CRATE.light), css(CRATE.shine));
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, S, S);
+  const arm = 56, t = 18;
+  for (const target of [ctx, ectx]) {
+    target.fillStyle = css(CRATE.light);
+    for (const [x, y] of [[0, 0], [S - arm, 0], [0, S - t], [S - arm, S - t]] as const) { target.beginPath(); target.roundRect(x, y, arm, t, 9); target.fill(); }
+    for (const [x, y] of [[0, 0], [S - t, 0], [0, S - arm], [S - t, S - arm]] as const) { target.beginPath(); target.roundRect(x, y, t, arm, 9); target.fill(); }
+  }
+  const mk = (cv: HTMLCanvasElement) => { const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; return tx; };
+  return [mk(c), mk(e)];
+}
+
 // Cube faces, one square each: slate, with an octagon in the middle, a plate inside a green glowing
 // border of three dashes a side (a pale plate, on every face) or one solid line (a white plate, on
 // the top). Each with its glow map.
@@ -636,6 +752,26 @@ function icePillar(ctx: Ctx, PW: number, PH: number) {
     ctx.fillStyle = css(PROPS.cyan); ctx.fillRect(0, y + 9.5, PW, 3);
   }
   for (let k = 0; k < 3; k++) flake(ctx, (k + 0.5) * (PW / 3), 104, 30, css(PILLAR.slate), 2.4);
+}
+
+// Cute pillar wrap: soft diagonal candy stripes, two fat pastel bands each with a rounded light
+// line, and a row of hearts between them.
+function cutePillar(ctx: Ctx, PW: number, PH: number) {
+  ctx.fillStyle = css(PILLAR.white); ctx.fillRect(0, 0, PW, PH);
+  ctx.fillStyle = css(PILLAR.pale);
+  const n = 8, w = PW / n;
+  for (let k = 0; k < n; k++) {
+    ctx.beginPath(); ctx.moveTo(k * w, PH); ctx.lineTo(k * w + w * 0.5, PH); ctx.lineTo(k * w + w * 0.5 + PH * 0.35, 0); ctx.lineTo(k * w + PH * 0.35, 0); ctx.closePath(); ctx.fill();
+  }
+  // The stripes wrap: the ones that run off the right come back in on the left.
+  for (let k = 0; k < 2; k++) {
+    ctx.beginPath(); ctx.moveTo(k * w - PW, PH); ctx.lineTo(k * w + w * 0.5 - PW, PH); ctx.lineTo(k * w + w * 0.5 + PH * 0.35 - PW, 0); ctx.lineTo(k * w + PH * 0.35 - PW, 0); ctx.closePath(); ctx.fill();
+  }
+  for (const y of [18, 162]) {
+    ctx.fillStyle = css(PILLAR.slate); ctx.beginPath(); ctx.roundRect(-10, y, PW + 20, 30, 10); ctx.fill();
+    ctx.fillStyle = css(PROPS.cyan); ctx.beginPath(); ctx.roundRect(-10, y + 11, PW + 20, 8, 4); ctx.fill();
+  }
+  for (let k = 0; k < 6; k++) heart(ctx, (k + 0.5) * (PW / 6), 106, 13, css(PILLAR.slate));
 }
 
 // Goal base: dark disc with light spokes and a hub.
@@ -749,6 +885,7 @@ export function structTextures(): StructMaps {
   pctx.fillRect(0, 0, PW, PH);
   const period = PW / SLATS;
   if (ENV.style === "ice") icePillar(pctx, PW, PH);
+  else if (ENV.style === "cute") cutePillar(pctx, PW, PH);
   else for (let t = 0; t < 3; t++) {
     const b = t * (BAND + GAP + TIER + GAP), y0 = b + BAND + GAP;
     pctx.fillStyle = css(PROPS.cyan);

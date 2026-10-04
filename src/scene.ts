@@ -1260,11 +1260,14 @@ export function createScene(fog = FOG_PLAY * ENV.fog): SceneEnv {
   const sun = addLights(scene);
   const rain = ENV.rain > 0 ? makeRain(ENV.rain) : null;
   if (rain) scene.add(rain.lines);
+  const bubbles = ENV.bubbles > 0 ? makeBubbles(ENV.bubbles) : null;
+  if (bubbles) scene.add(bubbles.points);
   const t0 = performance.now();
   // Sky and sea ride along with the camera; their shaders work in world space so nothing swims.
   const tick = (camera: THREE.Camera) => {
     const t = (performance.now() - t0) / 1000;
     rain?.tick(camera, t);
+    bubbles?.tick(camera, t);
     sky.position.copy(camera.position);
     (sky.material as THREE.ShaderMaterial).uniforms.time!.value = t;
     ocean.position.set(camera.position.x, OCEAN_Y, camera.position.z);
@@ -1439,6 +1442,52 @@ function makeRain(n: number): { lines: THREE.LineSegments; tick(camera: THREE.Ca
         pos[i * 6 + 3] = x + slant.x; pos[i * 6 + 4] = y + slant.y; pos[i * 6 + 5] = z + slant.z;
       }
       (geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    },
+  };
+}
+
+// Bubbles: n soap bubbles (a drawn ring with a highlight) of mixed sizes drifting slowly up and
+// sideways through a box that rides with the camera.
+const BUBBLE_BOX = { w: 50, h: 30, d: 50 }, BUBBLE_RISE = 0.9;
+function makeBubbles(n: number): { points: THREE.Object3D; tick(camera: THREE.Camera, t: number): void } {
+  const S = 128, c = document.createElement("canvas");
+  c.width = c.height = S;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(S / 2, S / 2, S * 0.3, S / 2, S / 2, S * 0.48);
+  g.addColorStop(0, "rgba(255,255,255,0.05)"); g.addColorStop(0.8, "rgba(255,255,255,0.18)"); g.addColorStop(1, "rgba(255,255,255,0.0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(S / 2, S / 2, S * 0.44, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath(); ctx.ellipse(S * 0.36, S * 0.34, S * 0.09, S * 0.055, -0.7, 0, Math.PI * 2); ctx.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  // Three sizes of bubble, each its own point cloud (a point cloud has one size).
+  const sizes = [0.45, 0.9, 1.6], points = new THREE.Group(), clouds: { pos: Float32Array; seeds: Float32Array; geo: THREE.BufferGeometry; size: number }[] = [];
+  for (const size of sizes) {
+    const m = Math.round(n / sizes.length), seeds = new Float32Array(m * 3), pos = new Float32Array(m * 3);
+    for (let i = 0; i < m * 3; i++) seeds[i] = Math.random();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ map: tex, size, transparent: true, opacity: 0.85, depthWrite: false, sizeAttenuation: true, fog: true });
+    const cloud = new THREE.Points(geo, mat);
+    cloud.frustumCulled = false;
+    cloud.userData.noShadow = true;
+    points.add(cloud);
+    clouds.push({ pos, seeds, geo, size });
+  }
+  return {
+    points: points as unknown as THREE.Points,
+    tick(camera, t) {
+      const cp = camera.position;
+      for (const { pos, seeds, geo, size } of clouds) {
+        for (let i = 0; i < seeds.length / 3; i++) {
+          pos[i * 3] = cp.x + (seeds[i * 3]! - 0.5) * BUBBLE_BOX.w + Math.sin(t * 0.3 + i) * 0.6;
+          pos[i * 3 + 1] = cp.y - BUBBLE_BOX.h * 0.45 + ((seeds[i * 3 + 1]! * BUBBLE_BOX.h + t * BUBBLE_RISE * size) % BUBBLE_BOX.h);
+          pos[i * 3 + 2] = cp.z + (seeds[i * 3 + 2]! - 0.5) * BUBBLE_BOX.d + Math.cos(t * 0.23 + i * 1.7) * 0.6;
+        }
+        (geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+      }
     },
   };
 }
@@ -1690,10 +1739,60 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built): Built 
     o.receiveShadow = true;
     o.castShadow = !mats.every((m) => !m.map && m.emissiveIntensity > 0 && m.emissive.getHex() === m.color.getHex());
   });
+  if (ENV.toon || ENV.outline > 0) stylize(group);
   for (const g of reuse?.pieceGroups ?? []) {
     if (!kept.has(g)) g.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
   }
   return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, beltRods: beltRodMeshes, goal };
+}
+
+// Cel shading: every standard material becomes a toon material with the same maps and glow, lit
+// in three steps; and an ink outline: an inside-out copy of each solid mesh pushed out along its
+// normals by ENV.outline. Shared materials convert once, so meshes keep sharing.
+let TOON_RAMP: THREE.DataTexture | null = null;
+const TOON_CACHE = new Map<THREE.Material, THREE.Material>();
+let OUTLINE_MAT: THREE.MeshBasicMaterial | null = null;
+function toonOf(m: THREE.Material): THREE.Material {
+  if (!(m instanceof THREE.MeshStandardMaterial) || m instanceof THREE.MeshPhysicalMaterial) return m;
+  const hit = TOON_CACHE.get(m);
+  if (hit) return hit;
+  if (!TOON_RAMP) {
+    TOON_RAMP = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1);
+    TOON_RAMP.minFilter = TOON_RAMP.magFilter = THREE.NearestFilter;
+    TOON_RAMP.needsUpdate = true;
+  }
+  const t = new THREE.MeshToonMaterial({
+    color: m.color, map: m.map, emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
+    transparent: m.transparent, opacity: m.opacity, side: m.side, depthWrite: m.depthWrite, gradientMap: TOON_RAMP,
+  });
+  TOON_CACHE.set(m, t);
+  return t;
+}
+export function stylize(root: THREE.Object3D): void {
+  const hulls: [THREE.Mesh, THREE.Mesh][] = [];
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || o.userData.outline) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const solid = mats.every((m) => m instanceof THREE.MeshStandardMaterial && !m.transparent && !(m instanceof THREE.MeshPhysicalMaterial));
+    if (ENV.toon) o.material = Array.isArray(o.material) ? o.material.map(toonOf) : toonOf(o.material);
+    if (ENV.outline > 0 && solid && !o.userData.noShadow) {
+      OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor);
+      const geo = o.geometry.clone();
+      geo.clearGroups();
+      const hull = new THREE.Mesh(geo, OUTLINE_MAT);
+      hull.userData.outline = true;
+      hull.userData.noShadow = true;
+      hulls.push([o, hull]);
+    }
+  });
+  for (const [o, hull] of hulls) o.add(hull);
+}
+function outlineMaterial(width: number, color: number): THREE.MeshBasicMaterial {
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `vec3 transformed = vec3(position) + normal * ${width.toFixed(4)};`);
+  };
+  return m;
 }
 
 const ROUTE_MAT = new THREE.LineBasicMaterial({ color: 0x5dffa8, transparent: true, opacity: 0.9, depthTest: false });
