@@ -984,8 +984,9 @@ function buildBean(g: THREE.Group, p: Bean, editor: boolean): THREE.Group {
   bean.add(body);
   if (ENV.props === "soft") {
     // The plain capsule in the tint and one round button in the hazard colour on top of its middle.
+    // beanAt lays the capsule's axis flat by turning local y to +x, which leaves local -x pointing up.
     const button = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 10), softMats().glaze);
-    button.position.y = p.r - 0.03;
+    button.position.x = -(p.r - 0.03);
     bean.add(button);
   }
   g.add(bean);
