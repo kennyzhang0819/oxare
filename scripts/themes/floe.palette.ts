@@ -10,7 +10,7 @@ export const RED = 0xff2a4a, DARK_RED = 0x5a1030;
 export const TUBE_GLASS = 0xcfeefb;
 
 // Floor tiles: the white in TILE_SHADES fixed shades, each a step darker; every tile takes one.
-export const TILE_SHADES = 5, TILE_STEP = 0.02;
+export const TILE_SHADES = 5, TILE_STEP = 0.012;
 
 export const PROPS = { white: WHITE, grey: DARK_GREY, tread: DARK_GREY, hinge: DARK_GREY, cyan: CYAN, green: GREEN };
 // Supports, columns and gates take the pillar's colours.
@@ -39,13 +39,13 @@ export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY
 export const EFFECTS = {
   jumpHolo: 0xffd27a,
   magnetAura: 0xff2a4a,
-  ball: { light: 0xb04a7a, mid: 0x7a1a44, dark: 0x3a0a20, bevel: 0xb04a7a, groove: 0x200510, dash: 0xffd27a, chrome: false },
+  ball: { light: 0xd3dde8, mid: 0xd3dde8, dark: 0xd3dde8, bevel: 0xd3dde8, groove: 0xd3dde8, dash: 0xd3dde8, chrome: true },
 };
 
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
 // numbers scene.ts and textures.ts read, so a look is one file.
 export const ENV = {
-  style: "lab" as "lab" | "ice" | "cute",
+  style: "ice" as "lab" | "ice" | "cute",
   floes: false,
   tileTints: null as number | null,
   rain: 0,
@@ -74,7 +74,7 @@ export const ENV = {
   lightRoughness: 0.4,
   bodyRoughness: 0.3,
   tileWide: 2,
-  tileGrout: 0xa9cfe0,
+  tileGrout: null as number | null,
 };
 
 // As a CSS colour, for canvas textures.
@@ -82,3 +82,6 @@ export const css = (c: number): string => `#${c.toString(16).padStart(6, "0")}`;
 // The colour scaled by k (below 1 darker), for shades of one colour.
 export const shade = (c: number, k: number): number =>
   [16, 8, 0].reduce((out, s) => out | (Math.max(0, Math.min(255, Math.round(((c >> s) & 255) * k))) << s), 0);
+
+// Theme overrides.
+Object.assign(BOARD, { edge: DARK_GREY, board: BLACK, trace: CYAN, pad: WHITE, hole: BLACK, chip: GREEN, chipTop: WHITE });
