@@ -52,7 +52,7 @@ export const ENV = {
   tileTints: [0xd0dff0, 0xd6e5f4, 0xd9dcf2, 0xd3e9ee],
   rain: 0,
   bubbles: 0,
-  cloudCover: 0.12,
+  cloudCover: 0.18,
   fog: 1,
   floorRoughness: 0.8,
   toon: true,

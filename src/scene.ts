@@ -1464,7 +1464,8 @@ const START_MAT = new THREE.MeshBasicMaterial({ color: 0xffd23f, wireframe: true
 // The sky dome lives on this layer: the main camera skips it and sees the low-res sky
 // buffer as the background instead; the ball's cube camera draws it directly.
 export const SKY_LAYER = 1;
-const SKY_SCALE = 1 / 3;
+// Cel clouds have crisp edges, so they get a finer buffer than the soft ones need.
+const SKY_SCALE = ENV.toon ? 1 / 2 : 1 / 3;
 
 export interface SceneEnv {
   scene: THREE.Scene; sun: THREE.DirectionalLight; tick(camera: THREE.Camera): void;
@@ -1629,7 +1630,9 @@ function makeSky(): THREE.Mesh {
             const int STEPS = 36;
             float len = min(t1 - t0, 160.0), dt = len / float(STEPS);
             // A quarter-step blue-ish jitter breaks up any residual slice without reading as grain.
-            float t = t0 + dt * (0.35 + 0.3 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))));
+            // Cel clouds take no jitter: hard edges would show it as speckle.
+            float t = t0 + dt * (toon > 0.5 ? 0.5 : 0.35 + 0.3 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))));
+            float far = 1.0 - exp(-t0 * 0.0016);
             vec3 acc = vec3(0.0);
             float trans = 1.0;
             for (int i = 0; i < STEPS; i++) {
@@ -1643,8 +1646,8 @@ function makeSky(): THREE.Mesh {
                 float shade = exp(-cs * shape(cs, hs) * 2.4);
                 float h = (p.y - cloudY) / (cloudTop - cloudY);
                 // Cel clouds: two flat tones and a hard edge, so they read as drawn puffs.
-                vec3 light = toon > 0.5 ? mix(cloudShade, cloud, step(0.5, shade)) : mix(cloudShade, cloud, shade) * (0.86 + 0.14 * h);
-                float a = toon > 0.5 ? step(0.14, den) * 0.45 : 1.0 - exp(-den * dt * 0.14);
+                vec3 light = toon > 0.5 ? mix(cloudShade, cloud, smoothstep(0.42, 0.58, shade)) : mix(cloudShade, cloud, shade) * (0.86 + 0.14 * h);
+                float a = toon > 0.5 ? smoothstep(0.06 + 0.3 * far, 0.26 + 0.3 * far, den) * 0.45 : 1.0 - exp(-den * dt * 0.14);
                 acc += trans * a * light;
                 trans *= 1.0 - a;
                 if (trans < 0.03) break;
