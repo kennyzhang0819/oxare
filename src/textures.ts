@@ -16,6 +16,7 @@ function seeded(seed: number): () => number {
 }
 
 export function tileTexture(anisotropy: number): THREE.Texture {
+  if (ENV.style === "ice") return iceTileTexture(anisotropy);
   const n = 16, px = 64;
   const [c, ctx] = canvas(n * px, n * px);
   const rnd = seeded(7);
@@ -41,6 +42,53 @@ export function tileTexture(anisotropy: number): THREE.Texture {
       ctx.strokeRect(x * px + 1.5, y * px + 1.5, w * px - 3, px - 3);
     }
   }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
+// Ice pack: a few irregular floes to the texture (one repeat is TILE units), split by dark-water
+// seams, each floe a slightly different white, darkening a little toward its seams, hairline
+// cracks across. Toroidal distances keep the pattern seamless.
+function iceTileTexture(anisotropy: number): THREE.Texture {
+  const S = 1024, N = 10, SEAM = 7;
+  const [c, ctx] = canvas(S, S);
+  const rnd = seeded(23);
+  const sites = Array.from({ length: N }, () => ({ x: rnd() * S, y: rnd() * S, k: 1 - rnd() * 0.045 }));
+  const seam = ENV.tileGrout ?? shade(PLATFORM.tile, 0.7);
+  const img = ctx.createImageData(S, S), d = img.data;
+  const rgb = (col: number): [number, number, number] => [(col >> 16) & 255, (col >> 8) & 255, col & 255];
+  const [sr, sg, sb] = rgb(seam);
+  const sm = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let d1 = Infinity, d2 = Infinity, near = 0;
+    for (let i = 0; i < N; i++) {
+      let dx = Math.abs(x - sites[i]!.x), dy = Math.abs(y - sites[i]!.y);
+      if (dx > S / 2) dx = S - dx;
+      if (dy > S / 2) dy = S - dy;
+      const dd = Math.hypot(dx, dy);
+      if (dd < d1) { d2 = d1; d1 = dd; near = i; } else if (dd < d2) d2 = dd;
+    }
+    const edge = d2 - d1;
+    const f = sm(0, SEAM, edge);
+    const bevel = 1 - 0.07 * (1 - sm(SEAM, SEAM + 90, edge));
+    const grain = 1 + ((((x * 1103515245 + y * 12345) >>> 0) % 1000) / 1000 - 0.5) * 0.02;
+    const [r, g, b] = rgb(shade(PLATFORM.tile, sites[near]!.k * bevel * grain));
+    const o = (y * S + x) * 4;
+    d[o] = sr + (r - sr) * f; d[o + 1] = sg + (g - sg) * f; d[o + 2] = sb + (b - sb) * f; d[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  // Hairline cracks: short bent lines inside the floes.
+  ctx.strokeStyle = css(shade(PLATFORM.tile, 0.84)); ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.globalAlpha = 0.6;
+  for (let i = 0; i < 16; i++) {
+    let x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    for (let k = 0; k < 3; k++) { const l = 30 + rnd() * 70; a += (rnd() - 0.5) * 1.2; x += Math.cos(a) * l; y += Math.sin(a) * l; ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -88,6 +136,7 @@ export interface EdgeMaps { map: THREE.Texture; glow: THREE.Texture }
 // flipped platform looks the same: under each white lip a grey strip, then a cyan light
 // line each side of the dark recess. Holes use the same strip on their inner walls.
 export function edgeTextures(): EdgeMaps {
+  if (ENV.style === "ice") return iceEdgeTextures();
   const W = 8, H = 256;
   const [c, ctx] = canvas(W, H);
   const [e, ectx] = canvas(W, H);
@@ -104,6 +153,41 @@ export function edgeTextures(): EdgeMaps {
   band(0.62, 0.67, cyan, true);
   band(0.67, 0.72, line);
   band(0.72, 1, lip);
+  const mk = (cv: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.LinearFilter;
+    return t;
+  };
+  return { map: mk(c), glow: mk(e) };
+}
+
+// Ice edge: pale lips over a band of deep water seen through the ice, lighter toward the top,
+// with icicle streaks hanging from its top edge and one glowing core line through its middle.
+function iceEdgeTextures(): EdgeMaps {
+  const W = 256, H = 256;
+  const [c, ctx] = canvas(W, H);
+  const [e, ectx] = canvas(W, H);
+  const rnd = seeded(5);
+  const Y = (v: number) => Math.round((1 - v) * H);
+  const band = (t: CanvasRenderingContext2D, v0: number, v1: number, col: string | CanvasGradient) => { t.fillStyle = col; t.fillRect(0, Y(v1), W, Y(v0) - Y(v1)); };
+  const lip = css(PLATFORM.lip), line = css(PLATFORM.lipLine), core = css(PROPS.cyan);
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, W, H);
+  band(ctx, 0, 1, lip);
+  const g = ctx.createLinearGradient(0, Y(0.3), 0, Y(0.72));
+  g.addColorStop(0, css(shade(PLATFORM.recess, 0.8)));
+  g.addColorStop(1, css(shade(PLATFORM.recess, 2.1)));
+  band(ctx, 0.3, 0.72, g);
+  // Icicles: translucent streaks from the top of the water band, and a few short ones up from the bottom.
+  for (let i = 0; i < 22; i++) {
+    const x = rnd() * W, w = 4 + rnd() * 10, len = (0.2 + rnd() * 0.45) * (0.72 - 0.3);
+    ctx.fillStyle = css(shade(PLATFORM.recess, 3.2)); ctx.globalAlpha = 0.45 + rnd() * 0.35;
+    ctx.beginPath(); ctx.moveTo(x - w / 2, Y(0.72)); ctx.lineTo(x + w / 2, Y(0.72)); ctx.lineTo(x, Y(0.72 - len)); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  band(ctx, 0.28, 0.3, line); band(ctx, 0.72, 0.74, line);
+  band(ctx, 0.495, 0.525, core); band(ectx, 0.495, 0.525, core);
   const mk = (cv: HTMLCanvasElement) => {
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -137,7 +221,71 @@ function canvas2x(w: number, h: number): [HTMLCanvasElement, Ctx] {
 // chip's size before that scaling. `round` makes it a round board inside the rectangle.
 function circuitPanel(ctx: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, K = 2.7, round = false) {
   ctx.save(); ctx.translate(px, py); ctx.scale(K, K);
-  drawBoard(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
+  if (ENV.style === "ice") drawFrost(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
+  else drawBoard(ctx, 0, 0, pw / K, ph / K, seed, cpu, round);
+  ctx.restore();
+}
+
+// A six-armed snowflake: arms with two pairs of side branches and a small hexagon at the heart.
+function flake(ctx: Ctx, cx: number, cy: number, r: number, col: string, lw: number) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (let k = 0; k < 6; k++) {
+    ctx.save(); ctx.rotate((k * Math.PI) / 3);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r, 0); ctx.stroke();
+    for (const [at, len] of [[0.42, 0.3], [0.68, 0.2]] as const) for (const sgn of [1, -1]) {
+      ctx.beginPath(); ctx.moveTo(r * at, 0); ctx.lineTo(r * at + r * len * Math.cos(Math.PI / 3), sgn * r * len * Math.sin(Math.PI / 3)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.beginPath();
+  for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3 + Math.PI / 6; ctx.lineTo(r * 0.16 * Math.cos(a), r * 0.16 * Math.sin(a)); }
+  ctx.closePath(); ctx.stroke();
+  ctx.restore();
+}
+
+// The ice pack's panel in place of the circuit board: deep water under a frosted frame, soft
+// aurora bands across it, a pale snowflake in the middle inside a thin ring of light and a dashed
+// outer ring, frost sparkles around, and two coloured pips. A wide panel gets a small flake at each end.
+function drawFrost(ctx: Ctx, px: number, py: number, pw: number, ph: number, seed: number, cpu: number, round = false) {
+  const rnd = seeded(seed);
+  const C = { edge: css(BOARD.edge), board: css(BOARD.board), ring: css(BOARD.trace), ice: css(BOARD.pad), pip: css(BOARD.chip) };
+  const ox = px + pw / 2, oy = py + ph / 2, R = Math.min(pw, ph) / 2;
+  ctx.save();
+  if (round) {
+    ctx.fillStyle = C.edge; ctx.beginPath(); ctx.arc(ox, oy, R + 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.clip();
+  } else {
+    ctx.fillStyle = C.edge; ctx.fillRect(px - 4, py - 4, pw + 8, ph + 8);
+    ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+  }
+  ctx.fillStyle = C.board; ctx.fillRect(px - 4, py - 4, pw + 8, ph + 8);
+  // Aurora: two soft bands, one in the ring's colour and one in the pips', drifting at a slight tilt.
+  for (const [col, v, h] of [[C.ring, 0.3, 0.22], [C.pip, 0.66, 0.18]] as const) {
+    const y = py + ph * v, g = ctx.createLinearGradient(0, y - ph * h, 0, y + ph * h);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.5, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.save(); ctx.globalAlpha = 0.22; ctx.translate(ox, y); ctx.rotate(-0.08); ctx.translate(-ox, -y);
+    ctx.fillStyle = g; ctx.fillRect(px - pw, y - ph * h, pw * 3, ph * h * 2); ctx.restore();
+  }
+  const r = cpu * 0.95;
+  flake(ctx, ox, oy, r, C.ice, 2);
+  ctx.strokeStyle = C.ring; ctx.lineWidth = 1.2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(ox, oy, r * 1.3, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(ox, oy, r * 1.55, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  if (pw / ph > 2.2) for (const f of [0.17, 0.83]) flake(ctx, px + pw * f, oy, r * 0.55, C.ice, 1.6);
+  // Sparkles: small four-point stars away from the flake.
+  ctx.strokeStyle = C.ice; ctx.lineWidth = 1; ctx.globalAlpha = 0.85;
+  for (let i = 0, tries = 0; i < 12 && tries < 80; tries++) {
+    const x = px + 6 + rnd() * (pw - 12), y = py + 6 + rnd() * (ph - 12), s = 2 + rnd() * 2.5;
+    if (Math.hypot(x - ox, y - oy) < r * 1.9 || (round && Math.hypot(x - ox, y - oy) > R - 8)) continue;
+    ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke();
+    i++;
+  }
+  ctx.globalAlpha = 1;
+  // Two pips in a corner, like the board's status lights.
+  const pxp = round ? ox - 6 : px + 7, pyp = round ? oy + R - 14 : py + ph - 9;
+  ctx.fillStyle = C.pip;
+  for (const dx of [0, 7]) { ctx.beginPath(); ctx.roundRect(pxp + dx, pyp, 5, 2.8, 1.4); ctx.fill(); }
   ctx.restore();
 }
 
@@ -370,6 +518,7 @@ function padTextures(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Text
 // up and down to a tab at each edge, a framed screen where they cross, and a green bracket glowing
 // round each corner, right at the edge so it wraps the rounded corner.
 function crateFaces(): [THREE.Texture, THREE.Texture] {
+  if (ENV.style === "ice") return iceCrateFaces();
   const S = 256;
   const [c, ctx] = canvas2x(S, S);
   const [e, ectx] = canvas2x(S, S);
@@ -400,6 +549,45 @@ function crateFaces(): [THREE.Texture, THREE.Texture] {
   return [mk(c), mk(e)];
 }
 
+// Ice crate face: a block of ice with a deep frozen window in its middle (lighter toward the top,
+// as if lit from above), a snowflake frozen inside, cracks running out of the window's corners,
+// and a glowing rounded bracket on each corner.
+function iceCrateFaces(): [THREE.Texture, THREE.Texture] {
+  const S = 256;
+  const [c, ctx] = canvas2x(S, S);
+  const [e, ectx] = canvas2x(S, S);
+  const rnd = seeded(29);
+  ctx.fillStyle = css(CRATE.body); ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 30; i++) {
+    ctx.fillStyle = css(shade(CRATE.body, rnd() < 0.5 ? 0.95 : 1.04)); ctx.globalAlpha = 0.3 + rnd() * 0.3;
+    const x = rnd() * S, y = rnd() * S; ctx.fillRect(x, y, 3 + rnd() * 10, 20 + rnd() * 60);
+  }
+  ctx.globalAlpha = 1;
+  const g = ctx.createLinearGradient(0, 48, 0, 208);
+  g.addColorStop(0, css(shade(CRATE.cross, 1.5))); g.addColorStop(1, css(shade(CRATE.cross, 0.85)));
+  ctx.fillStyle = css(CRATE.screen); ctx.beginPath(); ctx.roundRect(42, 42, 172, 172, 22); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(48, 48, 160, 160, 18); ctx.fill();
+  flake(ctx, S / 2, S / 2, 58, css(CRATE.shine), 3.2);
+  ctx.strokeStyle = css(CRATE.screen); ctx.lineWidth = 1.6; ctx.lineCap = "round"; ctx.globalAlpha = 0.9;
+  for (const [x, y] of [[48, 48], [208, 48], [48, 208], [208, 208]] as const) {
+    const dx = x < S / 2 ? -1 : 1, dy = y < S / 2 ? -1 : 1;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    let px = x, py = y;
+    for (let k = 0; k < 3; k++) { px += dx * (6 + rnd() * 10); py += dy * (4 + rnd() * 10); ctx.lineTo(px, py); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ectx.fillStyle = "#000"; ectx.fillRect(0, 0, S, S);
+  const arm = 60, t = 16;
+  for (const target of [ctx, ectx]) {
+    target.fillStyle = css(CRATE.light);
+    for (const [x, y] of [[0, 0], [S - arm, 0], [0, S - t], [S - arm, S - t]] as const) { target.beginPath(); target.roundRect(x, y, arm, t, 6); target.fill(); }
+    for (const [x, y] of [[0, 0], [S - t, 0], [0, S - arm], [S - t, S - arm]] as const) { target.beginPath(); target.roundRect(x, y, t, arm, 6); target.fill(); }
+  }
+  const mk = (cv: HTMLCanvasElement) => { const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; return tx; };
+  return [mk(c), mk(e)];
+}
+
 // Cube faces, one square each: slate, with an octagon in the middle, a plate inside a green glowing
 // border of three dashes a side (a pale plate, on every face) or one solid line (a white plate, on
 // the top). Each with its glow map.
@@ -425,6 +613,29 @@ function cubeFaces(): [THREE.Texture, THREE.Texture, THREE.Texture, THREE.Textur
     return [mk(c), mk(e)];
   };
   return [...face(CUBE.plate, true), ...face(CUBE.top, false)];
+}
+
+// Ice pillar wrap: a frozen column of vertical frost streaks and trapped bubbles, two deep-water
+// bands each with a hairline of light, and a snowflake stamped on the body between them.
+function icePillar(ctx: Ctx, PW: number, PH: number) {
+  const rnd = seeded(17);
+  ctx.fillStyle = css(PILLAR.white); ctx.fillRect(0, 0, PW, PH);
+  for (let i = 0; i < 46; i++) {
+    const x = rnd() * PW, w = 2 + rnd() * 12, y0 = rnd() * PH * 0.6, h = PH * (0.3 + rnd() * 0.7);
+    ctx.fillStyle = css(shade(PILLAR.white, rnd() < 0.5 ? 0.94 : 1.04)); ctx.globalAlpha = 0.35 + rnd() * 0.4;
+    ctx.fillRect(x, y0, w, h);
+  }
+  ctx.globalAlpha = 1;
+  for (let i = 0; i < 28; i++) {
+    const x = rnd() * PW, y = rnd() * PH, r = 1.5 + rnd() * 4;
+    ctx.fillStyle = css(shade(PILLAR.white, 0.9)); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = css(shade(PILLAR.white, 1.08)); ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const y of [22, 164]) {
+    ctx.fillStyle = css(PILLAR.slate); ctx.fillRect(0, y, PW, 22);
+    ctx.fillStyle = css(PROPS.cyan); ctx.fillRect(0, y + 9.5, PW, 3);
+  }
+  for (let k = 0; k < 3; k++) flake(ctx, (k + 0.5) * (PW / 3), 104, 30, css(PILLAR.slate), 2.4);
 }
 
 // Goal base: dark disc with light spokes and a hub.
@@ -537,7 +748,8 @@ export function structTextures(): StructMaps {
   pctx.fillStyle = css(PILLAR.white);
   pctx.fillRect(0, 0, PW, PH);
   const period = PW / SLATS;
-  for (let t = 0; t < 3; t++) {
+  if (ENV.style === "ice") icePillar(pctx, PW, PH);
+  else for (let t = 0; t < 3; t++) {
     const b = t * (BAND + GAP + TIER + GAP), y0 = b + BAND + GAP;
     pctx.fillStyle = css(PROPS.cyan);
     pctx.fillRect(0, b, PW, BAND);

@@ -45,6 +45,11 @@ export const EFFECTS = {
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
 // numbers scene.ts and textures.ts read, so a look is one file.
 export const ENV = {
+  style: "lab" as "lab" | "ice",
+  rain: 0,
+  cloudCover: 0x000000,
+  fog: 0x000001,
+  floorRoughness: 0.85,
   skyTop: 0x4ea3ff,
   skyHorizon: 0xd6f1ff,
   cloud: 0xffffff,

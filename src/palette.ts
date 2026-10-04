@@ -57,6 +57,11 @@ export const ENV = {
   glow: 1, lightMetal: 0, lightRoughness: 0.4, bodyRoughness: 0.45,
   // Width of the mosaic's wide tiles (1 for none) and an optional grout line colour between tiles.
   tileWide: 2, tileGrout: null as number | null,
+  // Which family of drawn patterns the pieces wear: the lab's mosaic, slats and circuit boards, or
+  // the ice pack's floes, frost and snowflakes.
+  style: "lab" as "lab" | "ice",
+  // Weather: rain streaks (how many; 0 for none), extra cloud cover, a fog multiplier, the floor's finish.
+  rain: 0, cloudCover: 0, fog: 1, floorRoughness: 0.85,
 };
 
 // As a CSS colour, for canvas textures.

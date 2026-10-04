@@ -59,7 +59,7 @@ export function initMaterials(renderer: THREE.WebGLRenderer): void {
   const tiles = tileTexture(renderer.capabilities.getMaxAnisotropy());
   const edge = edgeTextures();
   MAT = {
-    platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.85 }),
+    platform: new THREE.MeshStandardMaterial({ map: tiles, roughness: ENV.floorRoughness }),
     block: new THREE.MeshStandardMaterial({ map: tiles, color: PLATFORM.block, roughness: 0.8 }),
     edge: new THREE.MeshStandardMaterial({ map: edge.map, emissiveMap: edge.glow, emissive: 0xffffff, emissiveIntensity: 0.9 * ENV.glow, roughness: 0.6 }),
     rim: new THREE.MeshStandardMaterial({ color: PLATFORM.rim, roughness: Math.min(0.35, ENV.bodyRoughness), metalness: 0.05 }),
@@ -1250,7 +1250,7 @@ export function addLights(scene: THREE.Scene): THREE.DirectionalLight {
   return sun;
 }
 
-export function createScene(fog = FOG_PLAY): SceneEnv {
+export function createScene(fog = FOG_PLAY * ENV.fog): SceneEnv {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY_HORIZON);
   scene.fog = new THREE.FogExp2(SKY_HORIZON, fog);
@@ -1258,10 +1258,13 @@ export function createScene(fog = FOG_PLAY): SceneEnv {
   sky.layers.set(SKY_LAYER);
   scene.add(sky, ocean);
   const sun = addLights(scene);
+  const rain = ENV.rain > 0 ? makeRain(ENV.rain) : null;
+  if (rain) scene.add(rain.lines);
   const t0 = performance.now();
   // Sky and sea ride along with the camera; their shaders work in world space so nothing swims.
   const tick = (camera: THREE.Camera) => {
     const t = (performance.now() - t0) / 1000;
+    rain?.tick(camera, t);
     sky.position.copy(camera.position);
     (sky.material as THREE.ShaderMaterial).uniforms.time!.value = t;
     ocean.position.set(camera.position.x, OCEAN_Y, camera.position.z);
@@ -1330,8 +1333,8 @@ const NOISE_GLSL = `
     for (int i = 0; i < 3; i++) { v += a * noise(p); p = m * p; a *= 0.5; }
     return v + 0.0625; // the two dropped octaves average to this
   }
-  float cloudCover(vec2 xz, float time) { return smoothstep(0.42, 0.68, fbm(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }
-  float cloudCoverLow(vec2 xz, float time) { return smoothstep(0.42, 0.68, fbmLow(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }`;
+  float cloudCover(vec2 xz, float time) { return smoothstep(0.42 - cover, 0.68 - cover, fbm(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }
+  float cloudCoverLow(vec2 xz, float time) { return smoothstep(0.42 - cover, 0.68 - cover, fbmLow(xz * 0.025 + vec2(time * 0.01, time * 0.004))); }`;
 
 // Gradient dome under a volumetric cloud deck between CLOUD_Y and CLOUD_TOP. Each sky pixel
 // marches its view ray through the deck: coverage decides where clouds stand, coverage also
@@ -1342,11 +1345,11 @@ function makeSky(): THREE.Mesh {
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: {
       top: { value: new THREE.Color(SKY_TOP) }, bottom: { value: new THREE.Color(SKY_HORIZON) }, cloud: { value: new THREE.Color(ENV.cloud) }, cloudShade: { value: new THREE.Color(ENV.cloudShade) },
-      time: { value: 0 }, cloudY: { value: CLOUD_Y }, cloudTop: { value: CLOUD_TOP }, sunDir: { value: SUN_DIR }, detail: { value: 1 },
+      time: { value: 0 }, cloudY: { value: CLOUD_Y }, cloudTop: { value: CLOUD_TOP }, sunDir: { value: SUN_DIR }, detail: { value: 1 }, cover: { value: ENV.cloudCover },
     },
     // Pinned to the far plane: anything in the scene draws in front, and covered pixels skip the march.
     vertexShader: `varying vec3 vP; void main(){ vP = position; vec4 c = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = c.xyww; }`,
-    fragmentShader: `uniform vec3 top, bottom, sunDir, cloud, cloudShade; uniform float time, cloudY, cloudTop, detail; varying vec3 vP;
+    fragmentShader: `uniform vec3 top, bottom, sunDir, cloud, cloudShade; uniform float time, cloudY, cloudTop, detail, cover; varying vec3 vP;
       ${NOISE_GLSL}
       // Soft top and bottom so the ray march never crosses a hard edge (hard edges show as bands).
       float shape(float cover, float h) {
@@ -1410,6 +1413,36 @@ function makeSky(): THREE.Mesh {
   return m;
 }
 
+// Rain: n short slanted streaks in a box that rides with the camera, each falling and wrapping to
+// the top of the box, so the camera is always inside the shower.
+const RAIN_BOX = { w: 40, h: 34, d: 40 }, RAIN_SPEED = 18, RAIN_LEN = 1.1;
+function makeRain(n: number): { lines: THREE.LineSegments; tick(camera: THREE.Camera, t: number): void } {
+  const seeds = new Float32Array(n * 3);
+  for (let i = 0; i < n * 3; i++) seeds[i] = Math.random();
+  const pos = new Float32Array(n * 6);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xf6fafd, transparent: true, opacity: 0.6, depthWrite: false, fog: true });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.userData.noShadow = true;
+  const slant = new THREE.Vector3(0.12, -1, 0.05).normalize().multiplyScalar(RAIN_LEN);
+  return {
+    lines,
+    tick(camera, t) {
+      const c = camera.position;
+      for (let i = 0; i < n; i++) {
+        const x = c.x + (seeds[i * 3]! - 0.5) * RAIN_BOX.w;
+        const z = c.z + (seeds[i * 3 + 2]! - 0.5) * RAIN_BOX.d;
+        const y = c.y + RAIN_BOX.h * 0.6 - ((seeds[i * 3 + 1]! * RAIN_BOX.h + t * RAIN_SPEED) % RAIN_BOX.h);
+        pos[i * 6] = x; pos[i * 6 + 1] = y; pos[i * 6 + 2] = z;
+        pos[i * 6 + 3] = x + slant.x; pos[i * 6 + 4] = y + slant.y; pos[i * 6 + 5] = z + slant.z;
+      }
+      (geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+    },
+  };
+}
+
 // Endless sea: slow noise ripples, sky fresnel, a soft sun glint, and the shadows of the
 // cloud deck drifting over it (same coverage the sky marches, sampled straight below).
 function makeOcean(): THREE.Mesh {
@@ -1418,7 +1451,7 @@ function makeOcean(): THREE.Mesh {
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       time: { value: 0 }, sunDir: { value: SUN_DIR },
       deep: { value: new THREE.Color(ENV.seaDeep) }, shallow: { value: new THREE.Color(ENV.seaShallow) }, sky: { value: new THREE.Color(ENV.seaSky) },
-      grid: { value: new THREE.Color(ENV.seaGrid ?? 0) }, ruled: { value: ENV.seaGrid === null ? 0 : 1 },
+      grid: { value: new THREE.Color(ENV.seaGrid ?? 0) }, ruled: { value: ENV.seaGrid === null ? 0 : 1 }, cover: { value: ENV.cloudCover },
       detail: { value: 1 },
     }]),
     vertexShader: `#include <fog_pars_vertex>
@@ -1431,7 +1464,7 @@ function makeOcean(): THREE.Mesh {
         #include <fog_vertex>
       }`,
     fragmentShader: `#include <fog_pars_fragment>
-      uniform float time, detail, ruled; uniform vec3 sunDir, deep, shallow, sky, grid; varying vec3 vWorld;
+      uniform float time, detail, ruled, cover; uniform vec3 sunDir, deep, shallow, sky, grid; varying vec3 vWorld;
       ${NOISE_GLSL}
       void main(){
         vec2 p = vWorld.xz;
