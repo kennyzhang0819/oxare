@@ -2,7 +2,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { floorMesh } from "./floor.ts";
 import { platformMesh } from "./platform.ts";
 import { railSweep, revolveMesh, revolvePoints, ringMesh, sectorMesh, sweepTube, tubeWallBlocks } from "./geometry.ts";
-import { BALL_RADIUS, BUTTON, buttonBase, buttonLinked, beltLoop, beltOutline, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_ROUND, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, PUFFER_H, PUFFER_VENT, PUFF_REACH, PUFF_MIN_EVERY, pufferProfile, type Puffer, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, exitMouth, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, softProps, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCapsules, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, PANGOLIN_SEG, pangolinCuts, pangolinLine, pangolinPoint, pangolinRest, pangolinRing, pangolinTrack, pangolinUnrolled, type Pangolin, type PangolinTrack, pangolinSlices, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
+import { BALL_RADIUS, BUTTON, buttonBase, buttonLinked, beltLoop, beltOutline, isBelt, crateRound, CUBE_S, SUPPORT_W, GATE_ROUND, gateHulls, gateEarHulls, supportHulls, supportEarHulls, PILLAR_EAR, PUFFER_H, PUFFER_VENT, PUFF_REACH, PUFF_MIN_EVERY, pufferProfile, type Puffer, MAGNET_H, MAGNET_R, MAGNET_REACH, magnetProfile, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_H, PILLAR_R, propRound, startPadProfile, BRIDGE_PLANK_T, CURVE_SEGMENTS, PLANK_T, SPINNER_HEIGHT, SPINNER_WIDTH, START_PAD_REST, START_PAD_R, TUBE_R, TUBE_SOLID_WALL, TUBE_SKIN_SIDES, TUBE_WALL_SIDES, PLATFORM_LIP, PLATFORM_THICKNESS, RAIL_R, railsContact, railsLines, railsRingsWorld, moverAt, moverShift, isMoving, riders, type Mover, tubeRingsWorld, mouthRings, exitMouth, hoopRing, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, bridgeChain, fenceRings, softProps, isTilted, holeCuts, frameToWorld, worldToFrame, curveRollPoint, plankHinge, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, seesawTilt, seesawRange, boardLift, stoolAxis, stoolSlide, jumpPadSize, jumpHull, JUMP_H, JUMP_REACH, seesawPivot, seesawPostH, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, kickerHull, kickerSlide, isSliding, rollPoint, respawnY, pieceBoxes, pieceCapsules, pieceCylinders, pieceRot, pieceRoll, pieceTilt, propLift, isProp, pieceSectors, rampHeight, rotXZ, startOf, beanAt, beanTrack, type Bean, type BeanTrack, quatMul as qmul, quatYTo as yTo, type Quat, type Level, type Piece } from "./level.ts";
 import { TUNING } from "./tuning.ts";
 
 export const STEP = 1 / 120;
@@ -57,7 +57,6 @@ export interface SimMover { index: number; body: RAPIER.RigidBody; piece: Mover;
 export const moverTime = (m: SimMover, t: number): number => (m.since === null ? 0 : t - m.since);
 export interface SimButton { index: number; pressed: boolean }
 // `at` is the sim time it was first touched, null while it lies curled.
-export interface SimPangolin { index: number; piece: Pangolin; track: PangolinTrack; at: number | null }
 // `at` is the sim time the jump pad last launched something (the ball or a prop), null until then.
 export interface SimSpring { index: number; at: number | null }
 // `at` is the sim time the ball last bumped it into stretching, null until then.
@@ -70,7 +69,6 @@ export interface Sim {
   crates: SimCrate[];
   bridges: SimBridge[];
   planks: SimPlank[];
-  pangolins: SimPangolin[];
   springs: SimSpring[];
   tubes: SimTube[];
   movers: SimMover[];
@@ -539,59 +537,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     planks.push({ index, body, frozen: p.freeze ? collider : undefined });
   });
 
-  // A pangolin is a chain of slices along its belly line (pangolinLine), each a kinematic body set to
-  // its pose each step while it unrolls; laid flat, each slice's shape is the drawn body's between its
-  // cuts. The part already laid down is one welded trimesh on a fixed body instead, its slices switched
-  // off, so the ball rolls onto it and across, round its bends and over its slopes, with no seams.
-  const pangolins: (SimPangolin & { cuts: number[]; slices: RAPIER.Collider[]; bodies: RAPIER.RigidBody[]; laid: RAPIER.Collider | null; down: number; base: RAPIER.RigidBody })[] = [];
-  const pangolinPoses = (p: Pangolin, tr: PangolinTrack, cuts: number[], a: number) => {
-    const yaw = yQuat(p.rot);
-    return pangolinSlices(tr, a, cuts).map(({ c, q }) => { const o = rotXZ(c[0], c[2], p.rot); return { t: { x: p.x + o.x, y: p.y + c[1], z: p.z + o.z }, q: qmul(yaw, q) }; });
-  };
-  // The drawn body's cross-sections at s, laid straight with s = z0 at z = 0.
-  const pangolinRings = (tr: PangolinTrack, from: number, to: number, z0: number) =>
-    [from, to].flatMap((s) => pangolinRing(tr, s).flatMap(([x, t]) => [x, t, z0 - s]));
-  level.pieces.forEach((p, index) => {
-    if (p.type !== "pangolin") return;
-    const track = pangolinTrack(p);
-    if (track.L < PANGOLIN_SEG) return;
-    const cuts = pangolinCuts(track), poses = pangolinPoses(p, track, cuts, pangolinRest(track)), slices: RAPIER.Collider[] = [], bodies: RAPIER.RigidBody[] = [];
-    poses.forEach((at, j) => {
-      const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.t.x, at.t.y, at.t.z).setRotation(at.q));
-      slices.push(world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pangolinRings(track, cuts[j]!, cuts[j + 1]!, cuts[j]!)))!.setFriction(1), body));
-      bodies.push(body);
-    });
-    const base = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y, p.z).setRotation(yQuat(p.rot)));
-    pangolins.push({ index, piece: p, track, at: null, cuts, slices, bodies, laid: null, down: 0, base });
-  });
-  // Lay down the slices fully unrolled at `a`: the laid trimesh grows over them and they switch off.
-  // Its rings and caps wind outward, as the internal edge fix needs.
-  const layPangolin = (pg: (typeof pangolins)[number], a: number) => {
-    const tr = pg.track, cuts = pg.cuts;
-    let k = pg.down;
-    while (k < pg.slices.length && cuts[k + 1]! <= a + 1e-9) k++;
-    if (k === pg.down) return;
-    const ss = cuts.slice(0, k + 1), line = pangolinLine(tr, tr.L, ss), pos: number[] = [], idx: number[] = [];
-    ss.forEach((s, i) => { for (const [x, t] of pangolinRing(tr, s)) pos.push(...pangolinPoint(line[i]!, x, t)); });
-    const R = pos.length / 3 / ss.length;
-    for (let i = 0; i < k; i++) for (let j = 0; j < R; j++) { const a0 = i * R + j, b0 = i * R + ((j + 1) % R); idx.push(a0, a0 + R, b0, b0, a0 + R, b0 + R); }
-    for (const [i, out] of [[0, 1], [k, -1]] as const) {
-      const c = pos.length / 3;
-      let mx = 0, my = 0, mz = 0;
-      for (let j = 0; j < R; j++) { mx += pos[(i * R + j) * 3]!; my += pos[(i * R + j) * 3 + 1]!; mz += pos[(i * R + j) * 3 + 2]!; }
-      pos.push(mx / R, my / R, mz / R);
-      for (let j = 0; j < R; j++) { const a0 = i * R + j, b0 = i * R + ((j + 1) % R); if (out > 0) idx.push(c, a0, b0); else idx.push(c, b0, a0); }
-    }
-    const shape = RAPIER.ColliderDesc.trimesh(new Float32Array(pos), new Uint32Array(idx), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES | RAPIER.TriMeshFlags.DELETE_DEGENERATE_TRIANGLES);
-    if (pg.laid) pg.laid.setShape(shape.shape);
-    else pg.laid = world.createCollider(shape.setFriction(1), pg.base);
-    for (let j = pg.down; j < k; j++) pg.slices[j]!.setEnabled(false);
-    pg.down = k;
-  };
-  for (const pg of pangolins) layPangolin(pg, pangolinRest(pg.track));
-
-
-
   // A stool slides along its track and nothing else: an exact prismatic link (a multibody joint,
   // which cannot drift sideways under a push) to a fixed anchor at its start, stopped at the track's
   // ends. It floats a hair above the surface so only its damping, not floor friction, slows it.
@@ -769,7 +714,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
     crates,
     bridges,
     planks,
-    pangolins,
     springs,
     tubes,
     movers,
@@ -868,12 +812,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         b.vel = { x: (at.x - now.x) / STEP, y: (at.y - now.y) / STEP, z: (at.z - now.z) / STEP };
         b.body.setNextKinematicTranslation(at); b.body.setNextKinematicRotation(at.q);
       }
-      for (const pg of pangolins) {
-        if (pg.at === null || pg.down === pg.slices.length) continue;
-        const a = pangolinUnrolled(pg.track, time + STEP - pg.at, TUNING.unrollSpeed);
-        pangolinPoses(pg.piece, pg.track, pg.cuts, a).forEach((at, j) => { pg.bodies[j]!.setNextKinematicTranslation(at.t); pg.bodies[j]!.setNextKinematicRotation(at.q); });
-        layPangolin(pg, a);
-      }
       for (const c of carried) {
         if (c.active && !c.active()) continue;
         const d = moverShift(c.mover.piece, moverTime(c.mover, time + STEP));
@@ -960,7 +898,6 @@ export async function createSim(level: Level, from?: { x: number; y: number; z: 
         if (b.mover && b.mover.since === null) b.mover.since = time;
       }
       for (const pl of planks) if (pl.frozen && touchedByMover(world, pl.frozen)) { pl.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pl.frozen = undefined; }
-      for (const pg of pangolins) if (pg.at === null && pg.slices.some((c) => touchedByMover(world, c))) pg.at = time;
       // Jump pads: in a launch zone the ball's speed out of the pad (straight up, or along a rolled or
       // tilted pad's own up) becomes what carries it the pad's rise above its top from where it is, so
       // setting it again on the way up adds nothing; its speed across the pad is left as it is.

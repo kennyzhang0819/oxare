@@ -189,6 +189,8 @@ button.level-row .name { align-self: center; }
 .card.dialog.crested { margin-top: 60px; padding-top: 72px; }
 .card.dialog h2 { font-size: 24px; line-height: 1.15; }
 .dialog p { margin: 6px 0 0; font-size: 16px; line-height: 1.45; }
+.dialog .apple-count { white-space: nowrap; font-weight: 800; }
+.dialog .apple-icon svg { display: inline-block; width: 1.4em; height: 1.4em; vertical-align: -0.35em; }
 .card.dialog .row { margin-top: 20px; }
 .card.dialog .row > button { min-width: 140px; }
 .dialog-crest { position: absolute; left: 50%; top: 0; width: 112px; height: 112px; margin-left: -56px; margin-top: -64px; pointer-events: none; }
@@ -220,6 +222,7 @@ button.level-row .name { align-self: center; }
 .settings .slider { grid-column: 1 / -1; }
 .settings label.toggle { grid-template-columns: 1fr auto; }
 .settings label.toggle .switch { justify-self: end; }
+.settings .action { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 10px; }
 .settings .hint { font-size: 12px; opacity: 0.7; min-height: 0; }
 .settings-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 6px; border-radius: 999px; background: var(--steel); border: var(--glass-edge); }
 .settings-tabs button { flex: 1; padding: 7px 0; border: none; border-radius: 999px; background: none; color: var(--ink); font: 700 13px var(--display); letter-spacing: 0.05em; text-transform: uppercase; }

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, BARRIER_H, BARRIER_W, BUTTON, buttonLinked, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_H, BARRIER_W, BUTTON, buttonLinked, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { onTop, slantedTop, snapOnTop } from "./slanted.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, stylize, type Built, type SceneEnv } from "./scene.ts";
 import { decorStems } from "./decor.ts";
@@ -28,7 +28,7 @@ export function blankLevel(taken: string[] = []): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "button", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "button", "plank", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Structures", ["arch", "support", "column", "lamp", "mast"]],
   ["Nature", ["tree"]],
@@ -54,7 +54,6 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   plank: [["w", 0.5], ["h", 0.5], ["rot", 15], ["tilt", 5]],
   seesaw: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 1]],
   board: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 5], ["roll", 5]],
-  pangolin: [["w", 0.5], ["rot", 15]],
   support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
   arch: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   lamp: [["h", 0.5], ["rot", 15]],
@@ -153,9 +152,7 @@ const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
 // Pull every curve point back inside its segment's box (see fitMid), after any path edit.
 const fitMids = (p: PathPiece) => p.path.forEach((n, k) => { if (n.mid) n.mid = fitMid(p, k, n.mid); });
 // How far above its nodes a path piece's handles sit: at the rail, the bean's centre or the tube's.
-const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : p.type === "pangolin" ? PANGOLIN_T : TUBE_R);
-// The bend a newly rounded corner gets: a pangolin's widest-safe one, else a tube's.
-const pathBend = (p: PathPiece): number => (p.type === "pangolin" ? pangolinBend(p.w) : TUBE_BEND);
+const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : TUBE_R);
 
 // What can stand square on a slanted surface: the props that take roll and tilt, jump pads and plain kickers.
 const turnable = (p: Piece): p is Piece & { roll?: number; tilt?: number; rot?: number } =>
@@ -185,14 +182,6 @@ function settle(level: Level, p: Piece) {
   if (p.type === "tube") {
     const y = surfaceAt(level, p.x, p.z);
     if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
-    return;
-  }
-  if (p.type === "pangolin") {
-    // Its snout and tail tip each land on the platform top nearest their height; the nodes between stay put.
-    const y = surfaceAt(level, p.x, p.z, p.y);
-    if (y !== null && y !== p.y) { for (const n of p.path) n.y = r3(n.y - (y - p.y)); p.y = y; }
-    const tail = p.path[p.path.length - 1], w = tubeNodeWorld(p, p.path.length), at = surfaceAt(level, w.x, w.z, w.y);
-    if (tail && at !== null) tail.y = r3(at - p.y);
     return;
   }
   if (p.type === "plank" && p.side) { attachToEdge(level, p); return; }
@@ -508,7 +497,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "arch" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "support" || q.type === "arch" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
@@ -831,7 +820,7 @@ export class Editor implements Mode {
         props.append(h("label", {}, "facing", face));
       }
       this.body.append(h("h3", {}, `${pieceName(p.type)} #${index}`), props);
-      if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean" || p.type === "pangolin") this.body.append(this.tubePanel(p));
+      if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") this.body.append(this.tubePanel(p));
       if (p.type === "slab" && !p.belt && !p.twist && !p.curl && !isTilted(p) && !isMoving(p)) this.body.append(this.shapePanel(p));
       if (p.type === "slab" && !p.belt && !p.curl && !isShaped(p)) this.body.append(this.moverPanel(p));
       this.body.append(
@@ -886,7 +875,7 @@ export class Editor implements Mode {
 
   private selectedTube(): PathPiece | null {
     const p = this.sel.size === 1 ? this.level.pieces[[...this.sel][0]!] : undefined;
-    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" || p?.type === "bean" || p?.type === "pangolin" ? p : null;
+    return p?.type === "tube" || p?.type === "rails" || p?.type === "fence" || p?.type === "bean" ? p : null;
   }
 
   // A sphere at each node of the selected tube and a smaller mint one halfway along each segment,
@@ -996,7 +985,6 @@ export class Editor implements Mode {
       ) as HTMLSelectElement;
       wrap.append(h("label", {}, "one way", way));
     }
-    if (p.type === "pangolin") wrap.append(h("div", { class: "hint" }, `Unrolls ${pangolinTrack(p).L.toFixed(2)} long from its snout (the first node) to its tail tip (the last), round bends of at least ${pangolinBend(p.w)} and up or down slopes. The snout and tail tip land on the platform under them.`));
     const num = (n: Record<string, number>, key: string, step: number) => {
       const input = h("input", { type: "number", step, value: n[key] ?? 0, onchange: () => { const before = JSON.stringify(this.level); n[key] = Number(input.value); fitMids(p); this.commit(before); } });
       return h("label", {}, label(key), input);
@@ -1039,7 +1027,7 @@ export class Editor implements Mode {
         const smooth = n.bend > 0;
         row.append(
           h("span", { class: "hint" }, `${turns[k]!.toFixed(0)}°`),
-          h("button", { class: smooth ? "" : "ghost", title: "Sharp elbow or smooth bend (B)", onclick: () => { const before = JSON.stringify(this.level); n.bend = smooth ? 0 : pathBend(p); this.commit(before); } }, smooth ? "smooth" : "sharp"),
+          h("button", { class: smooth ? "" : "ghost", title: "Sharp elbow or smooth bend (B)", onclick: () => { const before = JSON.stringify(this.level); n.bend = smooth ? 0 : TUBE_BEND; this.commit(before); } }, smooth ? "smooth" : "sharp"),
         );
         if (smooth) row.append(num(n as unknown as Record<string, number>, "bend", 0.5));
       }
@@ -1122,7 +1110,7 @@ export class Editor implements Mode {
       // A curved segment splits at its curve point, into two straight halves.
       const at = b.mid ? { x: b.mid.x, y: b.mid.y, z: b.mid.z } : { x: snap((a.x + b.x) / 2), y: layerSnap((a.y + b.y) / 2), z: snap((a.z + b.z) / 2) };
       delete b.mid;
-      ns.splice(k + 1, 0, { ...at, bend: p.type === "fence" ? FENCE_RAIL_CORNER : pathBend(p) });
+      ns.splice(k + 1, 0, { ...at, bend: p.type === "fence" ? FENCE_RAIL_CORNER : TUBE_BEND });
     });
     this.node = k + 1;
     this.mid = -1;
@@ -1145,7 +1133,7 @@ export class Editor implements Mode {
     this.editTube((ns) => {
       const a = ns[ns.length - 2]!, b = ns[ns.length - 1]!;
       const l = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) || 1;
-      b.bend = pathBend(p);
+      b.bend = TUBE_BEND;
       ns.push({ x: snap(b.x + ((b.x - a.x) / l) * 4), y: layerSnap(b.y + ((b.y - a.y) / l) * 4), z: snap(b.z + ((b.z - a.z) / l) * 4), bend: 0 });
     });
     this.node = p.path.length;
@@ -1330,7 +1318,7 @@ export class Editor implements Mode {
         ArrowDown: () => this.moveNode((n) => { n.z = snap(n.z + g); }),
         PageUp: () => this.moveNode((n) => { n.y += rise; }), KeyE: () => this.moveNode((n) => { n.y += rise; }),
         PageDown: () => this.moveNode((n) => { n.y -= rise; }), KeyQ: () => this.moveNode((n) => { n.y -= rise; }),
-        KeyB: () => { const tp = this.selectedTube()!; this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : pathBend(tp); }); },
+        KeyB: () => this.moveNode((n) => { n.bend = n.bend > 0 ? 0 : TUBE_BEND; }),
         Delete: () => this.removeNode(), Backspace: () => this.removeNode(),
       };
       if (this.railsEnd()) ops.KeyR = () => this.turnEnd(e.shiftKey ? -15 : 15);

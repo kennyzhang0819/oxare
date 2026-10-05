@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, curlRadius, type Slab, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, curlRadius, type Slab, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { BARRIER_W, beanAt, beanDist, beanTrack, rotXZ, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -958,84 +958,6 @@ for (const [name, lines, end, mid] of [
   else if (fallen.y > 0.6 || fallen.z > -14) { failed = true; console.error(`FAIL plank: did not fall (centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)})`); }
   else if (p.z > -22 || Math.abs(p.y - BALL_RADIUS) > 0.1) { failed = true; console.error(`FAIL plank: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}`); }
   else console.log(`ok plank: stood frozen until touched, fell to centre y ${fallen.y.toFixed(2)} z ${fallen.z.toFixed(2)}, ball crossed to z ${p.z.toFixed(2)}`);
-}
-// A pangolin lies with its head out and the rest curled until the ball touches it, then unrolls across
-// the gap; laid out it is one smooth surface, so a second run over it rolls flat on its back.
-{
-  const level = testLevel({ id: "pangolin", name: "pangolin", pieces: [
-    { type: "start", x: 0, y: 0, z: -2 },
-    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "pangolin", x: 0, y: 0, z: -6.5, w: 2.5, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: 0 }] },
-    { type: "slab", x: 0, y: 0, z: -19, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "goal", x: 0, y: 0, z: -22, r: 2 },
-  ] });
-  const sim = await createSim(level), pg = sim.pangolins[0]!;
-  for (let i = 0; i < 120 * 2; i++) sim.step(0, 0, -1);
-  const waited = pg.at === null;
-  let p = sim.ball.translation();
-  for (let i = 0; i < 120 * 12 && p.z > -18; i++) { sim.step(1, 0, -1); p = sim.ball.translation(); }
-  const crossed = p.z <= -18 && Math.abs(p.y - BALL_RADIUS) < 0.1, touched = pg.at;
-  for (let i = 0; i < 120 * 3; i++) sim.step(0, 0, -1);
-  sim.respawn();
-  p = sim.ball.translation();
-  let lo = Infinity, hi = -Infinity;
-  for (let i = 0; i < 120 * 12 && p.z > -18; i++) {
-    sim.step(1, 0, -1); p = sim.ball.translation();
-    if (p.z < -9 && p.z > -12) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); }
-  }
-  sim.free();
-  const top = BALL_RADIUS + PANGOLIN_T;
-  if (!waited || touched === null) { failed = true; console.error(`FAIL pangolin: did not wait for a touch (waited ${waited}, touched at ${touched})`); }
-  else if (!crossed) { failed = true; console.error(`FAIL pangolin: ball did not cross on it (z ${p.z.toFixed(2)} y ${p.y.toFixed(2)})`); }
-  else if (Math.abs(lo - top) > 0.02 || Math.abs(hi - top) > 0.02) { failed = true; console.error(`FAIL pangolin: laid out, the ball rolled over the gap at y ${lo.toFixed(3)} to ${hi.toFixed(3)} (want ${top.toFixed(3)})`); }
-  else console.log(`ok pangolin: waited, touched at ${touched.toFixed(2)}s, unrolled under the ball; laid out it rolls flat over the gap (y ${lo.toFixed(3)} to ${hi.toFixed(3)})`);
-}
-// A pangolin's path may turn and climb: unrolled round a rounded corner that also rises a layer, its
-// solid's top is the drawn body's back everywhere along it and across it; and a ball steered along a
-// turning, climbing one rides it over the gap onto the higher platform.
-{
-  const pieces = (path: unknown[]) => [
-    { type: "start", x: 0, y: 0, z: -2 },
-    { type: "slab", x: 0, y: 0, z: -5, w: 10, d: 10, rot: 0, fences: {} },
-    { type: "pangolin", x: 0, y: 0, z: -7, w: 2.5, rot: 0, path },
-    { type: "slab", x: -12, y: 1, z: -14, w: 8, d: 8, rot: 0, fences: {} },
-    { type: "goal", x: -14, y: 1, z: -14, r: 1 },
-  ];
-  const level = testLevel({ id: "pangolin-path", name: "pangolin path", pieces: pieces([{ x: 0, y: 0, z: -7, bend: 2 }, { x: -7, y: 1, z: -7, bend: 2 }, { x: -11, y: 1, z: -7, bend: 0 }]) });
-  const problems = levelProblems(level).filter((m) => m.includes("pangolin"));
-  const refused = (path: unknown[]) => { try { testLevel({ id: "pangolin-bad", name: "pangolin bad", pieces: pieces(path) }); return ""; } catch (e) { return String(e); } };
-  const sharp = refused([{ x: 0, y: 0, z: -7, bend: 0 }, { x: -11, y: 1, z: -7, bend: 0 }]).includes("sharp");
-  const tight = refused([{ x: 0, y: 0, z: -7, bend: 0.5 }, { x: -11, y: 1, z: -7, bend: 0 }]).includes("tight");
-  const p = level.pieces[2] as Piece & { type: "pangolin" }, track = pangolinTrack(p);
-  let sim = await createSim(level);
-  sim.pangolins[0]!.at = 0;
-  for (let i = 0; i < 120 * 10; i++) sim.step(0, 0, -1);
-  let worst = 0, at = "";
-  for (let s = 0.6; s < track.L - 0.6; s += 0.3) for (const x of [-0.6, 0, 0.6]) {
-    const q = pangolinAt(track, s), top = pangolinPoint(q, x, pangolinSize(track, s).t), o = [p.x + top[0], p.y + top[1], p.z + top[2]];
-    const hit = sim.world.castRay(new RAPIER_RT.Ray({ x: o[0]!, y: o[1]! + 3, z: o[2]! }, { x: 0, y: -1, z: 0 }), 6, true, undefined, undefined, undefined, sim.ball);
-    const err = hit ? Math.abs(o[1]! + 3 - hit.timeOfImpact - o[1]!) : Infinity;
-    if (err > worst) { worst = err; at = `s ${s.toFixed(2)} x ${x}`; }
-  }
-  sim.free();
-  sim = await createSim(level);
-  let b = sim.ball.translation(), best = Infinity;
-  for (let i = 0; i < 120 * 20 && !(b.x < -10 && Math.abs(b.y - 1 - BALL_RADIUS) < 0.1); i++) {
-    // Steer at the track 1.5 ahead of the nearest point on it, holding about 3 a second.
-    let near = 0;
-    for (let s = 0; s <= track.L; s += 0.1) { const c = pangolinAt(track, s).c, d = Math.hypot(p.x + c[0] - b.x, p.z + c[2] - b.z); if (d < best || s === 0) { best = d; near = s; } }
-    best = Infinity;
-    const c = pangolinAt(track, Math.min(track.L, near + 1.5)).c, dx = p.x + c[0] - b.x, dz = p.z + c[2] - b.z, l = Math.hypot(dx, dz) || 1;
-    const v = sim.ball.linvel(), ex = (dx / l) * 3 - v.x, ez = (dz / l) * 3 - v.z, e = Math.hypot(ex, ez) || 1;
-    sim.step(Math.min(1, e), ex / e, ez / e); b = sim.ball.translation();
-  }
-  sim.free();
-  const rode = b.x < -10 && Math.abs(b.y - 1 - BALL_RADIUS) < 0.1;
-  if (problems.length) { failed = true; console.error(`FAIL pangolin path: ${problems.join("; ")}`); }
-  else if (!sharp || !tight) { failed = true; console.error(`FAIL pangolin path: a sharp corner (${sharp}) or one tighter than its width allows (${tight}) was not flagged`); }
-  else if (worst > 0.02) { failed = true; console.error(`FAIL pangolin path: unrolled, its solid's top is ${worst.toFixed(3)} off the drawn back at ${at}`); }
-  else if (!rode) { failed = true; console.error(`FAIL pangolin path: steered along it, the ball did not reach the higher platform (x ${b.x.toFixed(2)} y ${b.y.toFixed(2)} z ${b.z.toFixed(2)})`); }
-  else console.log(`ok pangolin path: ${track.L.toFixed(2)} long round a rising corner, its solid within ${worst.toFixed(3)} of the drawn back; the ball rode it onto the higher platform`);
 }
 // A point on a body, from its local frame to world.
 function bodyPoint(b: RAPIER.RigidBody, x: number, y: number, z: number) {

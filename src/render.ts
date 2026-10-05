@@ -2,7 +2,8 @@
 // for a headless browser to frame a camera and read the canvas. Not part of the game.
 import * as THREE from "three";
 import type { Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, hideHullsAround, initMaterials, makeBall, unfadeAll } from "./scene.ts";
+import { buildLevel, createScene, fitSun, hideHullsAround, initMaterials, unfadeAll } from "./scene.ts";
+import { makeHedgehog } from "./hedgehog.ts";
 import { NEAR_ON } from "./fade.ts";
 import showcase from "./showcase.json";
 import { LEVELS } from "./levels/index.ts";
@@ -17,7 +18,7 @@ const env = createScene();
 // `?level=<id>` builds that level in place of the showcase.
 const pick = new URLSearchParams(location.search).get("level");
 const built = buildLevel(LEVELS.find((l) => l.id === pick) ?? (showcase as Level), false);
-const ball = makeBall();
+const ball = makeHedgehog();
 env.scene.add(built.group, ball.mesh);
 fitSun(env.sun, built);
 const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 500);
@@ -33,8 +34,7 @@ interface Shot { w: number; h: number; pos: [number, number, number]; look: [num
   camera.lookAt(...s.look);
   if (s.ball) ball.mesh.position.set(...s.ball); else ball.mesh.position.set(0, -100, 0);
   renderer.shadowMap.needsUpdate = true;
-  ball.reflect(renderer, env);
-  ball.reflect(renderer, env);
+  ball.update(0, { rot: { x: 0, y: 0, z: 0, w: 1 }, spin: 0, rise: 0, push: false, eye: camera.position });
   camera.updateMatrixWorld();
   unfadeAll(built);
   if (s.play) {

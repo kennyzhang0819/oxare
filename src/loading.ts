@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { LEVELS } from "./levels/index.ts";
 import { BALL_RADIUS } from "./level.ts";
-import { buildLevel, createScene, initMaterials, makeBall } from "./scene.ts";
+import { buildLevel, createScene, initMaterials } from "./scene.ts";
+import { makeHedgehog } from "./hedgehog.ts";
 import { createSim, initPhysics } from "./sim.ts";
 import { h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
@@ -46,7 +47,7 @@ export class Loading implements Mode {
     const level = LEVELS[0]!;
     const env = createScene();
     const built = buildLevel(level, false);
-    const ball = makeBall();
+    const ball = makeHedgehog();
     ball.mesh.position.set(level.pieces[0]!.x, BALL_RADIUS, level.pieces[0]!.z);
     env.scene.add(built.group, ball.mesh);
     const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth / canvas.clientHeight, 0.1, 500);
@@ -55,8 +56,8 @@ export class Loading implements Mode {
     env.scene.add(camera);
     env.tick(camera);
     renderer.compile(env.scene, camera);
-    // A real frame plus one reflection pass hits the shadow and cube-camera variants compile() skips.
-    ball.reflect(renderer, env);
+    // A real frame hits the shadow variants compile() skips.
+    ball.update(0, { rot: { x: 0, y: 0, z: 0, w: 1 }, spin: 0, rise: 0, push: false, eye: camera.position });
     env.render(renderer, camera);
     ball.dispose();
     await this.step(3, n, "Building the first level");

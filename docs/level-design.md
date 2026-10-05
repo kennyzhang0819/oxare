@@ -99,7 +99,6 @@ Structures snap to a 2 grid, so most of these are "one grid step from the edge".
 - **Rails:** side end on a higher platform down to a top end on a lower one, 13 to 16 long, or side to side between slabs at one height (05, 10, 11).
 - **Twist and roll:** a slab twisted 30 feeds a slab rolled 30, with a rolled jump pad on it to throw the ball sideways (10, 16, 17).
 - **Moving platforms:** 4×4 pingpong over 4 at speed 1 to 3, in pairs or threes as stepping stones (04, 05, 09, 10, 12); a 6×6 over 10 or 16 as a ferry (12, 16, n01).
-- **Pangolin:** 8 long over a 4 gap with its snout 3.5 in from the near edge, so its coil sits on the platform and its tail tip lands 0.5 onto the far one. The ball touching it stops dead, then follows it across; at the default speed it is down in about 1.6 seconds. Laid out, a ball at full speed rolls over it with under 0.05 of lift. Its path can turn and climb: give the corner a bend and keep the climb over the gap, so the laid body never cuts into a platform's top; a ball held to about 3 a second follows it round a 90° corner that rises a layer.
 - **Knock-down plank as a ramp up:** an 8-tall plank standing on a low ledge 6 from a slab 4 higher leans on it at 30° when knocked (14).
 
 ## Harder twists (what `n01` changes)

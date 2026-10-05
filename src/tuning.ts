@@ -34,8 +34,6 @@ export const TUNING = {
   magnetFalloff: 2,
   // Treadmill: how fast its belt runs, and so how fast a ball left on it rides along.
   beltSpeed: 3,
-  // Pangolin: units per second it unrolls at, on average; it eases in and out, so its top speed is about 1.5 times this.
-  unrollSpeed: 3.5,
 };
 export type Tuning = typeof TUNING;
 export type TuningKey = keyof Tuning;
@@ -64,7 +62,6 @@ export const TUNING_RANGES: Record<TuningKey, [min: number, max: number, step: n
   magnetHold: [0, 0.9, 0.05],
   magnetFalloff: [1, 4, 0.25],
   beltSpeed: [0, 25, 0.5],
-  unrollSpeed: [0.5, 12, 0.25],
 };
 
 export const DEFAULT_TUNING: Tuning = { ...TUNING };

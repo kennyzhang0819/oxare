@@ -53,7 +53,7 @@ The mixed floor, the default, is mostly grass with patches of the others (`patch
 | bean | a steel capsule with a red band near each end |
 | plank | a steel sheet with a yellow band across its top end and another just above its hinge, on plain steel mounts |
 | board, seesaw | a steel plate with both ends painted yellow; a seesaw's posts plain steel |
-| pangolin, bridge, spinner, start pad | plain steel (the pangolin with yellow bands, the start pad's bowl dark) |
+| bridge, spinner, start pad | plain steel (the start pad's bowl dark) |
 | arch | steel arches and their ears, no panels or trim |
 | lamp post, signal mast | plain steel bars; the lamp under the hood glows `RUIN.lamp`, the mast's beacon blinks `RUIN.beacon` (both unlit, no outline) |
 | fences, rails, rings | plain steel pipe, no light strip |
@@ -91,7 +91,7 @@ The shared popup (`openDialog`, dialog.ts) is the UI's one way to tell the playe
 
 ## Effects
 
-Effects are not pieces and keep their own colors, in `EFFECTS`: the jump pad's rising squares (#f0c45a), the magnet's aura (#ff2828) and the ball's blues. The origin's wormhole is drawn in its own shaders, from `GOAL.disc` (the accretion disc's cool blue) and `CYAN` (its hot inner glow and sparks). Sky, sea, lighting and the editor's guides are outside the palette too.
+Effects are not pieces and keep their own colors, in `EFFECTS`: the jump pad's rising squares (#f0c45a), the magnet's aura (#ff2828); the hedgehog keeps its own browns and creams (`HOG` in hedgehog.ts). The origin's wormhole is drawn in its own shaders, from `GOAL.disc` (the accretion disc's cool blue) and `CYAN` (its hot inner glow and sparks). Sky, sea, lighting and the editor's guides are outside the palette too.
 
 ## Looks
 

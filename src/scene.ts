@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { APPLE, BALL_RADIUS, BEAN_LIFT, BUTTON, buttonBase, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_GAP, GATE_BEND_R, GATE_ROUND, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_LEG, BARRIER_LEG_R, BARRIER_R, barrierSize, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
-import { BELT_TILE, METAL_TILE, TILE, airTexture, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
+import { APPLE, BALL_RADIUS, BEAN_LIFT, BUTTON, buttonBase, CUBE_S, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_GAP, GATE_BEND_R, GATE_ROUND, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_LEG, BARRIER_LEG_R, BARRIER_R, barrierSize, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { BELT_TILE, METAL_TILE, TILE, airTexture, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { APPLE as APPLE_COLORS, CAUTION, GOLDEN as GOLDEN_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, PUFFER, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh, type PlatformJoins } from "./platform.ts";
@@ -1029,133 +1029,6 @@ function buildPlank(g: THREE.Group, p: Piece & { type: "plank" }): THREE.Group {
     }
   }
   return panel;
-}
-
-// Pangolin: one body mesh, bent along its belly line (pangolinLine) every frame, with flat paint discs
-// riding it: in the soft look staggered rows of scales on back and belly (the belly is the coil's
-// outside), each a pale plate over a darker one showing as a rim on its tail side, and on its head a
-// cream face, two eyes and an orange nose, the push accent; in the lab look orange bands.
-// Returns what poses it `a` unrolled; the editor also outlines where it lies unrolled.
-function buildPangolin(g: THREE.Group, p: Pangolin, editor: boolean): (a: number) => void {
-  const st = STRUCT!, tr = pangolinTrack(p), L = tr.L;
-  // A path with no length (two nodes on one spot, mid-edit) has no body to draw.
-  if (L < PANGOLIN_SEG) return () => {};
-  const n = Math.max(24, Math.ceil(L / 0.06)), ss = Array.from({ length: n + 1 }, (_, i) => (i * L) / n);
-  const rings = ss.map((s) => pangolinRing(tr, s)), R = rings[0]!.length, caps = (n + 1) * R;
-  const pos = new Float32Array((caps + 2 * (R + 1)) * 3), nor = new Float32Array(pos.length), idx: number[] = [];
-  for (let i = 0; i < n; i++) for (let k = 0; k < R; k++) {
-    const a = i * R + k, b = i * R + ((k + 1) % R);
-    idx.push(a, a + R, b, b, a + R, b + R);
-  }
-  for (let k = 0; k < R; k++) {
-    idx.push(caps, caps + 1 + k, caps + 1 + ((k + 1) % R));
-    const c = caps + R + 1;
-    idx.push(c, c + 1 + ((k + 1) % R), c + 1 + k);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
-  geo.setIndex(idx);
-  const body = new THREE.Mesh(geo, ruin() ? st.body : st.plank);
-  body.userData.live = true;
-  body.castShadow = body.receiveShadow = true;
-  g.add(body);
-  // Paint: discs `rx` across and `rs` along, on the back or the belly at (s, x), each colour one mesh;
-  // `over` lifts one a paint layer, onto the discs under it.
-  type Disc = { s: number; x: number; top: boolean; rx: number; rs: number; over?: boolean };
-  const discs: [Disc[], THREE.Material, boolean?][] = [];
-  const across = (s: number) => pangolinSize(tr, s).w / 2 - 0.1;
-  const bands: Disc[] = [];
-  for (let s = 1; s < L - 0.6; s += 1) for (const top of [true, false]) bands.push({ s, x: 0, top, rx: across(s) * 0.9, rs: 0.06 });
-  discs.push([bands, ruin() ? ruinPaint().move : st.plankGlow]);
-  // Each paint vertex rides the body at its own s, so a disc bends with the coil, the path's turns and
-  // the sloping ends. What doesn't change as it unrolls is worked out here: per vertex its sample and
-  // the share of the way to the next (at, u), its height off the belly line (h), the turn of the surface
-  // under it from the line's (ct, st), and its offset and normal in the disc (x, y, nx, ny, nz).
-  const unit = new THREE.SphereGeometry(1, 12, 6), up = unit.getAttribute("position"), un = unit.getAttribute("normal"), ui = unit.getIndex()!;
-  const painted = discs.map(([list, mat, ink]) => {
-    const V = up.count, count = list.length * V, ix: number[] = [];
-    const at = new Int32Array(count), u = new Float32Array(count), h = new Float32Array(count), ct = new Float32Array(count), st = new Float32Array(count);
-    const x = new Float32Array(count), y = new Float32Array(count), nx = new Float32Array(count), ny = new Float32Array(count), nz = new Float32Array(count);
-    list.forEach((d, j) => {
-      for (let v = 0; v < V; v++) {
-        const o = j * V + v, sv = d.s - up.getZ(v) * d.rs, f = Math.max(0, Math.min(n - 1e-6, (sv / L) * n)), lift = d.over ? 2 * LAYER : 0;
-        const a = d.top ? Math.atan(pangolinSlope(tr, sv)) : 0, mx = un.getX(v) / d.rx, my = un.getY(v) / 0.025, mz = un.getZ(v) / d.rs, l = Math.hypot(mx, my, mz);
-        at[o] = Math.floor(f); u[o] = f - at[o]!;
-        h[o] = d.top ? pangolinSize(tr, sv).t - 0.02 + lift : 0.02 - lift;
-        ct[o] = Math.cos(a); st[o] = Math.sin(a);
-        x[o] = d.x + up.getX(v) * d.rx; y[o] = up.getY(v) * 0.025;
-        nx[o] = mx / l; ny[o] = my / l; nz[o] = mz / l;
-      }
-      for (let k = 0; k < ui.count; k++) ix.push(j * V + ui.getX(k));
-    });
-    const dg = new THREE.BufferGeometry();
-    dg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    dg.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    dg.setIndex(ix);
-    const m = new THREE.Mesh(dg, mat);
-    m.userData.live = true;
-    if (ink) m.userData.noShadow = true;
-    g.add(m);
-    return { count, at, u, h, ct, st, x, y, nx, ny, nz, geo: dg };
-  });
-  unit.dispose();
-  // Per sample: the belly line's point, and the body's side, up and back (toward the snout), 3 each.
-  const Pt = new Float32Array((n + 1) * 3), X = new Float32Array(Pt.length), U = new Float32Array(Pt.length), B = new Float32Array(Pt.length);
-  // One sphere round every pose, curled to laid out, so culling never needs it worked out again.
-  const lo = [0, 1, 2].map((k) => Math.min(...tr.c.map((c) => c[k]!))), hi = [0, 1, 2].map((k) => Math.max(...tr.c.map((c) => c[k]!)));
-  const bound = new THREE.Sphere(new THREE.Vector3((lo[0]! + hi[0]!) / 2, (lo[1]! + hi[1]!) / 2 + 0.5, (lo[2]! + hi[2]!) / 2), Math.hypot(hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!) / 2 + p.w / 2 + 2);
-  for (const m of [geo, ...painted.map((d) => d.geo)]) m.boundingSphere = bound;
-  if (editor) {
-    // Where it lies unrolled: its full width along the path, at its back's height.
-    const laid = pangolinLine(tr, L, ss), edge = (k: number) => laid.map((q) => pangolinPoint(q, (k * p.w) / 2, PANGOLIN_T));
-    const left = edge(-1), right = edge(1), seg: number[] = [];
-    for (const side of [left, right]) for (let i = 0; i < n; i++) seg.push(...side[i]!, ...side[i + 1]!);
-    seg.push(...left[0]!, ...right[0]!, ...left[n]!, ...right[n]!);
-    const guide = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(seg, 3)), ROUTE_MAT);
-    guide.renderOrder = 9;
-    g.add(guide);
-  }
-  return (a: number) => {
-    pangolinLine(tr, a, ss).forEach((q, i) => {
-      const o = i * 3, f = q.f, w = q.u, sx = f[1] * w[2] - f[2] * w[1], sy = f[2] * w[0] - f[0] * w[2], sz = f[0] * w[1] - f[1] * w[0];
-      Pt[o] = q.c[0]; Pt[o + 1] = q.c[1]; Pt[o + 2] = q.c[2];
-      X[o] = sx; X[o + 1] = sy; X[o + 2] = sz;
-      U[o] = w[0]; U[o + 1] = w[1]; U[o + 2] = w[2];
-      B[o] = -f[0]; B[o + 1] = -f[1]; B[o + 2] = -f[2];
-      rings[i]!.forEach(([x, t, nx, nt], k) => {
-        const v = (i * R + k) * 3;
-        for (let c = 0; c < 3; c++) { pos[v + c] = Pt[o + c]! + X[o + c]! * x + U[o + c]! * t; nor[v + c] = X[o + c]! * nx + U[o + c]! * nt; }
-      });
-    });
-    // The two end caps: a fan round each end ring's middle, facing out along the body.
-    for (const [i, base, dir] of [[0, caps, 1], [n, caps + R + 1, -1]] as const) {
-      let cx = 0, cy = 0, cz = 0;
-      for (let k = 0; k < R; k++) {
-        const f = (i * R + k) * 3, o = (base + 1 + k) * 3;
-        pos[o] = pos[f]!; pos[o + 1] = pos[f + 1]!; pos[o + 2] = pos[f + 2]!;
-        cx += pos[f]!; cy += pos[f + 1]!; cz += pos[f + 2]!;
-      }
-      pos[base * 3] = cx / R; pos[base * 3 + 1] = cy / R; pos[base * 3 + 2] = cz / R;
-      for (let k = 0; k <= R; k++) for (let c = 0; c < 3; c++) nor[(base + k) * 3 + c] = B[i * 3 + c]! * dir;
-    }
-    geo.attributes.position!.needsUpdate = geo.attributes.normal!.needsUpdate = true;
-    for (const d of painted) {
-      const P = d.geo.attributes.position!.array as Float32Array, N = d.geo.attributes.normal!.array as Float32Array;
-      for (let v = 0; v < d.count; v++) {
-        const i = d.at[v]! * 3, j = i + 3, u = d.u[v]!, w = 1 - u, h = d.h[v]!, ct = d.ct[v]!, sn = d.st[v]!, o = v * 3;
-        const x = d.x[v]!, ly = d.y[v]!, nx = d.nx[v]!, my = d.ny[v]!, mz = d.nz[v]!;
-        for (let c = 0; c < 3; c++) {
-          // The surface under the disc is the body's up and back turned by the end's slope.
-          const xs = X[i + c]! * w + X[j + c]! * u, us = U[i + c]! * w + U[j + c]! * u, bs = B[i + c]! * w + B[j + c]! * u;
-          const top = us * ct + bs * sn, back = bs * ct - us * sn;
-          P[o + c] = Pt[i + c]! * w + Pt[j + c]! * u + xs * x + us * h + top * ly;
-          N[o + c] = xs * nx + top * my + back * mz;
-        }
-      }
-      d.geo.attributes.position!.needsUpdate = d.geo.attributes.normal!.needsUpdate = true;
-    }
-  };
 }
 
 // Board: the seesaw's tiled board with its orange rim on both faces, loose, PLANK_T thick. The group is
@@ -2364,8 +2237,6 @@ export interface Built {
   bridges: Map<number, THREE.Group[]>;
   // The moving part of each knock-down plank, seesaw and stool, local to the piece group, posed from its body.
   planks: Map<number, THREE.Group>;
-  // Each pangolin's pose: bends it to `a` unrolled (pangolinLine).
-  pangolins: Map<number, (a: number) => void>;
   // Each jump pad's spring pose, by piece index: `t` seconds since it launched something.
   springs: Map<number, (t: number) => void>;
   // Each moving platform's piece group, placed by its schedule every frame in play.
@@ -2426,7 +2297,6 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
   const crates = new Map<number, THREE.Group>();
   const bridges = new Map<number, THREE.Group[]>();
   const planks = new Map<number, THREE.Group>();
-  const pangolins = new Map<number, (a: number) => void>();
   const movers = new Map<number, THREE.Group>();
   const pool = new Map<string, number[]>(), kept = new Set<THREE.Group>();
   reuse?.pieceGroups.forEach((g, i) => { const k = g.userData.buildKey as string | undefined; if (k) pool.set(k, [...(pool.get(k) ?? []), i]); });
@@ -2440,7 +2310,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     if (reuse && was !== undefined) {
       const g = reuse.pieceGroups[was]!;
       g.userData.pieceIndex = index;
-      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.pangolins, pangolins], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
+      for (const [from, to] of [[reuse.spinnerBars, spinnerBars], [reuse.crates, crates], [reuse.bridges, bridges], [reuse.planks, planks], [reuse.movers, movers]] as [Map<number, unknown>, Map<number, unknown>][]) {
         if (from.has(was)) to.set(index, from.get(was));
       }
       kept.add(g);
@@ -2471,7 +2341,6 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     if (p.type === "plank") planks.set(index, buildPlank(g, p));
     if (p.type === "seesaw") planks.set(index, buildSeesaw(g, p, editor));
     if (p.type === "board") planks.set(index, buildBoard(g, p));
-    if (p.type === "pangolin") { const pose = buildPangolin(g, p, editor); pose(pangolinRest(pangolinTrack(p))); pangolins.set(index, pose); }
     if (p.type === "stool") planks.set(index, buildStool(g, p, editor));
     if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
@@ -2577,7 +2446,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     });
     return list.length && !box.isEmpty() ? [{ group: g, index: i, box, hulls: list, meshes, platform: isPlatform(level.pieces[i]!) }] : [];
   });
-  return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, movers, decor, hulls,
+  return { group, pieceGroups, spinnerBars, crates, bridges, planks, movers, decor, hulls,
     puffers: new Map(pieceGroups.flatMap((g, i) => (g.userData.puff ? [[i, g.userData.puff as (r: number | null) => void]] : []))),
     buttons: new Map(pieceGroups.flatMap((g, i) => (g.userData.press ? [[i, g.userData.press as (down: boolean) => void]] : []))),
     springs: new Map(pieceGroups.flatMap((g, i) => (g.userData.spring ? [[i, g.userData.spring as (t: number) => void]] : []))),
@@ -2592,7 +2461,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
 let TOON_RAMP: THREE.DataTexture | null = null;
 const TOON_CACHE = new Map<THREE.Material, THREE.Material>();
 let OUTLINE_MAT: THREE.MeshBasicMaterial | null = null;
-function toonRamp(): THREE.DataTexture {
+export function toonRamp(): THREE.DataTexture {
   if (!TOON_RAMP) {
     TOON_RAMP = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1);
     TOON_RAMP.minFilter = TOON_RAMP.magFilter = THREE.NearestFilter;
@@ -2711,7 +2580,9 @@ export function stylize(root: THREE.Object3D): void {
   });
   for (const [o, hull] of hulls) o.add(hull);
 }
-function outlineMaterial(width: number, color: number): THREE.MeshBasicMaterial {
+// The shared ink outline material, for meshes drawn outside stylize (the hedgehog).
+export const inkMaterial = (): THREE.MeshBasicMaterial => (OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor));
+export function outlineMaterial(width: number, color: number): THREE.MeshBasicMaterial {
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `vec3 transformed = vec3(position) + normal * ${width.toFixed(4)};`);
@@ -2734,55 +2605,6 @@ function buildMoverRoute(g: THREE.Group, p: Mover) {
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ROUTE_MAT);
   line.renderOrder = 9;
   g.add(line);
-}
-
-export interface Ball { mesh: THREE.Mesh; reflect(renderer: THREE.WebGLRenderer, env: SceneEnv): void; dispose(): void }
-
-// Lacquered ball mirroring the live scene: a cube camera at the ball re-renders the surroundings
-// each frame into its environment map, so platforms, rails and sky slide across it as it rolls.
-export function makeBall(): Ball {
-  const maps = ballTextures();
-  const target = new THREE.WebGLCubeRenderTarget(128);
-  const cube = new THREE.CubeCamera(0.2, 400, target);
-  const geo = new THREE.SphereGeometry(BALL_RADIUS, 48, 24);
-  // The toy ball is lit in steps like the pieces and wears the ink outline; it mirrors nothing.
-  const mesh = new THREE.Mesh(
-    geo,
-    EFFECTS.ball.cute && ENV.toon
-      ? new THREE.MeshToonMaterial({ map: maps.map, gradientMap: toonRamp() })
-      : new THREE.MeshPhysicalMaterial({
-        map: maps.map, roughnessMap: maps.roughness, roughness: 1, metalness: 1,
-        emissiveMap: maps.emissive, emissive: 0xffffff, emissiveIntensity: 1.1 * ENV.glow,
-        envMap: target.texture, envMapIntensity: 1.2, clearcoat: 0.6, clearcoatRoughness: 0.15,
-      }),
-  );
-  mesh.castShadow = true;
-  if (EFFECTS.ball.cute && ENV.outline > 0) {
-    OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor);
-    const hull = new THREE.Mesh(geo, OUTLINE_MAT);
-    hull.userData.outline = true;
-    mesh.add(hull);
-  }
-  return {
-    mesh,
-    reflect(renderer, env) {
-      if (EFFECTS.ball.cute && ENV.toon) return;
-      cube.position.copy(mesh.position);
-      mesh.visible = false;
-      const auto = renderer.shadowMap.autoUpdate;
-      renderer.shadowMap.autoUpdate = false; // the six faces reuse the main view's shadow maps
-      env.setDetail(false);
-      const bg = env.scene.background;
-      env.scene.background = null; // the six faces draw the dome itself, not the main view's sky buffer
-      for (const c of cube.children) c.layers.enable(SKY_LAYER);
-      cube.update(renderer, env.scene);
-      env.scene.background = bg;
-      env.setDetail(true);
-      renderer.shadowMap.autoUpdate = auto;
-      mesh.visible = true;
-    },
-    dispose() { target.dispose(); },
-  };
 }
 
 // Treadmill: the opening's walls (a dark box seen from inside, so it looks the same from below) and

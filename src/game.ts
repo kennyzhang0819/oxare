@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { Input } from "./input.ts";
-import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, startOf, takesApple, moverShift, pangolinUnrolled, type Level } from "./level.ts";
-import { buildLevel, createScene, fitSun, hideHullsAround, makeBall, posePlank, puffRings, turnBelts, type Built, type SceneEnv } from "./scene.ts";
+import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, startOf, takesApple, moverShift, type Level } from "./level.ts";
+import { buildLevel, createScene, fitSun, hideHullsAround, posePlank, puffRings, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { disposeDecor } from "./decor.ts";
 import { NEAR_ON } from "./fade.ts";
+import { makeHedgehog } from "./hedgehog.ts";
 import { STEP, createSim, moverTime, type Sim } from "./sim.ts";
 import { decorStems } from "./decor.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
@@ -13,8 +14,8 @@ import { Stats } from "./stats.ts";
 import { toggle } from "./toggle.ts";
 import { clear, h } from "./ui.ts";
 import { APPLE_EMPTY, APPLE_ICON, GOLDEN_ICON, appleMarks } from "./icons.ts";
-import { goldenOpen, recordClear } from "./progress.ts";
-import { openDialog } from "./dialog.ts";
+import { goldenOpen, isFirstLevel, isGoldenOpener, markSeen, recordClear, replayDialogs, seenDialog } from "./progress.ts";
+import { openDialog, type DialogOpts } from "./dialog.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Seconds the wormhole takes to swallow the ball before the level-complete card.
@@ -32,13 +33,14 @@ export class Game implements Mode {
   private env: SceneEnv;
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private built: Built;
-  private ball = makeBall();
+  private ball = makeHedgehog();
   private input = new Input();
   private sim: Sim | null = null;
   // Pose before the latest physics step; the frame renders between it and the current pose.
   private prevPos = new THREE.Vector3();
   private prevRot = new THREE.Quaternion();
   private shown = new THREE.Vector3();
+  private shownRot = new THREE.Quaternion();
   private yaw = 0;
   private acc = 0;
   private last = 0;
@@ -59,15 +61,14 @@ export class Game implements Mode {
   private count: HTMLElement | null = null;
   // Set once the ball goes back into the wormhole: where it went in and how long it has been sinking.
   private sink: { from: THREE.Vector3; to: THREE.Vector3; t: number; ended: boolean } | null = null;
-  private frames = 0;
-  // How far each pangolin was last drawn unrolled, by piece index.
-  private unrolled = new Map<number, number>();
   ready: Promise<void>;
   private drawn!: () => void;
   private hud: HTMLElement;
   private stats: Stats;
   private tunePanel: HTMLElement | null = null;
   private pauseMenu: HTMLElement | null = null;
+  // A story popup is up (say): the run waits for it like the pause menu.
+  private talking = false;
   private onResize = () => this.resize();
   // Set when the game lets go of the mouse itself, so only the player's Esc out of the lock pauses.
   private released = false;
@@ -76,10 +77,11 @@ export class Game implements Mode {
     if (document.pointerLockElement) return;
     this.unlockedAt = performance.now();
     if (this.released) { this.released = false; return; }
-    if (!this.done && !this.pauseMenu) this.togglePause();
+    if (!this.done && !this.pauseMenu && !this.talking) this.togglePause();
   };
   private onKey = (e: KeyboardEvent) => {
     // The Esc that ended a mouse lock has already paused.
+    if (this.talking) return;
     if (e.code === "Escape" && !this.done && performance.now() - this.unlockedAt > 300) this.togglePause();
     if (e.code === "KeyT" && this.opts.admin && !(e.target instanceof HTMLInputElement)) this.toggleTune();
     if (e.code === "KeyR" && !(e.target instanceof HTMLInputElement)) this.fall();
@@ -112,7 +114,10 @@ export class Game implements Mode {
     ctx.overlay.append(this.hud);
     this.stats = new Stats(ctx.renderer, ctx.overlay);
     this.input.attach(ctx.canvas, ctx.overlay);
-    this.input.lock();
+    // Level 1 opens with the tutorial (its apples, then the way home once they are taken).
+    if (this.tutorial()) this.say("intro", { icon: APPLE_ICON, title: "Oh no...",
+      body: line("I'm trapped here! I need ", this.total, " to power my teleporter. Collect them!"), buttons: [{ label: "Let's go!", primary: true }] });
+    else this.input.lock();
     addEventListener("resize", this.onResize);
     addEventListener("keydown", this.onKey);
     document.addEventListener("pointerlockchange", this.onLock);
@@ -149,7 +154,7 @@ export class Game implements Mode {
     this.input.update();
     const lookPx = this.input.takeLookPx();
     let simMs = 0;
-    if (!this.done && !this.pauseMenu) {
+    if (!this.done && !this.pauseMenu && !this.talking) {
       this.yaw -= this.input.steer * TUNING.yawRate * dt + lookPx * TUNING.mouseSens;
       this.acc += dt;
       this.time += dt;
@@ -166,10 +171,11 @@ export class Game implements Mode {
     // the previous pose by the unconsumed fraction of a step moves the ball by exactly the frame's dt.
     const alpha = this.done ? 1 : this.acc / STEP;
     const p = sim.ball.translation();
-    const r = sim.ball.rotation();
+    const r = sim.ball.rotation(), w = sim.ball.angvel(), v = sim.ball.linvel();
     this.shown.set(p.x, p.y, p.z).lerp(this.prevPos, 1 - alpha);
     this.ball.mesh.position.copy(this.shown);
-    this.ball.mesh.quaternion.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
+    this.shownRot.set(r.x, r.y, r.z, r.w).slerp(this.prevRot, 1 - alpha);
+    this.ball.update(dt, { rot: this.shownRot, spin: Math.hypot(w.x, w.y, w.z), rise: v.y, push: !this.done && !this.pauseMenu && !this.talking && this.input.throttle !== 0, eye: this.camera.position });
     if (this.sink) this.sinkBall(dt);
     turnBelts(sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
     puffRings(this.built, this.level, sim.time - STEP * (1 - alpha), TUNING.puffSpeed);
@@ -207,11 +213,6 @@ export class Game implements Mode {
       if (panel && piece) posePlank(piece, panel, pl.body.translation(), pl.body.rotation());
     }
     for (const sp of sim.springs) if (sp.at !== null) this.built.springs.get(sp.index)?.(sim.time - STEP * (1 - alpha) - sp.at);
-    for (const pg of sim.pangolins) {
-      const pose = this.built.pangolins.get(pg.index);
-      const a = pangolinUnrolled(pg.track, pg.at === null ? 0 : sim.time - STEP * (1 - alpha) - pg.at, TUNING.unrollSpeed);
-      if (pose && a !== this.unrolled.get(pg.index)) { this.unrolled.set(pg.index, a); pose(a); }
-    }
     if (!this.done) {
       if (p.y < sim.respawnY) this.fall();
       this.collect(p);
@@ -219,9 +220,6 @@ export class Game implements Mode {
     }
     this.poseApples();
     this.updateCamera();
-    // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
-    // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
-    if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
     hideHullsAround(this.built, this.camera.position, this.ball.mesh.position);
     NEAR_ON.value = 1;
     this.env.render(this.ctx.renderer, this.camera);
@@ -277,7 +275,11 @@ export class Game implements Mode {
       if (m === this.golds) { this.markGold(); continue; }
       const n = this.red();
       if (this.count) this.count.textContent = `${n} / ${this.total}`;
-      if (n === this.total) { this.openAt = this.time; this.count?.parentElement?.classList.add("done"); }
+      if (n !== this.total) continue;
+      this.openAt = this.time;
+      this.count?.parentElement?.classList.add("done");
+      if (this.tutorial()) this.say("powered", { icon: APPLE_ICON, title: "Teleporter powered!",
+        body: line("I collected ", this.total, ", my teleporter has been powered at the starting area!"), buttons: [{ label: "Head back", primary: true }] });
     }
   }
 
@@ -356,13 +358,33 @@ export class Game implements Mode {
     this.finish();
   }
 
-  // Played from the player's list, the clear is kept (progress.ts); the clear that makes golden apples
-  // appear says so in a popup over the card.
+  private tutorial(): boolean {
+    return !this.opts.admin && this.total > 0 && isFirstLevel(this.level);
+  }
+
+  // A story popup, once per player (progress.ts seenDialog) and never from the admin panel or editor; the
+  // run waits under it and takes the mouse back once it closes.
+  private say(id: string, opts: DialogOpts) {
+    if (this.opts.admin || seenDialog(id)) return;
+    this.talking = true;
+    this.releaseMouse();
+    void this.ready.then(() => {
+      if (this.raf === -1) return;
+      openDialog(this.ctx.overlay, { ...opts, onClose: () => {
+        markSeen(id);
+        this.talking = false;
+        if (!this.done) this.input.lock();
+      } });
+    });
+  }
+
+  // Played from the player's list, the clear is kept (progress.ts); the clear of the level that makes golden
+  // apples appear says so in a popup over the card.
   private finish() {
     this.done = true;
     this.releaseMouse();
     const gold = this.goldHome();
-    const opens = !this.opts.admin && recordClear(this.level, gold);
+    if (!this.opts.admin) recordClear(this.level, gold);
     this.ctx.overlay.append(
       h("div", { class: "banner" },
         h("div", { class: "card complete" },
@@ -377,7 +399,7 @@ export class Game implements Mode {
         ),
       ),
     );
-    if (opens) openDialog(this.ctx.overlay, {
+    if (isGoldenOpener(this.level)) this.say("golden", {
       icon: GOLDEN_ICON, tone: "gold", title: "Golden apple has appeared",
       body: "Some levels now hide an optional golden apple somewhere hard to reach.",
       buttons: [{ label: "Nice!", primary: true }],
@@ -452,6 +474,10 @@ export class Game implements Mode {
   }
 }
 
+// A dialog line with "N <apple>" in the middle.
+const line = (before: string, n: number, after: string) =>
+  h("p", {}, before, h("span", { class: "apple-count" }, `${n} `, h("span", { class: "apple-icon", innerHTML: APPLE_ICON })), after);
+
 // The player's own settings, shown in the pause menu and under Options on the home screen.
 export function playerSettings(): HTMLElement {
   // Speeds read as a share of their default; camera distances in units.
@@ -480,9 +506,14 @@ export function playerSettings(): HTMLElement {
     row("Camera distance", "camDist", true),
     row("Camera height", "camHeight", true),
   ];
+  const replay = () => {
+    const b = h("button", { class: "menu-btn small", onclick: () => { replayDialogs(); b.disabled = true; b.textContent = "Done"; } }, "Show again");
+    return h("div", { class: "action", title: "The tutorial and the golden apple popup show again when you next reach them" }, h("span", {}, "Story dialogs"), b);
+  };
   const other = () => [
     on("Performance stats", "While playing, in the top right: frame rate, frame, script and physics time, draw calls and triangles, resolution and memory",
       Stats.enabled(), (v) => Stats.setEnabled(v)),
+    replay(),
   ];
   const pages: [string, () => HTMLElement[]][] = [["Game", game], ["Interface", () => [size()]], ["Other", other]];
   const body = h("div", {}), tabs = h("div", { class: "settings-tabs", role: "tablist" });

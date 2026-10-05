@@ -243,133 +243,6 @@ export function boardLift(p: Piece & { type: "board" }): number {
 }
 // A seesaw's start angle, held inside its range.
 export const seesawTilt = (p: Piece & { type: "seesaw" }): number => { const [lo, hi] = seesawRange(p); return Math.max(lo, Math.min(hi, p.tilt)); };
-// Pangolin: a body `w` wide lying along a node path laid out like a tube's (see TubeNode), as long as
-// the path. (x, y, z) is its snout and `path` the rest, relative to it before `rot`, the last node its
-// tail tip; a node's y is the surface its belly lies on there. It waits with its head lying flat from
-// the snout and the rest curled up just past it, until something touches it; then it unrolls along the
-// path like a carpet, round its bends and up or down its slopes, and stays down, a bridge across the
-// gap. Both ends thin to a ramp. The body's line is its belly, s along it from the snout; the coil is a
-// spiral with the back inside, PANGOLIN_COIL between wraps and PANGOLIN_CORE across its innermost one,
-// so the head's top just clears the wrap above it (docs/animals.md).
-export type Pangolin = Piece & { type: "pangolin" };
-export const PANGOLIN_T = 0.25, PANGOLIN_COIL = 0.28, PANGOLIN_CORE = 0.3, PANGOLIN_SEG = 0.25, PANGOLIN_MIN_D = 4, PANGOLIN_STEEP = 50;
-// The tightest its path may turn, at the centre line, so the inner edge never folds; and the bend a
-// new rounded corner gets, that on the half grid.
-export const pangolinMinBend = (w: number): number => w / 2 + 0.25;
-export const pangolinBend = (w: number): number => Math.ceil(pangolinMinBend(w) * 2) / 2;
-// The belly line laid out, snout (s = 0) to tail tip (s = L), in the piece's own frame: knots at arc
-// length `s` with point `c` and unit heading `t`, a cubic between each two; and the body's width.
-export interface PangolinTrack { w: number; L: number; s: number[]; c: V3[]; t: V3[] }
-export function pangolinTrack(p: Pangolin): PangolinTrack {
-  const s: number[] = [], c: V3[] = [], t: V3[] = [];
-  for (const q of tubeRings(p, 0)) {
-    const k = c.length;
-    if (k && Math.hypot(...sub(q.c, c[k - 1]!)) < 1e-6) continue;
-    s.push(k ? s[k - 1]! + Math.hypot(...sub(q.c, c[k - 1]!)) : 0); c.push(q.c); t.push(unit(q.m));
-  }
-  if (!c.length) { s.push(0); c.push([0, 0, 0]); t.push([0, 0, -1]); }
-  return { w: p.w, L: s[s.length - 1]!, s, c, t };
-}
-// A place on the body: the belly line's point `c`, `f` along it toward the tail and `u` out of the back.
-export interface PangolinFrame { c: V3; f: V3; u: V3 }
-const upFrom = (f: V3): V3 => { const u = sub([0, 1, 0], [f[0] * f[1], f[1] * f[1], f[2] * f[1]]); return Math.hypot(...u) > 1e-6 ? unit(u) : [0, 0, 1]; };
-// The laid-out body's frame at s: never banked, its back square to the line and as near up as that allows.
-export function pangolinAt(tr: PangolinTrack, s: number): PangolinFrame {
-  const n = tr.s.length - 1;
-  if (n < 1) return { c: tr.c[0]!, f: tr.t[0]!, u: upFrom(tr.t[0]!) };
-  const v = Math.max(0, Math.min(tr.L, s));
-  let i = 0, j = n;
-  while (j - i > 1) { const m = (i + j) >> 1; if (tr.s[m]! <= v) i = m; else j = m; }
-  const h = tr.s[i + 1]! - tr.s[i]!, u = (v - tr.s[i]!) / h, u2 = u * u, u3 = u2 * u, a = tr.c[i]!, b = tr.c[i + 1]!, ta = tr.t[i]!, tb = tr.t[i + 1]!;
-  const P = (k: number) => (2 * u3 - 3 * u2 + 1) * a[k]! + (u3 - 2 * u2 + u) * h * ta[k]! + (-2 * u3 + 3 * u2) * b[k]! + (u3 - u2) * h * tb[k]!;
-  const D = (k: number) => (6 * u2 - 6 * u) * a[k]! + (3 * u2 - 4 * u + 1) * h * ta[k]! + (-6 * u2 + 6 * u) * b[k]! + (3 * u2 - 2 * u) * h * tb[k]!;
-  const f = unit([D(0), D(1), D(2)]);
-  return { c: [P(0), P(1), P(2)], f, u: upFrom(f) };
-}
-// The point `x` across and `t` up off the belly line at frame q.
-export function pangolinPoint(q: PangolinFrame, x: number, t: number): V3 {
-  const side: V3 = [q.f[1] * q.u[2] - q.f[2] * q.u[1], q.f[2] * q.u[0] - q.f[0] * q.u[2], q.f[0] * q.u[1] - q.f[1] * q.u[0]];
-  return add(add(q.c, side, x), q.u, t);
-}
-// What is wrong with a pangolin's path, if anything: too short, a sharp corner, a turn tighter than
-// pangolinMinBend, or a stretch steeper than PANGOLIN_STEEP degrees.
-export function pangolinProblems(p: Pangolin): string[] {
-  const out: string[] = [], tr = pangolinTrack(p), r = pangolinMinBend(p.w);
-  if (p.w < 1) out.push("w must be at least 1");
-  if (tr.L < PANGOLIN_MIN_D) out.push(`path must be at least ${PANGOLIN_MIN_D} long (it is ${tr.L.toFixed(2)})`);
-  if (!p.smooth) tubeTurns(p).forEach((deg, k) => {
-    const n = p.path[k - 1], rounded = n && n.bend > 0 && deg < 179 && !n.mid && !p.path[k]?.mid;
-    if (deg > 2 && !rounded) out.push(`node ${k} is a sharp ${deg.toFixed(0)}° corner; give it a bend`);
-  });
-  let tight = Infinity;
-  for (let i = 0; i + 1 < tr.c.length; i++) { const th = (angle(tr.t[i]!, tr.t[i + 1]!) * Math.PI) / 180; if (th > 1e-3) tight = Math.min(tight, (tr.s[i + 1]! - tr.s[i]!) / th); }
-  if (tight < r * 0.97) out.push(`turns as tight as radius ${tight.toFixed(2)}; at w ${p.w} it needs at least ${r}`);
-  if (tr.t.some((d) => Math.abs(d[1]) > Math.sin((PANGOLIN_STEEP * Math.PI) / 180) + 1e-6)) out.push(`path is steeper than ${PANGOLIN_STEEP}°`);
-  return out;
-}
-// Each end's ramp is long enough that a ball at full speed stays on it over the crest (speed squared
-// times the crest's bend under gravity), rather than being thrown, and thins almost to an edge, since
-// even a small step at the tip kicks a fast ball up.
-export const pangolinEnds = (tr: PangolinTrack) => ({ head: Math.min(2.4, tr.L * 0.3), tail: Math.min(2.4, tr.L * 0.3) });
-// How much lies flat while it waits: the head, out from under the coil.
-export const pangolinRest = (tr: PangolinTrack): number => Math.min(2.3, tr.L * 0.3);
-// Width and thickness at s: full in the middle, easing down to a thin point at the snout and tail tip.
-// Both are concave in s, so a straight laid-out body is convex.
-export function pangolinSize(tr: PangolinTrack, s: number): { w: number; t: number } {
-  const e = pangolinEnds(tr), ease = (u: number) => (u >= 1 ? 1 : u <= 0 ? 0 : 1 - (1 - u) ** 2);
-  const f = Math.min(ease(s / e.head), ease((tr.L - s) / e.tail));
-  return { w: tr.w * (0.3 + 0.7 * f), t: PANGOLIN_T * (0.03 + 0.97 * f) };
-}
-// Thickness's rate of change along s, for laying paint on the sloping ends.
-export const pangolinSlope = (tr: PangolinTrack, s: number): number => (pangolinSize(tr, s + 1e-3).t - pangolinSize(tr, s - 1e-3).t) / 2e-3;
-// Cross-section at s: a rounded rectangle across x and up its thickness t, as [x, t, nx, nt] round it.
-export function pangolinRing(tr: PangolinTrack, s: number): [number, number, number, number][] {
-  const { w, t } = pangolinSize(tr, s), r = Math.min(0.1, 0.45 * t), K = 3, out: [number, number, number, number][] = [];
-  const corners: [number, number, number][] = [[w / 2 - r, r, -Math.PI / 2], [w / 2 - r, t - r, 0], [-(w / 2 - r), t - r, Math.PI / 2], [-(w / 2 - r), r, Math.PI]];
-  for (const [cx, ct, a0] of corners) for (let k = 0; k <= K; k++) {
-    const a = a0 + (k / K) * (Math.PI / 2);
-    out.push([cx + r * Math.cos(a), ct + r * Math.sin(a), Math.cos(a), Math.sin(a)]);
-  }
-  return out;
-}
-// Where the physics cuts the body into slices: PANGOLIN_SEG apart or a little less, tail tip to snout.
-export function pangolinCuts(tr: PangolinTrack): number[] {
-  const n = Math.max(1, Math.ceil(tr.L / PANGOLIN_SEG - 1e-9));
-  return Array.from({ length: n + 1 }, (_, k) => (k * tr.L) / n);
-}
-// How much of it lies unrolled `elapsed` seconds after it was touched, at `speed` on average: eased in
-// and out, so it sets off and lands without a jolt.
-export function pangolinUnrolled(tr: PangolinTrack, elapsed: number, speed: number): number {
-  const a0 = pangolinRest(tr), u = Math.max(0, Math.min(1, (elapsed * speed) / (tr.L - a0)));
-  return a0 + ((tr.L - a0) * (1 - Math.cos(Math.PI * u))) / 2;
-}
-// The body's frame with `a` unrolled, at each s in `ss` (ascending). Laid out up to a, along the track;
-// past it the coil, standing on the track at a and facing along it there: its bend at s depends only on
-// how far s is from the snout, so the coil rolls along as one shape, shedding its outer wrap.
-export function pangolinLine(tr: PangolinTrack, a: number, ss: readonly number[]): PangolinFrame[] {
-  const L = tr.L, C = PANGOLIN_COIL, rad = (s: number) => Math.sqrt(PANGOLIN_CORE ** 2 + (C * Math.max(0, L - s)) / Math.PI);
-  const turn = (s: number) => ((2 * Math.PI) / C) * (rad(0) - rad(s)), ta = turn(a), o = pangolinAt(tr, a);
-  let fwd = 0, up = 0, at = a;
-  return ss.map((s) => {
-    if (s <= a) return pangolinAt(tr, s);
-    const n = Math.max(1, Math.ceil((s - at) / 0.01)), h = (s - at) / n;
-    for (let k = 0; k < n; k++) { const f = turn(at + (k + 0.5) * h) - ta; fwd += Math.cos(f) * h; up += Math.sin(f) * h; }
-    at = s;
-    const phi = turn(s) - ta, cp = Math.cos(phi), sp = Math.sin(phi);
-    return { c: add(add(o.c, o.f, fwd), o.u, up), f: add([o.f[0] * cp, o.f[1] * cp, o.f[2] * cp], o.u, sp), u: add([o.u[0] * cp, o.u[1] * cp, o.u[2] * cp], o.f, -sp) };
-  });
-}
-// Each physics slice's pose in the piece's frame with `a` unrolled: at its cut's point, lying along the
-// chord to the next cut with its back as near the line's up there as that allows. Its shape is the body
-// between the two cuts laid straight along its own -z.
-export function pangolinSlices(tr: PangolinTrack, a: number, cuts: readonly number[]): { c: V3; q: Quat }[] {
-  const line = pangolinLine(tr, a, cuts);
-  return line.slice(0, -1).map((b, j) => {
-    const f = unit(sub(line[j + 1]!.c, b.c)), u = unit(add(b.u, f, -dot(b.u, f)));
-    const x: V3 = [f[1] * u[2] - f[2] * u[1], f[2] * u[0] - f[0] * u[2], f[0] * u[1] - f[1] * u[0]];
-    return { c: b.c, q: quatFromAxes(x, u, [-f[0], -f[1], -f[2]]) };
-  });
-}
 // Support: three pillars standing against a platform's side wall, carrying a platform `h` layers
 // above. The piece origin is on the lower platform's edge at its top surface; the pillars stand
 // just outside that edge on local +z, from the lower platform's side wall up to the upper one's
@@ -671,8 +544,8 @@ export const TUBE_BEND = 1.5;
 // bends that segment into a smooth curve (see tubeSegments); without it the segment is straight.
 export interface TubeNode { x: number; y: number; z: number; bend: number; mid?: { x: number; y: number; z: number } }
 export type Tube = Piece & { type: "tube" };
-// Anything laid along a node path: tubes, rails, fences, beans and pangolins.
-export type PathPiece = Piece & { type: "tube" | "rails" | "fence" | "bean" | "pangolin" };
+// Anything laid along a node path: tubes, rails, fences and beans.
+export type PathPiece = Piece & { type: "tube" | "rails" | "fence" | "bean" };
 type PathLike = { path: TubeNode[]; smooth?: true };
 
 type V3 = [number, number, number];
@@ -976,16 +849,6 @@ export const quatYTo = (x: number, y: number, z: number): Quat => {
   return { x: z / l, y: 0, z: -x / l, w: w / l };
 };
 export const quatAboutY = (rad: number): Quat => ({ x: 0, y: Math.sin(rad / 2), z: 0, w: Math.cos(rad / 2) });
-// The turn carrying x, y and z onto the orthonormal right-handed axes `x`, `y` and `z`.
-export function quatFromAxes(x: V3, y: V3, z: V3): Quat {
-  const t = x[0] + y[1] + z[2];
-  if (t > 0) { const s = 0.5 / Math.sqrt(t + 1); return { w: 0.25 / s, x: (y[2] - z[1]) * s, y: (z[0] - x[2]) * s, z: (x[1] - y[0]) * s }; }
-  if (x[0] > y[1] && x[0] > z[2]) { const s = 2 * Math.sqrt(1 + x[0] - y[1] - z[2]); return { w: (y[2] - z[1]) / s, x: 0.25 * s, y: (y[0] + x[1]) / s, z: (z[0] + x[2]) / s }; }
-  if (y[1] > z[2]) { const s = 2 * Math.sqrt(1 + y[1] - x[0] - z[2]); return { w: (z[0] - x[2]) / s, x: (y[0] + x[1]) / s, y: 0.25 * s, z: (z[1] + y[2]) / s }; }
-  const s = 2 * Math.sqrt(1 + z[2] - x[0] - y[1]);
-  return { w: (x[1] - y[0]) / s, x: (z[0] + x[2]) / s, y: (z[1] + y[2]) / s, z: 0.25 * s };
-}
-
 // A bean's centre line in world space, from its first node: the points, how far along each is, and the whole length.
 export interface BeanTrack { pts: V3[]; s: number[]; len: number }
 export function beanTrack(p: Bean): BeanTrack {
@@ -1111,7 +974,6 @@ export type Piece =
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean; base?: number })
   | (At & { type: "seesaw"; w: number; d: number; h: number; rot: number; tilt: number; freeze?: boolean; dips?: "+z" | "-z" })
   | (At & { type: "board"; w: number; d: number; rot: number; tilt: number; roll?: number; freeze?: boolean })
-  | (At & { type: "pangolin"; w: number; rot: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "support"; w: number; h: number; rot: number; roll?: number; reach?: number })
   | (At & { type: "arch"; w: number; d: number; h: number; rot: number })
   | (At & { type: "lamp"; h: number; rot: number })
@@ -1141,7 +1003,7 @@ export type Piece =
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "arch", "lamp", "mast", "tree", "kicker", "jump", "button", "hole", "blockade", "barrier", "pillar", "column", "puffer", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "support", "arch", "lamp", "mast", "tree", "kicker", "jump", "button", "hole", "blockade", "barrier", "pillar", "column", "puffer", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "golden apple", base: "apple", make: (x, y, z) => ({ type: "apple", x, y, z, golden: true }) },
@@ -1511,7 +1373,7 @@ export function respawnY(level: Level): number {
   for (const p of level.pieces) {
     low = Math.min(low, p.y);
     if (p.type === "ramp" || isCurled(p)) low = Math.min(low, yRange(p)[0]);
-    if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean" || p.type === "pangolin") for (const n of p.path) low = Math.min(low, p.y + n.y);
+    if (p.type === "tube" || p.type === "rails" || p.type === "fence" || p.type === "bean") for (const n of p.path) low = Math.min(low, p.y + n.y);
     if (p.type === "slab" && p.move) for (const s of p.move.stops) low = Math.min(low, p.y + s.y);
   }
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
@@ -1842,7 +1704,6 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
     case "seesaw": return { type, x, y, z, w: 4, d: 8, h: SEESAW_PIVOT_H, rot: 0, tilt: 10 };
     case "board": return { type, x, y, z, w: 4, d: 8, rot: 0, tilt: 0 };
-    case "pangolin": return { type, x, y, z, w: 2.5, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: 0 }] };
     case "support": return { type, x, y, z, w: 6, h: SUPPORT_RISE, rot: 0 };
     case "arch": return { type, x, y, z, w: LANE_WIDTH, d: 0, h: GATE_H, rot: 0 };
     case "lamp": return { type, x, y, z, h: LAMP_H, rot: 0 };
@@ -2030,7 +1891,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && !CURVE_SWEEPS.includes(curveSweep(p))) out.push(`piece ${i}: curve sweep must be ${CURVE_SWEEPS.join(", ")}`);
     if (p.type === "curve" && curveSweep(p) === 270 && p.inner < CURVE_34_MIN_INNER) out.push(`piece ${i}: a 3/4 curve's inner must be at least ${CURVE_34_MIN_INNER}, or its two ends cross`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
-    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "pangolin" || p.type === "support" || p.type === "arch") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
+    if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "support" || p.type === "arch") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
     if (p.type === "barrier" && (barrierSize(p).w < 2 * BARRIER_R + 0.1 || barrierSize(p).h < BARRIER_LEG + 2 * BARRIER_R + 0.1)) out.push(`piece ${i}: barrier w must be at least ${2 * BARRIER_R + 0.1} and h at least ${BARRIER_LEG + 2 * BARRIER_R + 0.1}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
@@ -2063,7 +1924,6 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "plank" && (p.base ?? 0) < 0) out.push(`piece ${i}: plank base can't be negative`);
     if (p.type === "seesaw" && seesawPivot(p) < SEESAW_T) out.push(`piece ${i}: seesaw h must be at least ${SEESAW_T}`);
     if (p.type === "bridge" && p.d < 2 * BRIDGE_PITCH) out.push(`piece ${i}: bridge must span at least ${2 * BRIDGE_PITCH}`);
-    if (p.type === "pangolin") for (const m of pangolinProblems(p)) out.push(`piece ${i}: pangolin ${m}`);
   });
   return out;
 }
@@ -2164,13 +2024,6 @@ export function validateLevel(raw: unknown): Level {
         ...(typeof p.aYaw === "number" ? { aYaw: p.aYaw } : {}), ...(typeof p.bYaw === "number" ? { bYaw: p.bYaw } : {}) };
       case "plank": return { type: "plank", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.side === true ? { side: true } : {}), ...(p.freeze === true ? { freeze: true } : {}), ...(p.base ? { base: num(p.base, "base") } : {}) };
       case "board": return { type: "board", ...at, w: num(p.w ?? 4, "w"), d: num(p.d ?? 8, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.freeze === true ? { freeze: true } : {}) };
-      case "pangolin": {
-        const rot = num(p.rot ?? 0, "rot"), w = num(p.w ?? 2.5, "w"), smooth = p.smooth === true ? { smooth: true as const } : {};
-        if (p.path !== undefined) return { type: "pangolin", ...at, w, rot, path: parsePath(p.path, i), ...smooth };
-        // An older pangolin is `d` long and centred on (x, z), its snout at local z = d / 2.
-        const d = num(p.d ?? 8, "d"), o = rotXZ(0, d / 2, rot);
-        return { type: "pangolin", ...at, x: at.x + o.x, z: at.z + o.z, w, rot, path: [{ x: 0, y: 0, z: -d, bend: 0 }] };
-      }
       case "seesaw": return { type: "seesaw", ...at, w: num(p.w, "w"), d: num(p.d, "d"), h: num(p.h ?? SEESAW_PIVOT_H, "h"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.freeze === true ? { freeze: true } : {}), ...(p.dips === "+z" || p.dips === "-z" ? { dips: p.dips } : {}) };
       // Older levels have moving platforms as their own "mover" piece: a slab with its schedule inline.
       case "mover": return { type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: 0, move: parseMove(p, i) };
@@ -2179,7 +2032,7 @@ export function validateLevel(raw: unknown): Level {
         ...(p.track ? { track: num(p.track, "track"), offset: num(p.offset ?? 0, "offset") } : {}),
         ...(p.top !== undefined ? { top: num(p.top, "top") } : {}) };
       case "support": return { type: "support", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.reach !== undefined && num(p.reach, "reach") !== SUPPORT_REACH ? { reach: num(p.reach, "reach") } : {}) };
-      case "gate": case "clearing": return null;
+      case "gate": case "clearing": case "pangolin": return null;
       case "arch": return { type: "arch", ...at, w: num(p.w ?? LANE_WIDTH, "w"), d: num(p.d ?? 0, "d"), h: num(p.h ?? GATE_H, "h"), rot: num(p.rot ?? 0, "rot") };
       case "lamp": return { type: "lamp", ...at, h: num(p.h ?? LAMP_H, "h"), rot: num(p.rot ?? 0, "rot") };
       case "mast": return { type: "mast", ...at, h: num(p.h ?? MAST_H, "h"), rot: num(p.rot ?? 0, "rot") };

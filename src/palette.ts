@@ -75,12 +75,11 @@ export const DECOR = {
   cap: [0xf08a7a, 0xf6efe3, 0xc9a07a], stalk: 0xf6efe3, clover: [0x8acb6e, 0x9ad47c], ivy: [0x4f8f55, 0x5f9f58, 0x6aab5e],
 };
 
-// Effects, not pieces, keep their own colours: the jump pad's rising squares, the magnet's aura and
-// the ball. (The goal's portal is drawn in its own shaders.)
+// Effects, not pieces, keep their own colours: the jump pad's rising squares and the magnet's aura.
+// (The goal's portal is drawn in its own shaders; the hedgehog's colours are in hedgehog.ts.)
 export const EFFECTS = {
   jumpHolo: 0xffe566,
   magnetAura: 0xff6b6b,
-  ball: { light: 0x86bbf7, mid: 0x7fb5f2, dark: 0x7fb5f2, bevel: 0x7fb5f2, groove: 0x7fb5f2, dash: 0xeef4fb, chrome: false, cute: true },
 };
 
 // The world round the pieces and the finish on them: sky, clouds, sea, lights, and a few material
