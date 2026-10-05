@@ -13,10 +13,10 @@ export const TUBE_GLASS = 0xcfeaff;
 export const TILE_SHADES = 5, TILE_STEP = 0.006;
 
 export const PROPS = { white: WHITE, grey: DARK_GREY, tread: DARK_GREY, hinge: DARK_GREY, cyan: CYAN, movable: ORANGE };
-// Supports, columns and gates take the pillar's colours.
+// Supports, columns and arches take the pillar's colours.
 export const PILLAR = { white: WHITE, slate: DARK_GREY, pale: LIGHT_GREY };
 export const PLATFORM = { tile: WHITE, lip: WHITE, lipLine: LIGHT_GREY, recess: BLACK, rim: WHITE, border: LIGHT_GREY, block: DARK_GREY, plank: LIGHT_GREY, glass: TUBE_GLASS };
-// The circuit board every obstacle carries (barrier, kicker back, stool, puffer, magnet, barrel, gate).
+// The circuit board every obstacle carries (barrier, kicker back, stool, puffer, magnet, barrel, arch).
 export const BOARD = { edge: DARK_GREY, board: DARK_GREY, trace: LIGHT_GREY, pad: WHITE, hole: DARK_GREY, chip: LIGHT_GREY, chipTop: LIGHT_GREY };
 export const BLOCKADE = { plate: LIGHT_GREY };
 export const BARRIER = { grille: LIGHT_GREY, louvre: DARK_GREY };
@@ -31,7 +31,7 @@ export const MAGNET = { glow: RED, lower: DARK_RED, groove: BLACK, upper: BLACK 
 export const KICKER = { light: CYAN, glow: CYAN, slideTread: DARK_GREY };
 export const TUBE = { glass: TUBE_GLASS };
 export const RAILS = { rail: WHITE, stripe: CYAN };
-// The cube, on its own and hanging from a gate.
+// The pushable cube.
 export const CUBE = { body: DARK_GREY, plate: LIGHT_GREY, top: WHITE, glow: ORANGE };
 export const TREADMILL = { belt: 0x56625f, cleat: DARK_GREY, arrow: CYAN, bed: DARK_GREY };
 export const BEAN = { cap: LIGHT_GREY, stripe: RED, band: WHITE, body: DARK_GREY, dot: WHITE };

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, BUTTON, buttonLinked, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { onTop, slantedTop, snapOnTop } from "./slanted.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, stylize, type Built, type SceneEnv } from "./scene.ts";
 import { decorStems } from "./decor.ts";
@@ -28,9 +28,9 @@ export function blankLevel(taken: string[] = []): Level {
 // The add palette's sections; a type not listed here and not retired lands in misc.
 const PALETTE: [title: string, types: PieceType[]][] = [
   ["Platforms", ["slab", "curve", "ramp", "hole"]],
-  ["Interactables", ["bridge", "kicker", "jump", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
+  ["Interactables", ["bridge", "kicker", "jump", "button", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
-  ["Structures", ["gate", "arch", "support", "column", "lamp", "mast"]],
+  ["Structures", ["arch", "support", "column", "lamp", "mast"]],
   ["Nature", ["tree", "clearing"]],
   ["Misc", ["start", "apple"]],
 ];
@@ -54,7 +54,6 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   board: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 5], ["roll", 5]],
   pangolin: [["w", 0.5], ["rot", 15]],
   support: [["w", 0.5], ["h", 1], ["reach", 0.5], ["rot", 15], ["roll", 180]],
-  gate: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   arch: [["w", 0.5], ["d", 0.5], ["h", 0.5], ["rot", 15]],
   lamp: [["h", 0.5], ["rot", 15]],
   mast: [["h", 0.5], ["rot", 15]],
@@ -73,6 +72,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   hole: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   pillar: [["rot", 15], ["tilt", 15], ["roll", 15]],
   column: [["h", 0.5], ["r", 0.05], ["rot", 15], ["tilt", 15], ["roll", 15]],
+  button: [["rot", 15]],
   puffer: [["every", 0.5], ["offset", 0.25], ["rot", 15], ["tilt", 15], ["roll", 15]],
   magnet: [["rot", 15], ["tilt", 15], ["roll", 15]],
   spinner: [["length", 0.5], ["speed", 0.1]],
@@ -81,6 +81,10 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   hoop: [["rot", 15], ["tilt", 15], ["roll", 15]],
   fence: [["rot", 15]],
 };
+// The editor's button-to-platform links: dashed, drawn over everything, brighter when either end is selected.
+const LINK_MAT = new THREE.LineDashedMaterial({ color: 0xffd23f, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.7, depthTest: false });
+const LINK_LIT = new THREE.LineDashedMaterial({ color: 0xff8a2a, dashSize: 0.5, gapSize: 0.3, depthTest: false });
+const LINK_DOT = new THREE.SphereGeometry(0.25, 12, 8);
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
   w: "width", d: "depth", h: "height", rot: "rotate (°)", tilt: "tilt (°)", roll: "roll (°)", twist: "twist (°)", curl: "curl (°)",
@@ -339,6 +343,8 @@ export class Editor implements Mode {
   private built: Built;
   private sel = new Set<number>();
   private helpers: (THREE.Object3D & { update(): void })[] = [];
+  // A dashed line from each button to the start of the platform it starts.
+  private links = new THREE.Group();
   private clipboard: Piece[] = [];
   private cursor: { x: number; y: number } | null = null;
   private marquee: { x0: number; y0: number; el: HTMLElement; add: boolean } | null = null;
@@ -501,7 +507,7 @@ export class Editor implements Mode {
   }
 
   private commit(before = JSON.stringify(this.level)) {
-    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "gate" || q.type === "arch" || q.type === "tube") q.y = layerSnap(q.y);
+    for (const q of this.level.pieces) if (isPlatform(q) || q.type === "bridge" || q.type === "plank" || q.type === "seesaw" || q.type === "board" || q.type === "pangolin" || q.type === "support" || q.type === "arch" || q.type === "tube") q.y = layerSnap(q.y);
     if (before !== JSON.stringify(this.level)) this.pushUndo(before);
     this.refresh();
   }
@@ -510,6 +516,28 @@ export class Editor implements Mode {
   private placeFree(piece: Piece) {
     const others = { ...this.level, pieces: [...this.level.pieces, piece] };
     for (let tries = 0; tries < 400 && platformOverlaps(others).length; tries++) piece.x += 0.5;
+  }
+
+  private drawLinks() {
+    for (const o of this.links.children) (o as THREE.Line).geometry.dispose();
+    this.links.clear();
+    if (!this.links.parent) this.scene.add(this.links);
+    this.level.pieces.forEach((b, i) => {
+      if (b.type !== "button" || b.link === undefined) return;
+      const q = this.level.pieces[b.link];
+      if (!q || !isMoving(q)) return;
+      const lit = this.sel.has(i) || this.sel.has(b.link);
+      const from = new THREE.Vector3(b.x, b.y + BUTTON.baseH + BUTTON.capH, b.z), to = new THREE.Vector3(q.x, q.y + 0.05, q.z);
+      const mid = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, Math.min(6, 1 + from.distanceTo(to) * 0.15), 0));
+      const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(48)), lit ? LINK_LIT : LINK_MAT);
+      line.computeLineDistances();
+      line.renderOrder = 10;
+      const dot = new THREE.Mesh(LINK_DOT, lit ? LINK_LIT : LINK_MAT);
+      dot.position.copy(to);
+      dot.renderOrder = 10;
+      this.links.add(line, dot);
+    });
   }
 
   private refresh() {
@@ -531,6 +559,7 @@ export class Editor implements Mode {
       } else if (g) { const hl = new THREE.BoxHelper(g, 0xffd23f); this.helpers.push(hl); this.scene.add(hl); }
     }
     this.drawHitboxes();
+    this.drawLinks();
     this.grid?.removeFromParent();
     this.grid?.geometry.dispose();
     this.grid = null;
@@ -688,6 +717,20 @@ export class Editor implements Mode {
         ) as HTMLSelectElement;
         props.append(h("label", {}, "roll about", at));
       }
+      if (p.type === "button") {
+        // The moving platforms it can start, by piece index.
+        const movers = this.level.pieces.flatMap((q, k) => (isMoving(q) ? [k] : []));
+        const link = h("select", { title: "The moving platform this button starts: it waits at its start until the button is pressed", onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (link.value === "") delete p.link; else p.link = Number(link.value);
+          this.commit(before);
+        } },
+          h("option", { value: "", selected: p.link === undefined }, movers.length ? "pick a moving platform" : "no moving platforms yet"),
+          ...movers.map((k) => h("option", { value: String(k), selected: p.link === k }, `moving platform #${k}`)),
+        ) as HTMLSelectElement;
+        props.append(h("label", {}, "starts", link));
+      }
+      if (p.type === "slab" && isMoving(p) && buttonLinked(this.level, index)) props.append(h("div", { class: "hint" }, "Waits at its start until its button is pressed."));
       if (p.type === "slab") {
         const cb = h("input", { type: "checkbox", checked: !!p.belt, onchange: () => {
           const before = JSON.stringify(this.level);
@@ -1212,6 +1255,13 @@ export class Editor implements Mode {
   private remove() {
     if (!this.sel.size) return;
     const before = JSON.stringify(this.level);
+    // Buttons keep their platforms: links past a removed piece shift down with it, links to one go.
+    const gone = [...this.sel].sort((a, b) => a - b);
+    for (const q of this.level.pieces) {
+      if (q.type !== "button" || q.link === undefined) continue;
+      const link = q.link;
+      if (gone.includes(link)) delete q.link; else q.link = link - gone.filter((k) => k < link).length;
+    }
     for (const i of [...this.sel].sort((a, b) => b - a)) this.level.pieces.splice(i, 1);
     this.sel.clear();
     this.pushUndo(before);

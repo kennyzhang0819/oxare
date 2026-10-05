@@ -669,7 +669,7 @@ export function buildDecor(level: Level): THREE.Group {
         for (let k = 0; k < 3; k++) { const [x, y, z] = at((rnd() - 0.5) * p.w * 0.7, p.h - 0.05, back - 0.04); hang(x, y, z, p.h); }
       }
       if (p.type === "jump") for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) if (rnd() < 0.7) add(rnd() < 0.5 ? "fern" : "tuft", ...at(sx * (p.w / 2 + 0.3), 0, sz * (p.d / 2 + 0.3)), rnd() * 6.3, 0.8 + rnd() * 0.4, pick(DECOR.fern));
-      if (p.type === "gate" || p.type === "arch") for (const z of p.d ? [-p.d / 2, p.d / 2] : [0]) for (let x = -p.w / 2 + 0.6; x < p.w / 2 - 0.4; x += 0.8) if (rnd() < 0.55) hang(...at(x, p.h - 0.3, z), p.h - 0.6);
+      if (p.type === "arch") for (const z of p.d ? [-p.d / 2, p.d / 2] : [0]) for (let x = -p.w / 2 + 0.6; x < p.w / 2 - 0.4; x += 0.8) if (rnd() < 0.55) hang(...at(x, p.h - 0.3, z), p.h - 0.6);
       if (p.type === "lamp") {
         climb("wrapLamp", p.x, p.y + LAMP.foot, p.y + LAMP.foot + (p.h - 0.6) * (0.4 + rnd() * 0.5), p.z, rnd() * 6.3);
         for (let k = 0; k < 2; k++) { const [x, y, z] = at(LAMP.reach - 0.04 + (rnd() - 0.5) * 0.4, p.h + LAMP.rise - 0.1, (rnd() - 0.5) * 0.3); hang(x, y, z, p.h); }

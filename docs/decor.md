@@ -105,7 +105,7 @@ Each upright column gets:
 
 A tilted or rolled column is left bare.
 
-The lamp post gets a vine climbing part way up its post (`wrapLamp`), a vine or two hanging from its hood, and plants round its foot. The signal mast gets vines hanging from its rings and deck, a moss cushion on the deck, and a wide ring of plants round its foot. An arch gets vines hanging from its beam, like a gate.
+The lamp post gets a vine climbing part way up its post (`wrapLamp`), a vine or two hanging from its hood, and plants round its foot. The signal mast gets vines hanging from its rings and deck, a moss cushion on the deck, and a wide ring of plants round its foot. An arch gets vines hanging from its beam.
 
 Each support pillar gets ivy, flowers and leaf sprigs up all four faces, five per unit of height. Usually it also gets a vine climbing its stem (`wrapStem`, wound round the stem's corners) and one vine down its outer face from the platform it holds. A support turned over keeps its wall plants but gets no climbing or hanging vine.
 

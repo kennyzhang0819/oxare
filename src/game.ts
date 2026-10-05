@@ -4,7 +4,7 @@ import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, start
 import { buildLevel, createScene, fitSun, hideHullsAround, makeBall, posePlank, puffRings, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { disposeDecor } from "./decor.ts";
 import { NEAR_ON } from "./fade.ts";
-import { STEP, createSim, type Sim } from "./sim.ts";
+import { STEP, createSim, moverTime, type Sim } from "./sim.ts";
 import { decorStems } from "./decor.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
 import { slider } from "./slider.ts";
@@ -173,6 +173,7 @@ export class Game implements Mode {
     if (this.sink) this.sinkBall(dt);
     turnBelts(sim.beltTravel - TUNING.beltSpeed * STEP * (1 - alpha));
     puffRings(this.built, this.level, sim.time - STEP * (1 - alpha), TUNING.puffSpeed);
+    for (const b of sim.buttons) this.built.buttons.get(b.index)?.(b.pressed);
     for (const s of sim.spinners) {
       const bar = this.built.spinnerBars.get(s.index);
       if (bar) bar.rotation.y = s.angle - s.speed * STEP * (1 - alpha);
@@ -180,13 +181,13 @@ export class Game implements Mode {
     // Moving platforms by their schedule at the same in-between moment the ball is drawn at.
     for (const m of sim.movers) {
       const g = this.built.movers.get(m.index);
-      if (g) { const at = moverAt(m.piece, sim.time - STEP * (1 - alpha)); g.position.set(at.x, at.y, at.z); }
+      if (g) { const at = moverAt(m.piece, moverTime(m, sim.time - STEP * (1 - alpha))); g.position.set(at.x, at.y, at.z); }
     }
     // What rides a moving platform goes with it (a crate or barrel is placed by its own body below).
     for (const [i, m] of sim.riders) {
       const g = this.built.pieceGroups[i], p = this.level.pieces[i];
       if (!g || !p || p.type === "crate" || p.type === "barrel" || p.type === "cube") continue;
-      const d = moverShift(m.piece, sim.time - STEP * (1 - alpha));
+      const d = moverShift(m.piece, moverTime(m, sim.time - STEP * (1 - alpha)));
       g.position.set(p.x + d.x, p.y + d.y, p.z + d.z);
     }
     for (const c of sim.crates) {

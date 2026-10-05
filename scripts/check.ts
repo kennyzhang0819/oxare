@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import RAPIER_RT from "@dimforge/rapier3d-compat";
-import { BALL_RADIUS, curlRadius, type Slab, GATE_CUBE, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
+import { BALL_RADIUS, curlRadius, type Slab, SUPPORT_GAP, MAGNET_R, MAGNET_REACH, twistAt, twistPoint, frameToWorld, platformHeightAt, fenceRings, type FencePiece, plankMounts, PANGOLIN_T, pangolinAt, pangolinPoint, pangolinSize, pangolinTrack, curveRollPoint, SIDE_PLANK_HINGE_Z, FENCE_RAIL_INSET, FENCE_RAIL_Y, JUMP_H, RAIL_R, railsRingsWorld, type Rails, PLANK_HINGE_H, PLANK_T, PLATFORM_EDGE_DROP, moverOffset, type Mover, TUBE_SOLID_WALL, holeFootprint, TUBE_R, tubeRings, type Tube, platformFootprint, fenceSides, CURVE_STRAIGHT, CURVE_SWEEPS, curveStrip, type Curve, PLATFORM_LIP, PLATFORM_THICKNESS, rampHeight, type Level, type Piece, BRIDGE_HINGE_DROP, LAYER_H, RAMP_RISE, START_PAD_REST, START_PAD_R, bridgeChain, levelProblems, startOf, validateLevel, takesApple, inOrigin, ORIGIN_LEAVE, type Bridge } from "../src/level.ts";
 import { STEP, createSim } from "../src/sim.ts";
 import { BARRIER_W, beanAt, beanDist, beanTrack, rotXZ, type Bean } from "../src/level.ts";
 import { platformMesh } from "../src/platform.ts";
@@ -391,32 +391,6 @@ for (const piece of [{ type: "blockade", x: 0, y: 0, z: -8, rot: 0 }, { type: "p
   sim.free();
   if (minZ < -8 || maxY > 1.2) { failed = true; console.error(`FAIL stop-${piece.type}: ball passed the ${piece.type} (z ${minZ.toFixed(2)}, y ${maxY.toFixed(2)})`); }
   else console.log(`ok stop-${piece.type}: ${piece.type} holds the ball`);
-}
-// A gate's cube hangs still on its chain until the ball rolls into it, which knocks it swinging and
-// never gets inside it; a ball rolling past beside the cube goes through the arch untouched.
-for (const [name, x, hits] of [["gate-hit", 0, true], ["gate-past", 2.5, false]] as const) {
-  const level = testLevel({ id: name, name, pieces: [
-    { type: "start", x: 0, y: 0, z: 0 },
-    { type: "slab", x: 0, y: 0, z: -12, w: 8, d: 32, rot: 0 },
-    { type: "gate", x: 0, y: 0, z: -10, w: 8, d: 6, h: 5, rot: 0 },
-    { type: "goal", x: 0, y: 0, z: -20, r: 1 },
-  ] });
-  const sim = await createSim(level, { x, y: 0, z: -2 });
-  const cube = sim.bridges.find((b) => level.pieces[b.index]!.type === "gate")!.planks.at(-1)!, rest = cube.translation();
-  for (let i = 0; i < 120; i++) sim.step(0, 0, -1);
-  const still = Math.hypot(cube.translation().x - rest.x, cube.translation().z - rest.z);
-  let swing = 0, minZ = 0, near = Infinity;
-  for (let i = 0; i < 120 * 4; i++) {
-    sim.step(1, 0, -1);
-    const com = cube.translation(), b = sim.ball.translation();
-    swing = Math.max(swing, Math.hypot(com.x - rest.x, com.z - rest.z));
-    minZ = Math.min(minZ, b.z);
-    near = Math.min(near, Math.hypot(b.x - com.x, b.y - com.y, b.z - com.z));
-  }
-  sim.free();
-  const bad = still > 0.01 || near < GATE_CUBE / 2 + BALL_RADIUS - 0.05 || (hits ? swing < 0.3 : swing > 0.01 || minZ > -14);
-  if (bad) { failed = true; console.error(`FAIL ${name}: cube drifted ${still.toFixed(3)} at rest, swung ${swing.toFixed(2)}, ball came ${near.toFixed(2)} from its centre and reached z ${minZ.toFixed(2)}`); }
-  else console.log(`ok ${name}: cube swung ${swing.toFixed(2)}, ball came no nearer its centre than ${near.toFixed(2)}`);
 }
 // From full speed with forward held, a 1-high kicker on the end of a platform carries the ball over
 // an 8 gap onto the next one.
@@ -1495,6 +1469,28 @@ for (const [name, bend, y0, y1] of [["up-smooth", 1.5, 0, 4], ["up-sharp", 0, 0,
   sim.free();
   if (p.z > -24 || Math.abs(p.y - (y1 + BALL_RADIUS)) > 0.1 || minY < Math.min(y0, y1)) { failed = true; console.error(`FAIL tube-${name}: ball ended at z ${p.z.toFixed(2)} y ${p.y.toFixed(2)}, lowest y ${minY.toFixed(2)}`); }
   else console.log(`ok tube-${name}: ball came out at y ${p.y.toFixed(2)} z ${p.z.toFixed(2)}`);
+}
+// A button holds its moving platform at the start until the ball rolls onto it, then the platform runs
+// its schedule; its cap sinks and stays down. A gate dropped on load before the platform keeps the link.
+{
+  const raw = { id: "button", name: "button", pieces: [
+    { type: "start", x: 0, y: 0, z: 0 },
+    { type: "slab", x: 0, y: 0, z: -6, w: 8, d: 16, rot: 0, fences: {} },
+    { type: "gate", x: 0, y: 0, z: -12, w: 8, d: 6, h: 5, rot: 0 },
+    { type: "slab", x: 20, y: 0, z: 0, w: 4, d: 4, rot: 0, tilt: 0, move: { speed: 3, wait: 0, offset: 0, loop: "pingpong", stops: [{ x: 0, y: 0, z: -12, wait: 0 }] } },
+    { type: "button", x: 0, y: 0, z: -5, rot: 0, link: 3 },
+    { type: "goal", x: 0, y: 0, z: -12, r: 1 },
+  ] };
+  const level = testLevel(raw), button = level.pieces.find((p) => p.type === "button")!;
+  const linked = button.type === "button" && button.link !== undefined && level.pieces[button.link]?.type === "slab";
+  const sim = await createSim(level), plat = sim.movers[0]!.body, z0 = plat.translation().z;
+  for (let i = 0; i < 120 * 2; i++) sim.step(0, 0, -1);
+  const still = Math.abs(plat.translation().z - z0), early = sim.buttons[0]!.pressed;
+  for (let i = 0; i < 120 * 3; i++) sim.step(1, 0, -1);
+  const moved = Math.abs(plat.translation().z - z0), pressed = sim.buttons[0]!.pressed;
+  sim.free();
+  if (!linked || still > 1e-6 || early || !pressed || moved < 2) { failed = true; console.error(`FAIL button: linked after load ${linked}; before the press it moved ${still.toFixed(3)} (pressed ${early}); after, pressed ${pressed} and it moved ${moved.toFixed(2)} (want 2+)`); }
+  else console.log(`ok button: the platform waits until the ball presses the button, then moves (${moved.toFixed(2)} so far); the link survives a dropped gate`);
 }
 // A one-way tube lets the ball through from its open end and out of its red one, but holds it out of
 // the red one from either side: driven at it head on, or at the far end of one laid the other way.

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { APPLE, BALL_RADIUS, BEAN_LIFT, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_CUBE, GATE_GAP, GATE_BEND_R, GATE_LINK, GATE_ROUND, gateHang, gateLinks, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { APPLE, BALL_RADIUS, BEAN_LIFT, BUTTON, buttonBase, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_GAP, GATE_BEND_R, GATE_ROUND, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, METAL_TILE, TILE, airTexture, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { APPLE as APPLE_COLORS, CAUTION, GOLDEN as GOLDEN_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, PUFFER, STOOL, TREADMILL, TUBE } from "./palette.ts";
@@ -297,6 +297,20 @@ function buildApple(g: THREE.Group, golden: boolean): void {
   g.userData[golden ? "golden" : "apple"] = a;
 }
 
+// Button: a steel base (buttonBase's hull) with a cap in the movables' paint on top, raised until pressed.
+function buildButton(g: THREE.Group) {
+  const pts = buttonBase(), idx = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 5, 1, 0, 4, 5, 1, 6, 2, 1, 5, 6, 2, 7, 3, 2, 6, 7, 3, 4, 0, 3, 7, 4];
+  const base = new THREE.BufferGeometry();
+  base.setAttribute("position", new THREE.Float32BufferAttribute(idx.flatMap((k) => pts[k]!), 3));
+  base.computeVertexNormals();
+  g.add(steel(base));
+  const cap = steel(new THREE.CylinderGeometry(BUTTON.capR, BUTTON.capR, BUTTON.capH, 32), ruin() ? ruinPaint().move : STRUCT!.glow);
+  const up = BUTTON.baseH + BUTTON.capH / 2;
+  cap.position.y = up;
+  g.add(cap);
+  g.userData.press = (down: boolean) => { cap.position.y = down ? up - BUTTON.press : up; };
+}
+
 // Puffer: the revolved profile in its bands (pufferProfile), steel with the vent recess dark, the collar in
 // red paint and louvres across the vents; and its air ring, a soft band run out and faded by puffRings.
 const BUMPER_RUBBER = new THREE.MeshStandardMaterial({ color: BUMPER.rubber, roughness: 0.45 });
@@ -475,7 +489,7 @@ function softSupportBody(top: number, reach: number, ri: number): THREE.BufferGe
 // Support pillars: a white column per pillar wearing supportTrim, its foot curving straight into the
 // lower platform's wall. The stem collides as the box from pieceBoxes, the foot and bend as
 // supportHulls and the ears as supportEarHulls.
-// Supports, columns and gates take the pillar's colours: its slate for the dark parts, its pale grey
+// Supports, columns and arches take the pillar's colours: its slate for the dark parts, its pale grey
 // for the light ones, beside the props' white and cyan.
 const SLATE = new THREE.MeshStandardMaterial({ color: PILLAR.slate, roughness: 0.5, metalness: 0.05 });
 const PALE = new THREE.MeshStandardMaterial({ color: PILLAR.pale, roughness: 0.5, metalness: 0.05 });
@@ -718,33 +732,15 @@ function softSupportTrim(col: THREE.Group, top: number, bend: number) {
   }
 }
 
-// Gate: each arch is one white extrusion of gateStrip, bevelled like a support's pillar. Each leg
+// Arch: each frame is one white extrusion of gateStrip, bevelled like a support's pillar. Each leg
 // wears a support's trim, its slot facing the platform, and each beam a row of circuit-board
-// panels front and back. A fence rail's rod
-// joins the beams; each link and the cube hang from it in a group of their own, returned for the
-// physics to pose.
-// A chain link's middle line, a "0" in the x-y plane, long along y: up the right side, over the
-// top, down the left, under the bottom.
-class LinkPath extends THREE.Curve<THREE.Vector3> {
-  constructor() { super(); }
-  override getPoint(u: number, out = new THREE.Vector3()): THREE.Vector3 {
-    const { r, straight: s } = GATE_LINK;
-    let d = u * (4 * s + 2 * Math.PI * r);
-    if (d < 2 * s) return out.set(r, -s + d, 0);
-    if ((d -= 2 * s) < Math.PI * r) return out.set(r * Math.cos(d / r), s + r * Math.sin(d / r), 0);
-    if ((d -= Math.PI * r) < 2 * s) return out.set(-r, s - d, 0);
-    const a = Math.PI + (d - 2 * s) / r;
-    return out.set(r * Math.cos(a), -s + r * Math.sin(a), 0);
-  }
-}
-const linkGeometry = () => new THREE.TubeGeometry(new LinkPath(), 64, GATE_LINK.t, 10, true);
-
+// panels front and back.
 // The soft arch: one round tube along the middle of the strip, as thick as fits in it.
 function archTube(strip: [[number, number], [number, number]][]): THREE.BufferGeometry {
   const pts = strip.map(([o, i]) => new THREE.Vector3((o[0] + i[0]) / 2, (o[1] + i[1]) / 2, 0));
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.1), 96, SOFT_STEM_R, 20, false);
 }
-function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
+function buildArch(g: THREE.Group, p: Gate): void {
   const st = STRUCT!, b = GATE_ROUND, W = SUPPORT_W, D = SUPPORT_D;
   const strip = gateStrip(p, b), shape = new THREE.Shape();
   shape.setFromPoints([...strip.map(([o]) => o), ...strip.map(([, i]) => i).reverse()].map(([x, y]) => new THREE.Vector2(x, y)));
@@ -793,34 +789,6 @@ function buildGate(g: THREE.Group, p: Gate): THREE.Group[] {
     }
     g.add(arch);
   }
-  if (p.type === "arch") return [];
-  const hang = gateHang(p);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(RAIL_R, RAIL_R, p.d, 24).rotateX(Math.PI / 2), RAIL_MAT);
-  bar.position.y = hang.pivot;
-  g.add(bar);
-
-  // A group per link and one for the cube, in the physics' order, each centred on its body.
-  const out: THREE.Group[] = [];
-  const link = linkGeometry();
-  gateLinks(p).forEach((y, k) => {
-    const lg = new THREE.Group();
-    lg.position.y = hang.pivot + y;
-    // Soft: a bead chain, round beads alternating the tint and the light colour.
-    const m = ENV.props === "soft"
-      ? new THREE.Mesh(new THREE.SphereGeometry(GATE_LINK.r + GATE_LINK.t * 0.5, 20, 14), k % 2 ? softMats().tint : st.glow)
-      : new THREE.Mesh(link, st.body);
-    m.rotation.y = (k % 2) * (Math.PI / 2);
-    m.castShadow = true;
-    lg.add(m);
-    g.add(lg);
-    out.push(lg);
-  });
-  const cube = new THREE.Group();
-  cube.position.y = hang.cube;
-  buildCube(cube, GATE_CUBE);
-  g.add(cube);
-  out.push(cube);
-  return out;
 }
 
 // Lamp posts and signal masts: every part pieceCapsules lists, drawn as it collides, in one steel mesh;
@@ -858,7 +826,7 @@ function buildFrame(g: THREE.Group, p: Piece & { type: "lamp" | "mast" }): void 
   }
 }
 
-// The cube, the gate's and the pushable prop's alike, `C` a side and centred on its body: a slate
+// The pushable cube, `C` a side and centred on its body: a slate
 // rounded box wearing the ribbed octagon face on every side (the top face its white, solid-bordered
 // one on a plate over it), and on every face a pale rim with an orange lit line just inside it.
 function buildCube(g: THREE.Group, C: number): void {
@@ -2391,7 +2359,7 @@ export interface Built {
   pieceGroups: THREE.Group[];
   spinnerBars: Map<number, THREE.Mesh>;
   crates: Map<number, THREE.Group>;
-  // Plank groups per bridge piece, in chain order, local to the piece group; a gate's links, then its cube.
+  // Plank groups per bridge piece, in chain order, local to the piece group.
   bridges: Map<number, THREE.Group[]>;
   // The moving part of each knock-down plank, seesaw and stool, local to the piece group, posed from its body.
   planks: Map<number, THREE.Group>;
@@ -2403,6 +2371,8 @@ export interface Built {
   movers: Map<number, THREE.Group>;
   // Each puffer's air ring by piece index: shown that far out, or hidden for null (puffRings).
   puffers: Map<number, (r: number | null) => void>;
+  // Each button's cap by piece index: down once pressed.
+  buttons: Map<number, (down: boolean) => void>;
   // The scattered overgrowth (decor.ts), kept apart so the editor can carry it over a rebuild.
   decor: THREE.Group;
   // Each apple's floating group, by piece index, the golden ones apart; and the origin's wormhole, opened
@@ -2490,6 +2460,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     if (p.type === "barrier") buildBarrier(g);
     if (p.type === "pillar") buildPillar(g);
     if (p.type === "puffer") buildPuffer(g);
+    if (p.type === "button") buildButton(g);
     if (p.type === "magnet") buildMagnet(g);
     if (p.type === "column") buildColumn(g, p.h, p.r);
     if (p.type === "crate") { buildCrate(g, p.w, p.h, p.d); g.position.y += propLift(p) + 0.02; crates.set(index, g); }
@@ -2504,8 +2475,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     if (p.type === "bean") planks.set(index, buildBean(g, p, editor));
     if (p.type === "jump") buildJump(g, p);
     if (p.type === "support") buildSupport(g, p);
-    if (p.type === "gate") bridges.set(index, buildGate(g, p));
-    if (p.type === "arch") buildGate(g, p);
+    if (p.type === "arch") buildArch(g, p);
     if (p.type === "lamp" || p.type === "mast") buildFrame(g, p);
     if (p.type === "tree") g.add(buildTree(p));
     if (p.type === "kicker") { const k = buildKicker(g, p, editor); if (k) planks.set(index, k); }
@@ -2607,6 +2577,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
   });
   return { group, pieceGroups, spinnerBars, crates, bridges, planks, pangolins, movers, decor, hulls,
     puffers: new Map(pieceGroups.flatMap((g, i) => (g.userData.puff ? [[i, g.userData.puff as (r: number | null) => void]] : []))),
+    buttons: new Map(pieceGroups.flatMap((g, i) => (g.userData.press ? [[i, g.userData.press as (down: boolean) => void]] : []))),
     springs: new Map(pieceGroups.flatMap((g, i) => (g.userData.spring ? [[i, g.userData.spring as (t: number) => void]] : []))),
     apples: new Map(pieceGroups.flatMap((g, i) => (g.userData.apple ? [[i, g.userData.apple as THREE.Group]] : []))),
     golden: new Map(pieceGroups.flatMap((g, i) => (g.userData.golden ? [[i, g.userData.golden as THREE.Group]] : []))),

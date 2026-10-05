@@ -71,7 +71,7 @@ Each classic is named for one headline prop and adds three to five supporting on
 | 08 Rings | hoop | 8 | ramp, long kicker, stool, jump, column, hole, rails |
 | 09 Puffers | puffer | 10 | ramp, barrel, side plank, blockade, jump, pillar, kicker, mover, sliding kicker |
 | 10 Basics combined | mix | 8 | twist, roll, jump, kicker, mover, bridge, rails, plank |
-| 11 Wrecking cube | gate | 9 | side plank, puffer, jump, rails, hole, roll, kicker, crate |
+| 11 Wrecking cube | (its gate is removed) | 9 | side plank, puffer, jump, rails, hole, roll, kicker, crate |
 | 12 Tubes 2 | tube | 7 | mover, hole, ramp, rolled puffer, treadmill, kicker |
 | 13 Wall jumps | wall and side kicker | 10 | jump, roll, barrier, crate, seesaw, rails, puffer, support |
 | 14 Magnets | magnet | 12 | mover, fence, kicker, plank, side kicker, shaped slab, support, crate, rails, jump, wall |
