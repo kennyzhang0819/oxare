@@ -1,7 +1,7 @@
 // Near fade: in the game's own view a prop or plant close to the camera turns see-through, by how close
 // it is: solid from FADE.far out, down to FADE.min opacity at FADE.near and closer. It never goes
 // entirely, and it fades as a whole (hideHullsAround in scene.ts, the plants' shaders in decor.ts), its
-// ink outline faster so the inside-out hull never tints through. Platforms stay solid. The camera itself
+// ink outline faster so the inside-out hull never tints through. A platform fades only while it lies between the camera and the ball. The camera itself
 // never moves. On only while NEAR_ON is set, so the ball's reflection, thumbnails and the editor draw
 // everything solid. See docs/levels.md "Controls".
 export const FADE = { near: 1, far: 3, min: 0.5 };

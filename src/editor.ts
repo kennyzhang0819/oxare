@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, BUTTON, buttonLinked, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, BARRIER_H, BARRIER_W, BUTTON, buttonLinked, CUBE_S, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, FLOORS, type FloorKind, TREE_CROWNS, TREE_LEAVES, TUBE_BEND, TUBE_R, PANGOLIN_T, pangolinBend, pangolinTrack, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, isCurled, type Ramp, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { onTop, slantedTop, snapOnTop } from "./slanted.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, stylize, type Built, type SceneEnv } from "./scene.ts";
 import { decorStems } from "./decor.ts";
@@ -31,7 +31,7 @@ const PALETTE: [title: string, types: PieceType[]][] = [
   ["Interactables", ["bridge", "kicker", "jump", "button", "plank", "pangolin", "seesaw", "board", "stool", "bean", "crate", "barrel", "cube", "puffer", "magnet", "blockade", "barrier", "pillar", "hoop"]],
   ["Connectors", ["tube", "rails", "fence"]],
   ["Structures", ["arch", "support", "column", "lamp", "mast"]],
-  ["Nature", ["tree", "clearing"]],
+  ["Nature", ["tree"]],
   ["Misc", ["start", "apple"]],
 ];
 // Still loaded from old level files, but no longer offered.
@@ -42,6 +42,8 @@ function paletteGroups(): [string, PieceType[]][] {
   return PALETTE.map(([title, ts]): [string, PieceType[]] => [title, title === "Misc" ? [...ts, ...rest] : ts]);
 }
 
+// Fields a piece may leave out, and what it means then.
+const FIELD_DEFAULTS: Partial<Record<PieceType, Record<string, number>>> = { barrier: { w: BARRIER_W, h: BARRIER_H } };
 const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   start: [],
   slab: [["w", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15], ["twist", 15], ["curl", 15]],
@@ -58,11 +60,10 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   lamp: [["h", 0.5], ["rot", 15]],
   mast: [["h", 0.5], ["rot", 15]],
   tree: [["size", 0.1], ["rot", 15]],
-  clearing: [["w", 0.5], ["d", 0.5], ["rot", 15]],
   kicker: [["w", 0.5], ["d", 0.5], ["h", 0.1], ["flat", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
   block: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15]],
   blockade: [["w", 0.5], ["h", 0.5], ["d", 0.5], ["rot", 15], ["tilt", 15], ["roll", 15]],
-  barrier: [["rot", 15], ["tilt", 15], ["roll", 15]],
+  barrier: [["w", 0.5], ["h", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
   crate: [["w", 0.1], ["h", 0.1], ["d", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
   cube: [["rot", 15], ["tilt", 15], ["roll", 15]],
   barrel: [["r", 0.1], ["h", 0.1], ["rot", 15], ["tilt", 15], ["roll", 15]],
@@ -93,7 +94,7 @@ const LABELS: Record<string, string> = {
 };
 const label = (key: string) => LABELS[key] ?? key;
 // What the editor calls each piece type; the level files keep the type ids.
-const PIECE_NAMES: Record<string, string> = { tube: "pipe", jump: "spring", plank: "metal plate", clearing: "no trees" };
+const PIECE_NAMES: Record<string, string> = { tube: "pipe", jump: "spring", plank: "metal plate" };
 const pieceName = (t: string) => PIECE_NAMES[t] ?? t;
 // Snap increments for moving platforms and structures, chosen in the toolbar and remembered; platform
 // sizes and heights step and round to the platform snap too.
@@ -639,10 +640,12 @@ export class Editor implements Mode {
           return h("label", { title: "The centre line's radius: moves inner and outer together, keeping the lane as wide as it is" }, "radius", input);
         }
         const grid = snapsToPlatform(p.type, key) ? SNAP.platform : 0;
-        const input = h("input", { type: "number", step: grid || step, value: rec[key] ?? 0,
+        const def = FIELD_DEFAULTS[p.type]?.[key];
+        const input = h("input", { type: "number", step: grid || step, value: rec[key] ?? def ?? 0,
           onchange: () => {
             const before = JSON.stringify(this.level);
             rec[key] = grid ? to(grid)(Number(input.value)) : Number(input.value);
+            if (rec[key] === def) delete rec[key];
             this.commit(before);
           } });
         return h("label", {}, label(key), input);
@@ -659,6 +662,12 @@ export class Editor implements Mode {
           this.commit(before);
         } }, h("option", { value: "level", selected: !p.floor }, `level (${this.level.floor ?? "mixed"})`), ...FLOORS.map((f) => h("option", { value: f, selected: f === p.floor }, f))) as HTMLSelectElement;
         props.append(h("label", {}, "floor", sel));
+        const bare = h("input", { type: "checkbox", checked: !!p.noTrees, onchange: () => {
+          const before = JSON.stringify(this.level);
+          if (bare.checked) p.noTrees = true; else delete p.noTrees;
+          this.commit(before);
+        } });
+        props.append(h("div", { class: "checks", title: "No scattered trees, saplings or firs grow from this platform; shown orange in the editor" }, h("label", {}, bare, "no trees")));
       }
       if (isPlatform(p) && !isTilted(p)) props.append(this.fencePanel(p));
       if (p.type === "plank") {

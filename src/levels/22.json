@@ -12,12 +12,12 @@
     {"type": "slab", "x": -16, "y": 3, "z": 16, "w": 8, "d": 8, "rot": 180, "tilt": 0},
     {"type": "support", "x": -12, "y": 0, "z": -7, "w": 6, "h": 3, "rot": 270},
     {"type": "support", "x": -12, "y": 0, "z": 1, "w": 6, "h": 3, "rot": 270},
-    {"type": "lamp", "x": -4, "y": 0, "z": 4, "h": 5, "rot": 0},
+    {"type": "lamp", "x": -6, "y": 0, "z": 7, "h": 5, "rot": 0},
     {"type": "plank", "x": -5, "y": 0, "z": -8, "w": 4, "h": 8, "rot": 90, "tilt": 0},
     {"type": "slab", "x": 6, "y": 5, "z": -8, "w": 8, "d": 12, "rot": 270, "tilt": 0},
-    {"type": "column", "x": 6, "y": 0, "z": -8, "h": 4},
-    {"type": "column", "x": 8, "y": 0, "z": 4, "h": 8},
-    {"type": "slab", "x": 8, "y": 9, "z": 4, "w": 6, "d": 8, "rot": 0, "tilt": 0},
+    {"type": "column", "x": 6, "y": 0, "z": -8, "h": 4, "r": 0.8},
+    {"type": "column", "x": 8, "y": 0, "z": 4, "h": 8, "r": 0.8},
+    {"type": "slab", "x": 8, "y": 9, "z": 4, "w": 6, "d": 8, "rot": 0, "tilt": 0, "noTrees": true},
     {"type": "apple", "x": -16, "y": 3, "z": 16},
     {"type": "crate", "x": -20, "y": 3, "z": 2, "w": 2, "h": 1.2, "d": 2, "rot": 90},
     {"type": "slab", "x": -1, "y": -8, "z": 4, "w": 8, "d": 4, "rot": 90, "tilt": 0},
@@ -26,8 +26,12 @@
     {"type": "apple", "x": 8, "y": 9, "z": 4},
     {"type": "plank", "x": 8, "y": 5, "z": -6, "w": 2, "h": 7, "rot": 0, "tilt": 0},
     {"type": "arch", "x": -16, "y": 3, "z": 18, "w": 8, "d": 0, "h": 4, "rot": 0},
-    {"type": "barrier", "x": 6.5, "y": 9, "z": 7.5, "rot": 0},
-    {"type": "barrier", "x": 9.5, "y": 9, "z": 7.5, "rot": 0},
-    {"type": "ramp", "x": 4.5, "y": -4, "z": 10, "w": 4, "d": 15, "rot": 90, "rise": -4}
+    {"type": "ramp", "x": 4.5, "y": -4, "z": 10, "w": 4, "d": 15, "rot": 90, "rise": -4},
+    {"type": "crate", "x": 8.5, "y": 9, "z": 6, "w": 2, "h": 1.2, "d": 2, "rot": 90},
+    {"type": "slab", "x": 8, "y": 9, "z": 16, "w": 6, "d": 4, "rot": 0, "tilt": 0, "noTrees": true},
+    {"type": "slab", "x": 8, "y": 7, "z": 11, "w": 6, "d": 6, "rot": 0, "tilt": 0, "noTrees": true},
+    {"type": "support", "x": 8, "y": 7, "z": 14, "w": 6, "h": 2, "rot": 0},
+    {"type": "support", "x": 8, "y": 7, "z": 8, "w": 6, "h": 2, "rot": 180},
+    {"type": "apple", "x": 8, "y": 9, "z": 16, "golden": true}
   ]
 }

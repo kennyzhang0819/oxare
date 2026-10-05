@@ -1,6 +1,6 @@
 # Level design
 
-What the classic levels (`01`–`17`, rebuilt from the original game) in Archive and the first Expert level (`n01`) do, measured from their files and from headless runs of the physics, so new levels can follow the same vibe. Update this as more classics are rebuilt: the classics are the reference for the props, the numbers and the placement, but not for the shape of a level (below).
+What the classic levels (`01`–`17`, rebuilt from the original game) and Advanced tubes (`n01`), all in Archive, do, measured from their files and from headless runs of the physics, so new levels can follow the same vibe. Update this as more classics are rebuilt: the classics are the reference for the props, the numbers and the placement, but not for the shape of a level (below).
 
 ## The shape of a level
 
@@ -102,9 +102,9 @@ Structures snap to a 2 grid, so most of these are "one grid step from the edge".
 - **Pangolin:** 8 long over a 4 gap with its snout 3.5 in from the near edge, so its coil sits on the platform and its tail tip lands 0.5 onto the far one. The ball touching it stops dead, then follows it across; at the default speed it is down in about 1.6 seconds. Laid out, a ball at full speed rolls over it with under 0.05 of lift. Its path can turn and climb: give the corner a bend and keep the climb over the gap, so the laid body never cuts into a platform's top; a ball held to about 3 a second follows it round a 90° corner that rises a layer.
 - **Knock-down plank as a ramp up:** an 8-tall plank standing on a low ledge 6 from a slab 4 higher leans on it at 30° when knocked (14).
 
-## Expert twists (what `n01` changes)
+## Harder twists (what `n01` changes)
 
-Expert levels raise the aim and timing demands on classic parts rather than adding parts: a tube mouth turned up so the jump pad shot must drop into it; a kicker onto a moving platform and a jump pad riding it, so the launch has to be timed; a window in a wall the ball drops through from a tube; a slab twisted 90 from wall to floor. The connective parts stay classic.
+Harder levels raise the aim and timing demands on classic parts rather than adding parts: a tube mouth turned up so the jump pad shot must drop into it; a kicker onto a moving platform and a jump pad riding it, so the launch has to be timed; a window in a wall the ball drops through from a tube; a slab twisted 90 from wall to floor. The connective parts stay classic.
 
 ## Mechanisms the pieces allow
 

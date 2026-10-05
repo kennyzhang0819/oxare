@@ -222,7 +222,7 @@ export class Game implements Mode {
     // The mirror refreshes every other frame: six extra scene passes at 60 Hz is the single
     // dearest thing in the loop, and a one-frame-old reflection on a rolling ball is invisible.
     if (this.frames++ % 2 === 0) this.ball.reflect(this.ctx.renderer, this.env);
-    hideHullsAround(this.built, this.camera.position);
+    hideHullsAround(this.built, this.camera.position, this.ball.mesh.position);
     NEAR_ON.value = 1;
     this.env.render(this.ctx.renderer, this.camera);
     NEAR_ON.value = 0;
@@ -379,7 +379,7 @@ export class Game implements Mode {
     );
     if (opens) openDialog(this.ctx.overlay, {
       icon: GOLDEN_ICON, tone: "gold", title: "Golden apple has appeared",
-      body: "Some levels now hide a golden apple somewhere hard to reach. It's optional: bring it home with the others to earn it.",
+      body: "Some levels now hide an optional golden apple somewhere hard to reach.",
       buttons: [{ label: "Nice!", primary: true }],
     });
   }

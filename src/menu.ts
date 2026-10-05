@@ -7,7 +7,7 @@ import { createScene, type SceneEnv } from "./scene.ts";
 import { levelThumbSrc, saveThumb } from "./thumbs.ts";
 import { clear, h } from "./ui.ts";
 import { appleMarks } from "./icons.ts";
-import { goldenOpen, hasGolden, isCleared, levelHasGolden } from "./progress.ts";
+import { hasGolden, isCleared } from "./progress.ts";
 import type { Ctx, Mode } from "./main.ts";
 
 // Worlds players can't open yet: shown with a lock. Admin-only worlds have no tab for players.
@@ -122,12 +122,12 @@ export class Menu implements Mode {
         // Hidden levels are the admin's playgrounds; players see and number only the public ones.
         const select = levelSelect({ admin: false, start: [h("button", { class: "menu-btn small", onclick: home }, "Back")], end: [],
           levels: (w) => LEVELS.flatMap((l, i) => (l.hidden || worldOf(l) !== w ? [] : [i])), item: (i, n, v) => {
-          // Its red apple once cleared; its golden one, once golden apples have appeared, if it has one.
+          // Its red apple once cleared; its golden one only once brought home, no outline before.
           const l = LEVELS[i]!;
           return h("button", { class: v === "grid" ? "level-card" : "level-row", onclick: () => opts.onPlay(i) },
             h("img", { src: levelThumbSrc(ctx.renderer, l), alt: "", loading: "lazy" }),
             h("span", { class: "name" }, `${levelCode(l, n)}. ${l.name}`),
-            h("span", { class: "marks", innerHTML: appleMarks(isCleared(l), goldenOpen() && levelHasGolden(l) ? hasGolden(l) : null) }),
+            h("span", { class: "marks", innerHTML: appleMarks(isCleared(l), hasGolden(l) || null) }),
           );
         } });
         show(false, home, select.el);

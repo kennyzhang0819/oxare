@@ -1,7 +1,6 @@
 {
   "id": "n01",
   "name": "Advanced tubes",
-  "world": "expert",
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "goal", "x": -28, "y": 23, "z": -30, "r": 1},

@@ -62,7 +62,7 @@ Each is turned any way, at least 0.6 in from the rim and clear of other pieces l
 
 ## Trees
 
-Now and then an open edge sample of a level platform (not a corner) grows a tree out of the wall, its root just under the lip. A tree's stem is solid, its crown and branches are not; see "Stems" below. No tree, sapling or fir grows with its root inside a `clearing` piece or within half a unit of one, at about its height (`treeless`).
+Now and then an open edge sample of a level platform (not a corner) grows a tree out of the wall, its root just under the lip. A tree's stem is solid, its crown and branches are not; see "Stems" below. None grows from a platform with `noTrees`.
 
 **Size:** most trees are small (0.5 to 0.75 times their modelled size, 35%) or middling (0.85 to 1.15, 30%), fewer large (1.25 to 1.5, 22%) and only some big (1.6 to 2, 13%). It keeps 4 plus 4 times its size from any other tree, so small ones can stand closer together.
 

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
-import { BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_W, COLUMN_R, LAMP, MAST, PILLAR_H, PILLAR_R, TREE_CROWN, TREE_STEM, mastRings, treeSize, floorOf, type FloorKind, type TreeCrown, type TreeLeaves, PLATFORM_THICKNESS, RAIL_R, SUPPORT_D, SUPPORT_W, TUBE_R, curveRollPoint, curveStrip, fenceRings, frameToWorld, isSliding, platformHeightAt, slabPoint, worldToFrame, railsRingsWorld, riders, tubeRingsWorld, isMoving, isPlatform, isShaped, isTilted, pieceRoll, pieceRot, pieceTilt, rotXZ, slabOutline, supportOver, supportPillars, surfaceAt, type Level, type Piece, type XZ } from "./level.ts";
+import { BARRIER_D, BARRIER_LEG, BARRIER_W, barrierSize, COLUMN_R, LAMP, MAST, PILLAR_H, PILLAR_R, TREE_CROWN, TREE_STEM, mastRings, treeSize, floorOf, type FloorKind, type TreeCrown, type TreeLeaves, PLATFORM_THICKNESS, RAIL_R, SUPPORT_D, SUPPORT_W, TUBE_R, curveRollPoint, curveStrip, fenceRings, frameToWorld, isSliding, platformHeightAt, slabPoint, worldToFrame, railsRingsWorld, riders, tubeRingsWorld, isMoving, isPlatform, isShaped, isTilted, pieceRoll, pieceRot, pieceTilt, rotXZ, slabOutline, supportOver, supportPillars, surfaceAt, type Level, type Piece, type XZ } from "./level.ts";
 import { CURIO, DECOR, ENV } from "./palette.ts";
 import { patchAt, patchSeed } from "./patches.ts";
 import { INK_FADE, NEAR_ON, fadeGlsl } from "./fade.ts";
@@ -434,7 +434,7 @@ function surfaceOf(level: Level, p: Piece): Surface | null {
 function keepOut(level: Level): { x: number; z: number; r: number }[] {
   const out: { x: number; z: number; r: number }[] = [];
   for (const p of level.pieces) {
-    if (isPlatform(p) || p.type === "hole" || p.type === "apple" || p.type === "clearing") continue;
+    if (isPlatform(p) || p.type === "hole" || p.type === "apple") continue;
     const rot = "rot" in p && typeof p.rot === "number" ? p.rot : 0;
     if ("path" in p) {
       const pts = p.path.map((n) => { const o = rotXZ(n.x, n.z, rot); return [p.x + o.x, p.z + o.z] as XZ; });
@@ -448,6 +448,8 @@ function keepOut(level: Level): { x: number; z: number; r: number }[] {
       for (const s of [-1, 1]) { const o = rotXZ(0, (s * p.d) / 2, rot); out.push({ x: p.x + o.x, z: p.z + o.z, r: p.w / 2 + 0.6 }); }
       continue;
     }
+    // A barrier keeps as clear as it always has, more as it widens.
+    if (p.type === "barrier") { out.push({ x: p.x, z: p.z, r: Math.max(1.5, barrierSize(p).w / 2 + 1.5 - BARRIER_W / 2) }); continue; }
     if (p.type === "lamp" || p.type === "mast" || p.type === "tree") {
       out.push({ x: p.x, z: p.z, r: p.type === "lamp" ? LAMP.footW : p.type === "mast" ? MAST.foot + 0.3 : 0.4 * treeSize(p) });
       continue;
@@ -530,13 +532,6 @@ export function buildDecor(level: Level): THREE.Group {
     at.set(kind, [...(at.get(kind) ?? []), { m: new THREE.Matrix4().compose(new THREE.Vector3(...pos), q, sc), c: col, o: owner }]);
   };
   const clear = keepOut(level), trees: V3[] = [], young: XZ[] = [], riding = riders(level);
-  // No tree, sapling or fir roots inside a clearing, or within half a unit of it (so one drawn to a
-  // platform's edge stops the trees out of that wall), at about its height.
-  const clearings = level.pieces.filter((c): c is Piece & { type: "clearing" } => c.type === "clearing");
-  const treeless = (w: V3) => clearings.some((c) => {
-    const l = rotXZ(w[0] - c.x, w[2] - c.z, -c.rot);
-    return Math.abs(w[1] - c.y) < 1.5 && Math.abs(l.x) < c.w / 2 + 0.5 && Math.abs(l.z) < c.d / 2 + 0.5;
-  });
   level.pieces.forEach((p, index) => {
     let seed = (index * 2654435761 + 12345) >>> 0;
     const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -549,7 +544,7 @@ export function buildDecor(level: Level): THREE.Group {
     };
     // A sapling or a small fir, a few units from any other.
     const youngAt = (pos: V3, up: THREE.Vector3, s: number) => {
-      if (treeless(pos)) return;
+      if (bare) return;
       if (young.some(([x, z]) => Math.hypot(x - pos[0], z - pos[2]) < 2.5)) return;
       young.push([pos[0], pos[2]]);
       const yaw = rnd() * 6.3;
@@ -654,7 +649,7 @@ export function buildDecor(level: Level): THREE.Group {
       owner = index;
       if (p.type === "blockade") { cushion(p.h, p.w, p.d); sides(p.w, p.d, 0, p.h, 1.2); foot(Math.max(p.w, p.d) / 2 + 0.5, Math.round((2 + p.w + p.d) / 1.5)); }
       if (p.type === "block") { cushion(p.h, p.w, p.d); sides(p.w, p.d, 0, p.h, 1); foot(Math.max(p.w, p.d) / 2 + 0.4, 4); }
-      if (p.type === "barrier") { cushion(BARRIER_H, BARRIER_W, BARRIER_D); sides(BARRIER_W, BARRIER_D, BARRIER_LEG, BARRIER_H, 1); foot(0.9, 3); }
+      if (p.type === "barrier") { const { w, h } = barrierSize(p); cushion(h, w, BARRIER_D); sides(w, BARRIER_D, BARRIER_LEG, h, 1); foot(0.9, 3); }
       if (p.type === "pillar") {
         add("mound", ...at(0, PILLAR_H - 0.12, 0), 0, [PILLAR_R / 0.3, 0.8, PILLAR_R / 0.3], pick(DECOR.moss));
         for (let k = 0; k < 1 + rnd() * 2; k++) climb("wrapPillar", p.x, p.y + 0.05, p.y + 0.05 + (PILLAR_H - 0.6) * (0.5 + rnd() * 0.5), p.z, rnd() * 6.3);
@@ -699,9 +694,11 @@ export function buildDecor(level: Level): THREE.Group {
         if (rnd() < 0.25) add("mound", q.c[0], q.c[1] + TUBE_R - 0.1, q.c[2], rnd() * 6.3, [1.2, 0.7, 1.2], pick(DECOR.moss));
       }
     }
-    owner = -1;
+    // What grows on a platform fades with it (it fades while it hides the ball).
+    owner = isPlatform(p) ? index : -1;
     const surf = surfaceOf(level, p);
     if (!surf) return;
+    const bare = isPlatform(p) && !!p.noTrees;
     const v3 = (w: V3) => new THREE.Vector3(...w);
     const upAt = (x: number, z: number) => v3(surf.at(x, z, 0.1)).sub(v3(surf.at(x, z, 0))).normalize();
     const kept = (w: V3) => !clear.some((c) => Math.hypot(c.x - w[0], c.z - w[2]) < c.r);
@@ -742,7 +739,7 @@ export function buildDecor(level: Level): THREE.Group {
       if (surf.flat && !e.corner && rnd() < 0.08 && trees.every(([x, z, r]) => Math.hypot(x - w0[0], z - w0[2]) > Math.max(r, room))) {
         const cx = w0[0] + out.x * TREE[2] * ts, cz = w0[2] + out.z * TREE[2] * ts, rr = 1.6 * ts;
         const free = [[0, 0], [rr, 0], [-rr, 0], [0, rr], [0, -rr]].every(([dx, dz]) => surfaceAt(level, cx + dx!, cz + dz!) === null);
-        if (free && !treeless(w0)) {
+        if (free && !bare) {
           trees.push([w0[0], w0[2], room]);
           const x = w0[0] + out.x * 0.12, z = w0[2] + out.z * 0.12, y = w0[1] - 0.5 - 0.15 * ts;
           const [crown, leaves, bark] = pickTree(rnd);

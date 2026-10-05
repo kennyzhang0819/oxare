@@ -2,6 +2,7 @@
   "id": "new-level-2",
   "name": "Curves",
   "world": "basics",
+  "thumb": {"x": -15, "y": 8, "z": 3, "r": 12, "yaw": 80},
   "pieces": [
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "slab", "x": -4, "y": 0, "z": 0, "w": 16, "d": 8, "rot": 0, "tilt": 0},

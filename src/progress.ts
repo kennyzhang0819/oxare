@@ -18,7 +18,6 @@ const opener = () => LEVELS.filter((l) => !l.hidden && worldOf(l) === "basics")[
 export const isCleared = (l: Level): boolean => saved.cleared.includes(l.id);
 export const hasGolden = (l: Level): boolean => saved.golden.includes(l.id);
 export const goldenOpen = (): boolean => !!saved.goldenOpen;
-export const levelHasGolden = (l: Level): boolean => l.pieces.some((p) => p.type === "apple" && p.golden);
 
 // Records a clear (`golden`: its golden apples came home too); true when this clear is the one that
 // makes golden apples appear.

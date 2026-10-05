@@ -9,7 +9,7 @@
     {"type": "curve", "x": -10, "y": 0, "z": 1.5, "inner": 6, "outer": 14, "rot": 90},
     {"type": "pillar", "x": 6, "y": 0, "z": -13, "rot": 180},
     {"type": "pillar", "x": -4, "y": 0, "z": -8, "rot": 180},
-    {"type": "ramp", "x": 14, "y": 0, "z": -15, "w": 8, "d": 16, "rot": 0, "rise": 4},
+    {"type": "ramp", "x": 14, "y": 0, "z": -15, "w": 8, "d": 16, "rot": 0, "rise": 4, "noTrees": true},
     {"type": "blockade", "x": 1, "y": 0, "z": -6, "w": 2, "h": 1.5, "d": 2, "rot": 0},
     {"type": "blockade", "x": -7, "y": 0, "z": -20, "w": 2, "h": 1.5, "d": 2, "rot": 0},
     {"type": "fence", "x": 9.5, "y": 0, "z": 4, "rot": 0, "path": [{"x": -19, "y": 0, "z": 0, "bend": 0.2}]},

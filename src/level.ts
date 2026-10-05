@@ -16,6 +16,11 @@ export const PILLAR_R = 0.6, PILLAR_H = 2.6;
 export const BARRIER_W = 2.5, BARRIER_H = 1.4, BARRIER_D = 0.5;
 // A barrier is a rounded pod BARRIER_LEG off the surface on two legs, the pod's top at BARRIER_H.
 export const BARRIER_LEG = 0.16, BARRIER_R = 0.2, BARRIER_LEG_R = 0.12, BARRIER_LEG_X = BARRIER_W / 2 - 0.85;
+// A barrier's own width and top height (BARRIER_W, BARRIER_H unless it sets them); its legs spread with its width.
+export const barrierSize = (p: Piece & { type: "barrier" }): { w: number; h: number; legX: number } => {
+  const w = p.w ?? BARRIER_W;
+  return { w, h: p.h ?? BARRIER_H, legX: (BARRIER_LEG_X * w) / BARRIER_W };
+};
 // Corner rounding of a block and a blockade, drawn and solid alike.
 export const BLOCK_R = 0.3, BLOCKADE_R = 0.18;
 // The soft look rounds the kicker and jump pad more and stands the barrier on one stick.
@@ -1098,9 +1103,9 @@ interface At { x: number; y: number; z: number; mirror?: true }
 
 export type Piece =
   | (At & { type: "start" })
-  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; curl?: number; move?: Move; belt?: true; glass?: true; shape?: SlabShape; floor?: FloorKind })
-  | (At & { type: "curve"; inner: number; outer: number; rot: number; sweep?: number; roll?: number; rollAt?: "b"; floor?: FloorKind })
-  | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number; floor?: FloorKind })
+  | (At & { type: "slab"; w: number; d: number; rot: number; tilt: number; roll?: number; twist?: number; curl?: number; move?: Move; belt?: true; glass?: true; shape?: SlabShape; floor?: FloorKind; noTrees?: true })
+  | (At & { type: "curve"; inner: number; outer: number; rot: number; sweep?: number; roll?: number; rollAt?: "b"; floor?: FloorKind; noTrees?: true })
+  | (At & { type: "ramp"; w: number; d: number; rot: number; rise: number; floor?: FloorKind; noTrees?: true })
   | (At & { type: "bridge"; w: number; d: number; rot: number })
   | (At & { type: "rails"; rot: number; path: TubeNode[]; smooth?: true; lines: 1 | 2; a: RailEnd; b: RailEnd; aYaw?: number; bYaw?: number })
   | (At & { type: "plank"; w: number; h: number; rot: number; tilt: number; side?: boolean; freeze?: boolean; base?: number })
@@ -1111,14 +1116,12 @@ export type Piece =
   | (At & { type: "arch"; w: number; d: number; h: number; rot: number })
   | (At & { type: "lamp"; h: number; rot: number })
   | (At & { type: "mast"; h: number; rot: number })
-  // A patch of a platform's top where the scattered trees, saplings and firs don't grow (decor.ts); editor only, no collider.
-  | (At & { type: "clearing"; w: number; d: number; rot: number })
   | (At & { type: "tree"; rot: number; size: number; crown?: TreeCrown; leaves?: TreeLeaves })
   | (At & { type: "kicker"; w: number; d: number; h: number; rot: number; flat?: number; roll?: number; tilt?: number; track?: number; offset?: number; top?: number })
   | (At & { type: "block"; w: number; h: number; d: number; rot: number })
   | (At & { type: "blockade"; w: number; h: number; d: number; rot: number; roll?: number; tilt?: number })
   | (At & { type: "pillar"; rot?: number; roll?: number; tilt?: number })
-  | (At & { type: "barrier"; rot: number; roll?: number; tilt?: number })
+  | (At & { type: "barrier"; rot: number; roll?: number; tilt?: number; w?: number; h?: number })
   | (At & { type: "crate"; w: number; h: number; d: number; rot: number; roll?: number; tilt?: number })
   | (At & { type: "cube"; rot: number; roll?: number; tilt?: number })
   | (At & { type: "barrel"; r: number; h: number; rot: number; roll?: number; tilt?: number })
@@ -1138,7 +1141,7 @@ export type Piece =
 ;
 
 export type PieceType = Piece["type"];
-export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "arch", "lamp", "mast", "tree", "clearing", "kicker", "jump", "button", "hole", "blockade", "barrier", "pillar", "column", "puffer", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
+export const PIECE_TYPES: PieceType[] = ["slab", "curve", "ramp", "bridge", "rails", "fence", "plank", "seesaw", "board", "pangolin", "support", "arch", "lamp", "mast", "tree", "kicker", "jump", "button", "hole", "blockade", "barrier", "pillar", "column", "puffer", "magnet", "crate", "barrel", "cube", "stool", "bean", "block", "spinner", "tube", "hoop", "apple", "start"];
 // Extra add buttons in the editor: a named preset of an existing type, listed after that type.
 export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, y: number, z: number) => Piece }[] = [
   { name: "golden apple", base: "apple", make: (x, y, z) => ({ type: "apple", x, y, z, golden: true }) },
@@ -1159,7 +1162,7 @@ export const PIECE_VARIANTS: { name: string; base: PieceType; make: (x: number, 
 ];
 // Pieces that sit on a platform: grid-snapped, with y taken from the surface beneath.
 export const isStructure = (p: Piece): boolean =>
-  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "cube" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "button" || p.type === "hoop" || p.type === "column" || p.type === "puffer" || p.type === "magnet" || p.type === "lamp" || p.type === "mast" || p.type === "tree" || p.type === "clearing";
+  p.type === "block" || p.type === "blockade" || p.type === "pillar" || p.type === "hole" || p.type === "barrier" || p.type === "crate" || p.type === "barrel" || p.type === "cube" || p.type === "stool" || p.type === "kicker" || p.type === "jump" || p.type === "button" || p.type === "hoop" || p.type === "column" || p.type === "puffer" || p.type === "magnet" || p.type === "lamp" || p.type === "mast" || p.type === "tree";
 export type Platform = Piece & { type: "slab" | "curve" | "ramp" };
 export const isPlatform = (p: Piece): p is Platform => p.type === "slab" || p.type === "curve" || p.type === "ramp";
 export type Ramp = Piece & { type: "ramp" };
@@ -1514,11 +1517,11 @@ export function respawnY(level: Level): number {
   return (Number.isFinite(low) ? low : 0) - RESPAWN_DROP;
 }
 // The worlds levels are grouped into, a tab each in the level select; a level without `world` is in Archive.
-// `tag` prefixes a level's number in the menus: B1, B2 in Basics, E1 in Expert, W1 in Workshop (community levels), A1 in Archive.
-export const WORLDS = [{ id: "basics", name: "Basics", tag: "B" }, { id: "expert", name: "Expert", tag: "E" }, { id: "workshop", name: "Workshop", tag: "W" }, { id: "archive", name: "Archive", tag: "A" }] as const;
+// `tag` prefixes a level's number in the menus: B1, B2 in Basics, W1 in Workshop (community levels), A1 in Archive.
+export const WORLDS = [{ id: "basics", name: "Basics", tag: "B" }, { id: "workshop", name: "Workshop", tag: "W" }, { id: "archive", name: "Archive", tag: "A" }] as const;
 export type World = (typeof WORLDS)[number]["id"];
 export const worldOf = (level: Level): World => level.world ?? "archive";
-// A level's label in its world's list: the world's tag and its number there, B3 or E1.
+// A level's label in its world's list: the world's tag and its number there, B3 or W1.
 export const levelCode = (level: Level, n: number): string => `${WORLDS.find((w) => w.id === worldOf(level))!.tag}${n}`;// `hidden` keeps a level out of the player's list (a playground); without it a level is public.
 export interface Level { id: string; name: string; hidden?: true; world?: World; floor?: FloorKind; thumb?: { x: number; y: number; z: number; r: number; yaw?: number }; pieces: Piece[] }
 // What a platform's top is covered with: the level's `floor`, or the platform's own. Mixed (the default)
@@ -1549,7 +1552,7 @@ export function pieceBoxes(p: Piece): Box[] {
     { kind: "block", x: LAMP.reach - 0.04, y: p.h + LAMP.rise + 0.05 - LAMP.hood.h / 2, z: 0, w: LAMP.hood.w, h: LAMP.hood.h, d: LAMP.hood.d },
   ];
   if (p.type === "mast") { const w = 2 * MAST.top + 0.5; return [{ kind: "block", x: 0, y: p.h + 0.06, z: 0, w, h: 0.12, d: w }]; }
-  if (p.type === "barrier") { const h = BARRIER_H - BARRIER_LEG; return [{ kind: "block", x: 0, y: BARRIER_LEG + h / 2, z: 0, w: BARRIER_W, h, d: BARRIER_D, r: BARRIER_R }]; }
+  if (p.type === "barrier") { const s = barrierSize(p), h = s.h - BARRIER_LEG; return [{ kind: "block", x: 0, y: BARRIER_LEG + h / 2, z: 0, w: s.w, h, d: BARRIER_D, r: BARRIER_R }]; }
   // Rolled 180 a support turns over about its platform's mid-thickness (see supportPillars).
   if (p.type === "support") return supportPillars(p).map((c) => {
     const mid = (c.y0 + c.y1) / 2;
@@ -1569,7 +1572,7 @@ export function stoolSlide(p: Piece & { type: "stool" }): { lo: number; hi: numb
 
 // Upright cylinders standing on the piece's y.
 export function pieceCylinders(p: Piece): Cylinder[] {
-  if (p.type === "barrier") return (softProps() ? [0] : [BARRIER_LEG_X, -BARRIER_LEG_X]).map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 }));
+  if (p.type === "barrier") { const { legX } = barrierSize(p); return (softProps() ? [0] : [legX, -legX]).map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 })); }
   if (p.type === "column") return [{ r: p.r, h: p.h }];
   if (p.type === "pillar") return [
     { r: PILLAR_R, h: PILLAR_H - PILLAR_CAP },
@@ -1845,7 +1848,6 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "lamp": return { type, x, y, z, h: LAMP_H, rot: 0 };
     case "mast": return { type, x, y, z, h: MAST_H, rot: 0 };
     case "tree": return { type, x, y, z, rot: 0, size: 1 };
-    case "clearing": return { type, x, y, z, w: 6, d: 6, rot: 0 };
     case "kicker": return { type, x, y, z, w: KICKER_W, d: KICKER_D, h: KICKER_H, rot: 0 };
     case "hole": return { type, x, y, z, w: 4, d: 4, rot: 0 };
     case "block": return { type, x, y, z, w: 4, h: 1.2, d: 4, rot: 0 };
@@ -2029,6 +2031,7 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "curve" && curveSweep(p) === 270 && p.inner < CURVE_34_MIN_INNER) out.push(`piece ${i}: a 3/4 curve's inner must be at least ${CURVE_34_MIN_INNER}, or its two ends cross`);
     if (p.type === "ramp" && !Number.isInteger(p.rise)) out.push(`piece ${i}: ramp rise must be a whole number of layers`);
     if ((isPlatform(p) || p.type === "bridge" || p.type === "plank" || p.type === "seesaw" || p.type === "board" || p.type === "pangolin" || p.type === "support" || p.type === "arch") && Math.abs(p.y / HEIGHT_STEP - Math.round(p.y / HEIGHT_STEP)) > 1e-6) out.push(`piece ${i}: ${p.type} y must be a multiple of ${HEIGHT_STEP}`);
+    if (p.type === "barrier" && (barrierSize(p).w < 2 * BARRIER_R + 0.1 || barrierSize(p).h < BARRIER_LEG + 2 * BARRIER_R + 0.1)) out.push(`piece ${i}: barrier w must be at least ${2 * BARRIER_R + 0.1} and h at least ${BARRIER_LEG + 2 * BARRIER_R + 0.1}`);
     if (p.type === "crate" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: crate w, h and d must be positive`);
     if (p.type === "barrel" && Math.min(p.r, p.h) <= 0) out.push(`piece ${i}: barrel r and h must be positive`);
     if (p.type === "stool" && Math.min(p.w, p.h, p.d) <= 0) out.push(`piece ${i}: stool w, h and d must be positive`);
@@ -2047,7 +2050,6 @@ export function levelProblems(level: Level): string[] {
     if (p.type === "kicker" && isSliding(p) && (p.roll || p.tilt)) out.push(`piece ${i}: a sliding kicker can't roll or tilt`);
     if (p.type === "kicker" && p.top !== undefined && (p.top <= 0 || p.top > p.w)) out.push(`piece ${i}: a side kicker's top must be above 0 and at most its width`);
     if (p.type === "arch" && (p.w <= 0 || p.d < 0 || p.h < SUPPORT_D + GATE_CORNER + 1)) out.push(`piece ${i}: arch w must be positive, d not negative and h at least ${SUPPORT_D + GATE_CORNER + 1}`);
-    if (p.type === "clearing" && (p.w <= 0 || p.d <= 0)) out.push(`piece ${i}: clearing w and d must be positive`);
     if (p.type === "lamp" && p.h < 1.5) out.push(`piece ${i}: lamp h must be at least 1.5`);
     if (p.type === "mast" && p.h < 3) out.push(`piece ${i}: mast h must be at least 3`);
     if (p.type === "tree" && (treeSize(p) < 0.3 || treeSize(p) > 4)) out.push(`piece ${i}: tree size must be between 0.3 and 4`);
@@ -2137,8 +2139,9 @@ export function validateLevel(raw: unknown): Level {
   if (typeof r.id !== "string" || typeof r.name !== "string") throw new Error("level needs string id and name");
   if (!Array.isArray(r.pieces)) throw new Error("level needs a pieces array");
   const fenced: [Platform, Record<string, Fence>][] = [];
-  const keep = <T extends Platform>(q: T, f: Record<string, unknown>, keys: string[], floor: unknown): T => {
+  const keep = <T extends Platform>(q: T, f: Record<string, unknown>, keys: string[], floor: unknown, noTrees: unknown): T => {
     if (isFloor(floor)) q.floor = floor;
+    if (noTrees === true) q.noTrees = true;
     const spec = Object.fromEntries(keys.map((k) => [k, fence(f[k])]));
     if (Object.values(spec).some((v) => v)) fenced.push([q, spec]);
     return q;
@@ -2151,9 +2154,9 @@ export function validateLevel(raw: unknown): Level {
     switch (p.type) {
       case "start": return { type: "start", ...at };
       case "slab": return keep({ type: "slab", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), tilt: num(p.tilt ?? 0, "tilt"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.twist ? { twist: num(p.twist, "twist") } : {}), ...(p.curl ? { curl: num(p.curl, "curl") } : {}), ...(p.belt === true ? { belt: true as const } : {}), ...(p.glass === true ? { glass: true as const } : {}), ...(shape(p.shape) ? { shape: shape(p.shape)! } : {}),
-        ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"], p.floor);
-      case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"), ...(p.sweep !== undefined && num(p.sweep, "sweep") !== 90 ? { sweep: num(p.sweep, "sweep") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.rollAt === "b" ? { rollAt: "b" as const } : {}) }, f, ["a", "outer", "b", "inner"], p.floor);
-      case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"], p.floor);
+        ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"], p.floor, p.noTrees);
+      case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"), ...(p.sweep !== undefined && num(p.sweep, "sweep") !== 90 ? { sweep: num(p.sweep, "sweep") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.rollAt === "b" ? { rollAt: "b" as const } : {}) }, f, ["a", "outer", "b", "inner"], p.floor, p.noTrees);
+      case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"], p.floor, p.noTrees);
       case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
@@ -2176,9 +2179,8 @@ export function validateLevel(raw: unknown): Level {
         ...(p.track ? { track: num(p.track, "track"), offset: num(p.offset ?? 0, "offset") } : {}),
         ...(p.top !== undefined ? { top: num(p.top, "top") } : {}) };
       case "support": return { type: "support", ...at, w: num(p.w, "w"), h: num(p.h, "h"), rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.reach !== undefined && num(p.reach, "reach") !== SUPPORT_REACH ? { reach: num(p.reach, "reach") } : {}) };
-      case "gate": return null;
+      case "gate": case "clearing": return null;
       case "arch": return { type: "arch", ...at, w: num(p.w ?? LANE_WIDTH, "w"), d: num(p.d ?? 0, "d"), h: num(p.h ?? GATE_H, "h"), rot: num(p.rot ?? 0, "rot") };
-      case "clearing": return { type: "clearing", ...at, w: num(p.w ?? 6, "w"), d: num(p.d ?? 6, "d"), rot: num(p.rot ?? 0, "rot") };
       case "lamp": return { type: "lamp", ...at, h: num(p.h ?? LAMP_H, "h"), rot: num(p.rot ?? 0, "rot") };
       case "mast": return { type: "mast", ...at, h: num(p.h ?? MAST_H, "h"), rot: num(p.rot ?? 0, "rot") };
       case "tree": return { type: "tree", ...at, rot: num(p.rot ?? 0, "rot"), size: num(p.size ?? 1, "size"),
@@ -2190,7 +2192,8 @@ export function validateLevel(raw: unknown): Level {
         every: num(p.every ?? PUFF_EVERY, "every"), ...(p.offset ? { offset: num(p.offset, "offset") } : {}) };
       case "magnet": return { type: "magnet", ...at, ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
       case "column": return { type: "column", ...at, h: num(p.h ?? COLUMN_H, "h"), r: Math.max(0.1, num(p.r ?? COLUMN_R, "r")), ...(p.rot ? { rot: num(p.rot, "rot") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
-      case "barrier": return { type: "barrier", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}) };
+      case "barrier": return { type: "barrier", ...at, rot: num(p.rot ?? 0, "rot"), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.tilt ? { tilt: num(p.tilt, "tilt") } : {}),
+        ...(p.w !== undefined && num(p.w, "w") !== BARRIER_W ? { w: num(p.w, "w") } : {}), ...(p.h !== undefined && num(p.h, "h") !== BARRIER_H ? { h: num(p.h, "h") } : {}) };
       case "crate": {
         // Older levels give a cube's side as `s`.
         const s = p.s === undefined ? undefined : num(p.s, "s");

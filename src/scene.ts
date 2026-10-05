@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { APPLE, BALL_RADIUS, BEAN_LIFT, BUTTON, buttonBase, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_GAP, GATE_BEND_R, GATE_ROUND, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_H, BARRIER_LEG, BARRIER_LEG_R, BARRIER_LEG_X, BARRIER_R, BARRIER_W, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
+import { APPLE, BALL_RADIUS, BEAN_LIFT, BUTTON, buttonBase, CUBE_S, PANGOLIN_SEG, PANGOLIN_T, pangolinRest, pangolinLine, pangolinPoint, pangolinRing, pangolinSize, pangolinSlope, pangolinTrack, type Pangolin, holeCuts, isTilted, curveRollPoint, supportOver, supportReach, supportBend, beltLoop, beltOutline, isBelt, isCurled, isGlass, curlPoint, isShaped, slabOutline, type Slab, crateRound, GATE_CORNER, GATE_GAP, GATE_BEND_R, GATE_ROUND, gateStrip, type Gate, pieceRoll, pieceTilt, propLift, barrelProfile, pufferProfile, puffRing, PUFFER_VENT, PUFF_REACH, type Puffer, magnetProfile, MAGNET_REACH, BRIDGE_BARREL, BRIDGE_LUG, PILLAR_CAP, PILLAR_COLLAR, PILLAR_RING, propRound, SPINNER_HUB_R, startPadProfile, START_PAD_BOWL, START_PAD_EDGE_N, START_PAD_REST, BARRIER_D, BARRIER_LEG, BARRIER_LEG_R, BARRIER_R, barrierSize, BLOCK_R, BLOCKADE_R, BRIDGE_PLANK_T, PLANK_HINGE_H, PLANK_T, seesawPivot, seesawPostH, boardLift, SEESAW_POST_D, SEESAW_POST_R, SEESAW_POST_W, SEESAW_STUB, SEESAW_T, PAINT, SUPPORT_D, SUPPORT_W, START_PAD_H, START_PAD_R, type Cylinder, PILLAR_H, PILLAR_R, PLATFORM_EDGE_DROP, PLATFORM_EDGE_INSET, PLATFORM_LIP, PLATFORM_THICKNESS, SPINNER_HEIGHT, SPINNER_WIDTH, TUBE_R, TUBE_SKIN_SIDES, tubeRings, mouthRings, exitMouth, RING_R, RING_T, RING_SIDES, RING_SEGMENTS, RAIL_R, type Tube, type TubeRing, bridgeChain, holesOn, pieceBoxes, kickerHull, kickerSpan, KICKER_W, KICKER_SINK, kickerSlide, isSliding, isMoving, twistAt, type Mover, pieceRot, plankMounts, plankPose, PLANK_BARREL, PLANK_MOUNT_R, rampHeight, seesawTilt, stoolAxis, stoolSlide, jumpPadSize, jumpHull, jumpCorner, JUMP_H, JUMP_REACH, JUMP_RUN, supportPillars, pillarStretches, pillarEar, PILLAR_EAR, gateLegTop, rotXZ, curveStrip, type Curve, type Bridge, beanAt, beanTrack, type Bean, type Level, type Piece, type XZ } from "./level.ts";
 import { BELT_TILE, METAL_TILE, TILE, airTexture, ballTextures, beanTexture, beltTextures, edgeTextures, floorTexture, magnetAuraTexture, metalTexture, structTextures, tileTexture } from "./textures.ts";
 import { RAIL_MAT, STRIPE_MAT, buildFence, buildRailsPiece } from "./rails.ts";
 import { APPLE as APPLE_COLORS, CAUTION, GOLDEN as GOLDEN_COLORS, BUMPER, EFFECTS, ENV, GOAL, KICKER, RUIN, MAGNET, PILLAR, PLATFORM, PROPS, PUFFER, STOOL, TREADMILL, TUBE } from "./palette.ts";
 import { platformMesh, type PlatformJoins } from "./platform.ts";
 import { platformSeams } from "./floor.ts";
 import { DECOR_TIME, buildDecor, buildTree, fadePlantsOn } from "./decor.ts";
-import { INK_FADE, fadeAt } from "./fade.ts";
+import { FADE, INK_FADE, fadeAt } from "./fade.ts";
 import { PATCH_GLSL, PATCH_KINDS, patchSeed } from "./patches.ts";
 import { LAMP, floorOf, gateFrames, isPlatform, pieceCapsules, type Capsule, type FloorKind } from "./level.ts";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -189,28 +189,29 @@ function buildHoleMarker(g: THREE.Group, p: Piece & { type: "hole" }) {
   g.add(new THREE.Mesh(plane, HOLE_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), HOLE_LINE));
 }
 
-// Editor only: a clearing (no trees grow there) as a pale orange patch with its outline; in play it draws nothing.
-const CLEARING_MAT = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
-const CLEARING_LINE = new THREE.LineBasicMaterial({ color: 0xff9a3c });
-function buildClearingMarker(g: THREE.Group, p: Piece & { type: "clearing" }) {
-  const plane = new THREE.PlaneGeometry(p.w, p.d).rotateX(-Math.PI / 2).translate(0, 0.04, 0);
-  g.add(new THREE.Mesh(plane, CLEARING_MAT), new THREE.LineSegments(new THREE.EdgesGeometry(plane), CLEARING_LINE));
+// Editor only: a no-trees platform washed orange, over its own geometry.
+const NO_TREES_MAT = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+function noTreesWash(g: THREE.Group, geo: THREE.BufferGeometry) {
+  const m = new THREE.Mesh(geo, NO_TREES_MAT);
+  m.userData.noShadow = true;
+  g.add(m);
 }
 
 // Slatted column with a domed cap and a glowing base ring.
 // Barrier: a rounded white pod on two legs with a cyan band along its bottom, a recessed
 // instrument panel on each long face and a louvred grille on each end. The pod fills the
 // collider exactly. Every detail is a box standing proud of the body, never a plane lying on it.
-function buildBarrier(g: THREE.Group) {
+function buildBarrier(g: THREE.Group, p: Piece & { type: "barrier" }) {
+  const size = barrierSize(p);
   if (ruin()) {
-    const H = BARRIER_H - BARRIER_LEG, y0 = BARRIER_LEG;
-    g.add(steel(new RoundedBoxGeometry(BARRIER_W, H, BARRIER_D, 4, BARRIER_R).translate(0, y0 + H / 2, 0)));
-    for (const y of [y0 + 0.05, BARRIER_H - 0.05]) g.add(steel(new RoundedBoxGeometry(BARRIER_W + 0.02, 0.1, BARRIER_D + 0.04, 2, 0.04).translate(0, y, 0), SEAM_MAT));
-    for (const x of [BARRIER_LEG_X, -BARRIER_LEG_X]) g.add(steel(new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.1, 16).translate(x, (BARRIER_LEG + 0.1) / 2, 0), SEAM_MAT));
+    const H = size.h - BARRIER_LEG, y0 = BARRIER_LEG;
+    g.add(steel(new RoundedBoxGeometry(size.w, H, BARRIER_D, 4, BARRIER_R).translate(0, y0 + H / 2, 0)));
+    for (const y of [y0 + 0.05, size.h - 0.05]) g.add(steel(new RoundedBoxGeometry(size.w + 0.02, 0.1, BARRIER_D + 0.04, 2, 0.04).translate(0, y, 0), SEAM_MAT));
+    for (const x of [size.legX, -size.legX]) g.add(steel(new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.1, 16).translate(x, (BARRIER_LEG + 0.1) / 2, 0), SEAM_MAT));
     return;
   }
   const st = STRUCT!, R = BARRIER_R;
-  const W = BARRIER_W, D = BARRIER_D, H = BARRIER_H - BARRIER_LEG, y0 = BARRIER_LEG;
+  const W = size.w, D = BARRIER_D, H = size.h - BARRIER_LEG, y0 = BARRIER_LEG;
   const body = new THREE.Mesh(new RoundedBoxGeometry(W, H, D, 4, R), st.body);
   body.position.y = y0 + H / 2;
   body.castShadow = body.receiveShadow = true;
@@ -231,7 +232,7 @@ function buildBarrier(g: THREE.Group) {
     g.add(m);
   }
   const legGeo = new THREE.CylinderGeometry(BARRIER_LEG_R, BARRIER_LEG_R, BARRIER_LEG + 0.1, 24);
-  for (const x of [BARRIER_LEG_X, -BARRIER_LEG_X]) {
+  for (const x of [size.legX, -size.legX]) {
     const leg = new THREE.Mesh(legGeo, st.body);
     leg.position.set(x, (BARRIER_LEG + 0.1) / 2, 0);
     leg.castShadow = true;
@@ -2382,7 +2383,7 @@ export interface Built {
   origin: ((open: number) => void) | null;
   // Each piece group's ink hulls (stylize) with the group's bounds in its own frame, hidden while the
   // camera is near the piece (hideHullsAround).
-  hulls: { group: THREE.Group; index: number; box: THREE.Box3; hulls: THREE.Mesh[]; meshes: THREE.Mesh[]; platform: boolean }[];
+  hulls: { group: THREE.Group; index: number; box: THREE.Box3; hulls: THREE.Mesh[]; meshes: THREE.Mesh[]; platform: boolean; shown?: number }[];
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -2457,7 +2458,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
     else if (pieceRoll(p) || pieceTilt(p)) { g.rotation.z = (pieceRoll(p) * Math.PI) / 180; g.rotation.x = (pieceTilt(p) * Math.PI) / 180; }
     g.userData.pieceIndex = index;
     if (p.type === "blockade") buildBlockade(g, p);
-    if (p.type === "barrier") buildBarrier(g);
+    if (p.type === "barrier") buildBarrier(g, p);
     if (p.type === "pillar") buildPillar(g);
     if (p.type === "puffer") buildPuffer(g);
     if (p.type === "button") buildButton(g);
@@ -2505,6 +2506,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       m.receiveShadow = true;
       g.add(m);
       if (isGlass(p) && !isBelt(p)) g.add(glassPane(geo));
+      if (editor && p.noTrees) noTreesWash(g, geo);
       if (isBelt(p)) buildBelt(g, p);
       if (isMoving(p)) {
         m.castShadow = true;
@@ -2513,7 +2515,6 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       }
     }
     if (p.type === "hole" && editor) buildHoleMarker(g, p);
-    if (p.type === "clearing" && editor) buildClearingMarker(g, p);
     if (p.type === "ramp") {
       // The strip runs along the ramp, turned a quarter into place after.
       const strip = (x: number, z: number): XZ => { const l = pieceLocal(p, x, z); return [-l[1], l[0]]; }, frame = tileFrame(p);
@@ -2524,6 +2525,7 @@ export function buildLevel(level: Level, editor: boolean, reuse?: Built, plants 
       m.receiveShadow = true;
       m.castShadow = true;
       g.add(m);
+      if (editor && p.noTrees) noTreesWash(g, geo);
     }
     if (p.type === "fence") buildFence(p, g);
     if (p.type === "rails") buildRailsPiece(p, g, level);
@@ -2615,24 +2617,43 @@ function toonOf(m: THREE.Material): THREE.Material {
 // bounds (in the mesh's frame): its meshes swap to see-through copies of their materials while it is
 // faded, its ink hull fading faster (INK_FADE) so the hull's inside never tints through. A mesh's hull
 // is drawn inside out, so from inside the mesh its faces fill the view with ink: it is hidden while the
-// eye is inside its mesh. Platforms stay solid; those that meet have no wall where they join, so from
-// inside one the next one's open end shows its hull: while the eye is inside any platform, every
-// platform's hull is hidden.
-const EYE = new THREE.Vector3(), INV = new THREE.Matrix4();
+// eye is inside its mesh. Platforms that meet have no wall where they join, so from inside one the next
+// one's open end shows its hull: while the eye is inside any platform, every platform's hull is hidden.
+// A platform never fades by distance (the floor under the ball is always near the eye); it fades to
+// FADE.min, eased over a few frames, while it lies between the eye and the ball.
+const EYE = new THREE.Vector3(), INV = new THREE.Matrix4(), RAY = new THREE.Ray(), HIT = new THREE.Vector3(), CAST = new THREE.Raycaster();
 const eyeIn = (o: THREE.Object3D, eye: THREE.Vector3) => EYE.copy(eye).applyMatrix4(INV.copy(o.matrixWorld).invert());
-export function hideHullsAround(built: Built, eye: THREE.Vector3): void {
+const PLATFORM_EASE = 0.15;
+// Whether platform `r` crosses the line from `eye` to `ball`: its bounds first, then its meshes.
+function blocks(r: Built["hulls"][number], eye: THREE.Vector3, ball: THREE.Vector3): boolean {
+  INV.copy(r.group.matrixWorld).invert();
+  RAY.origin.copy(eye).applyMatrix4(INV);
+  RAY.direction.copy(ball).applyMatrix4(INV).sub(RAY.origin);
+  const len = RAY.direction.length();
+  if (len < 1e-6) return false;
+  RAY.direction.divideScalar(len);
+  if (!RAY.intersectBox(r.box, HIT) || HIT.distanceTo(RAY.origin) > len) return false;
+  CAST.set(eye, HIT.copy(ball).sub(eye).normalize());
+  CAST.far = eye.distanceTo(ball);
+  return CAST.intersectObjects(r.meshes.filter((m) => !m.userData.outline), false).length > 0;
+}
+// `ball` is where the ball is drawn; without it no platform fades.
+export function hideHullsAround(built: Built, eye: THREE.Vector3, ball?: THREE.Vector3): void {
   const inside = built.hulls.some((r) => r.platform && r.box.containsPoint(eyeIn(r.group, eye)));
   const dist = (h: THREE.Mesh) => { const m = h.parent as THREE.Mesh; return m.geometry.boundingBox!.distanceToPoint(eyeIn(m, eye)); };
   const faded: [number, number][] = [];
   for (const r of built.hulls) {
     const d = r.hulls.map(dist);
     r.hulls.forEach((h, k) => { h.visible = !(r.platform && inside) && d[k]! > ENV.outline; });
-    if (r.platform) continue;
-    const o = fadeAt(Math.min(...d));
+    let o: number;
+    if (r.platform) {
+      const want = ball && blocks(r, eye, ball) ? FADE.min : 1, was = r.shown ?? 1;
+      o = r.shown = was + Math.max(-PLATFORM_EASE, Math.min(PLATFORM_EASE, want - was));
+    } else o = fadeAt(Math.min(...d));
     fadePiece(r, o);
     if (o < 1) faded.push([r.index, o]);
   }
-  // The plants growing on a faded prop fade with it.
+  // The plants growing on a faded piece fade with it.
   fadePlantsOn(faded);
 }
 
@@ -2657,7 +2678,7 @@ function fadePiece(r: Built["hulls"][number], o: number): void {
 }
 // Every prop solid again, every hull shown (a view that doesn't fade, after one that did).
 export function unfadeAll(built: Built): void {
-  for (const r of built.hulls) { fadePiece(r, 1); for (const h of r.hulls) h.visible = true; }
+  for (const r of built.hulls) { r.shown = undefined; fadePiece(r, 1); for (const h of r.hulls) h.visible = true; }
   fadePlantsOn([]);
 }
 
