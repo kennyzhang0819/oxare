@@ -298,16 +298,33 @@ function buildApple(g: THREE.Group, golden: boolean): void {
   g.userData[golden ? "golden" : "apple"] = a;
 }
 
-// Button: a steel base (buttonBase's hull) with a cap in the movables' paint on top, raised until pressed.
+// Button: a steel base (buttonBase's hull) with a steel cap on top, raised until pressed, its top painted
+// with a grid of pale dots.
+const BUTTON_DOT_MAT = new THREE.MeshStandardMaterial({ color: RUIN.rivet, roughness: 0.6 });
+let BUTTON_DOTS: THREE.BufferGeometry | null = null;
+function buttonDots(): THREE.BufferGeometry {
+  if (BUTTON_DOTS) return BUTTON_DOTS;
+  const step = 0.17, r = 0.04, parts: THREE.BufferGeometry[] = [];
+  for (let i = -3; i <= 3; i++) {
+    for (let j = -3; j <= 3; j++) {
+      const x = (j + (i & 1 ? 0.5 : 0)) * step, z = i * step * Math.sqrt(3) / 2;
+      if (Math.hypot(x, z) + r < BUTTON.capR - 0.08) parts.push(new THREE.CircleGeometry(r, 10).rotateX(-Math.PI / 2).translate(x, 0, z));
+    }
+  }
+  return (BUTTON_DOTS = mergeGeometries(parts));
+}
 function buildButton(g: THREE.Group) {
   const pts = buttonBase(), idx = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 5, 1, 0, 4, 5, 1, 6, 2, 1, 5, 6, 2, 7, 3, 2, 6, 7, 3, 4, 0, 3, 7, 4];
   const base = new THREE.BufferGeometry();
   base.setAttribute("position", new THREE.Float32BufferAttribute(idx.flatMap((k) => pts[k]!), 3));
   base.computeVertexNormals();
   g.add(steel(base));
-  const cap = steel(new THREE.CylinderGeometry(BUTTON.capR, BUTTON.capR, BUTTON.capH, 32), ruin() ? ruinPaint().move : STRUCT!.glow);
+  const cap = steel(new THREE.CylinderGeometry(BUTTON.capR, BUTTON.capR, BUTTON.capH, 32));
   const up = BUTTON.baseH + BUTTON.capH / 2;
   cap.position.y = up;
+  const dots = new THREE.Mesh(buttonDots(), ruin() ? BUTTON_DOT_MAT : STRUCT!.glow);
+  dots.position.y = BUTTON.capH / 2 + PAINT;
+  cap.add(dots);
   g.add(cap);
   g.userData.press = (down: boolean) => { cap.position.y = down ? up - BUTTON.press : up; };
 }
@@ -1115,10 +1132,11 @@ function buildSeesaw(g: THREE.Group, p: Piece & { type: "seesaw" }, editor: bool
 }
 
 // The pipe's plating and windows, drawn in its shader from vPipe = (distance along, distance round from
-// the top, length): a seam round it every PIPE_PLATE with rivets beside it, and a small framed window on top
-// every PIPE_WINDOW, none within a unit of a mouth.
+// the top, length, flow): a seam round it every PIPE_PLATE with rivets beside it, and a small framed window on
+// top every PIPE_WINDOW, none within a unit of a mouth. A one-way pipe (flow +1 toward the last mouth, -1 toward
+// the first) has red > chevrons pointing the way out: on both sides of every plate, and on top between windows.
 const PIPE_PLATE = 2, PIPE_WINDOW = 4, PIPE_CIRC = 2 * Math.PI * TUBE_R;
-const PIPE_GLSL = `varying vec3 vPipe;
+const PIPE_GLSL = `varying vec4 vPipe;
 float pipeArc() { float a = vPipe.y; return a > ${(PIPE_CIRC / 2).toFixed(4)} ? a - ${PIPE_CIRC.toFixed(4)} : a; }
 float pipeWindow() {
   float c = (floor(vPipe.x / ${PIPE_WINDOW.toFixed(1)}) + 0.5) * ${PIPE_WINDOW.toFixed(1)};
@@ -1126,10 +1144,20 @@ float pipeWindow() {
   vec2 q = abs(vec2(vPipe.x - c, pipeArc())) - vec2(0.4 - 0.15, 0.3 - 0.15);
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.15;
 }
+bool pipeChevron(float u, float v) {
+  return abs(v) < 0.24 && abs(u * vPipe.w + abs(v) * 0.8 - 0.1) < 0.06;
+}
+bool pipeArrow() {
+  if (vPipe.w == 0.0) return false;
+  float c = floor(vPipe.x / ${PIPE_PLATE.toFixed(1)} + 0.5) * ${PIPE_PLATE.toFixed(1)}, u = vPipe.x - c, a = pipeArc(), q = ${(PIPE_CIRC / 4).toFixed(4)};
+  if (c < 0.8 || c > vPipe.z - 0.8) return false;
+  if (pipeChevron(u, abs(a) - q)) return true;
+  return mod(c, ${PIPE_WINDOW.toFixed(1)}) < 0.5 && pipeChevron(u, a);
+}
 `;
 function pipeShader(m: THREE.Material, body: (shader: { fragmentShader: string }) => void, key: string): void {
   m.onBeforeCompile = (shader) => {
-    shader.vertexShader = "attribute vec3 pipe;\nvarying vec3 vPipe;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vPipe = pipe;");
+    shader.vertexShader = "attribute vec4 pipe;\nvarying vec4 vPipe;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vPipe = pipe;");
     shader.fragmentShader = PIPE_GLSL + shader.fragmentShader;
     body(shader);
   };
@@ -1144,6 +1172,7 @@ function pipeMats() {
       float w = pipeWindow(), ds = abs(fract(vPipe.x / ${PIPE_PLATE.toFixed(1)}) - 0.5) * ${PIPE_PLATE.toFixed(1)};
       float step8 = ${(PIPE_CIRC / 8).toFixed(4)}, da = (fract(vPipe.y / step8) - 0.5) * step8;
       if (w < 0.07 || ds < 0.035) diffuseColor.rgb = ${glslColor(RUIN.seam)};
+      else if (pipeArrow()) diffuseColor.rgb = ${glslColor(BUMPER.rubber)};
       else if (length(vec2(abs(ds - 0.12), da)) < 0.04) diffuseColor.rgb = ${glslColor(RUIN.rivet)};`);
   }, "pipe-steel");
   const glass = new THREE.MeshPhysicalMaterial({ color: TUBE.glass, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.1 });
@@ -1155,7 +1184,7 @@ function pipeMats() {
 
 // Pipe (the "tube" piece): a rust-steel skin with small glass windows (the physics keeps a solid wall behind
 // it) and a ring of rail round each mouth. A one-way pipe's exit-only mouth is painted red like the puffer's
-// collar: its ring, and a red band round the pipe just inside it.
+// collar: its ring, and a red band round the pipe just inside it; red chevrons along it point there.
 function buildTube(g: THREE.Group, p: Tube) {
   const rings = tubeRings(p);
   if (rings.length < 2) return;
@@ -1168,7 +1197,7 @@ function buildTube(g: THREE.Group, p: Tube) {
   const S = TUBE_SKIN_SIDES, P = welded.getAttribute("position"), N = welded.getAttribute("normal");
   const along = [0];
   for (let i = 1; i < rings.length; i++) { const a = rings[i - 1]!.c, b = rings[i]!.c; along.push(along[i - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])); }
-  const L = along[along.length - 1]!, [du, dv] = rustShift(new THREE.Vector3(p.x, p.y, p.z));
+  const L = along[along.length - 1]!, [du, dv] = rustShift(new THREE.Vector3(p.x, p.y, p.z)), flow = p.out === "b" ? 1 : p.out === "a" ? -1 : 0;
   const pos: number[] = [], nor: number[] = [], uv: number[] = [], pipe: number[] = [], idx: number[] = [];
   rings.forEach((_, i) => {
     for (let j = 0; j <= S; j++) {
@@ -1177,7 +1206,7 @@ function buildTube(g: THREE.Group, p: Tube) {
       nor.push(N.getX(k), N.getY(k), N.getZ(k));
       // One whole rust tile round, so the texture meets itself at the top.
       uv.push(along[i]! + du, (j / S) * METAL_TILE + dv);
-      pipe.push(along[i]!, arc, L);
+      pipe.push(along[i]!, arc, L, flow);
     }
   });
   for (let i = 0; i + 1 < rings.length; i++) {
@@ -1191,7 +1220,7 @@ function buildTube(g: THREE.Group, p: Tube) {
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute("pipe", new THREE.Float32BufferAttribute(pipe, 3));
+  geo.setAttribute("pipe", new THREE.Float32BufferAttribute(pipe, 4));
   geo.setIndex(idx);
   const mats = pipeMats();
   g.add(new THREE.Mesh(geo, mats.steel));

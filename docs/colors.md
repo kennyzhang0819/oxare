@@ -57,6 +57,8 @@ The mixed floor, the default, is mostly grass with patches of the others (`patch
 | arch | steel arches and their ears, no panels or trim |
 | lamp post, signal mast | plain steel bars; the lamp under the hood glows `RUIN.lamp`, the mast's beacon blinks `RUIN.beacon` (both unlit, no outline) |
 | fences, rails, rings | plain steel pipe, no light strip |
+| button | a plain steel base and cap, the cap's top dotted pale (`RUIN.rivet`) |
+| pipe | rusting steel plates; a one-way pipe's exit ring and band red, and red chevrons along it pointing there |
 
 The lights no longer glow (`glow` 0.3). The platforms' walls and lips are steel too (docs/platforms.md). Plants grow over everything that stands still (docs/decor.md).
 
