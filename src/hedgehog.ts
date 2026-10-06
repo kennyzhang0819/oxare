@@ -17,9 +17,9 @@ const STILL_SPIN = 0.6, STILL_RISE = 0.5;
 
 const HOG = { quill: 0x5a3a28, tip: 0xe6cfa8, skin: 0x7c5640, face: 0xf4dfbd, paw: 0xd9ae84, ear: 0xe8c09a, dark: 0x22181a, blush: 0xf29a9e };
 const K = BALL_RADIUS / 0.5;
-// Curled: the body is a ball this big under quills reaching to about the ball's radius, its face
-// bulging FACE_BUMP out among them and its snout a stub (CURL_SNOUT of its length).
-const CURL_R = 0.37 * K, FACE_BUMP = 0.08 * K, CURL_SNOUT = 0.35;
+// Curled: the body is a ball this big under quills reaching to about the ball's radius, its bare face
+// raised FACE_BUMP to their tips and its snout tucked in, so it is round from every side.
+const CURL_R = 0.37 * K, FACE_BUMP = 0.09 * K;
 // Sitting: an upright egg its bottom on the ground, wider low down; its snout pushed out round FACE.
 const EGG = { a: 0.4 * K, b: 0.44 * K, c: 0.38 * K, widen: 0.14 };
 const SNOUT = { len: 0.27 * K, sharp: 18 };
@@ -39,8 +39,8 @@ const angleTo = (d: THREE.Vector3, axis: THREE.Vector3) => THREE.MathUtils.radTo
 function shape(d: THREE.Vector3, e: number, breathe: number, out: THREE.Vector3): THREE.Vector3 {
   const low = Math.max(0, -d.y), a = EGG.a * (1 + EGG.widen * low), b = EGG.b * breathe, c = EGG.c * (1 + EGG.widen * low);
   const s = 1 / Math.hypot(d.x / a, d.y / b, d.z / c), toFace = d.dot(FACE);
-  const snout = SNOUT.len * Math.max(0, toFace) ** SNOUT.sharp * (CURL_SNOUT + (1 - CURL_SNOUT) * e);
-  const r = CURL_R + FACE_BUMP * smooth(toFace, 0.5, 0.92);
+  const snout = SNOUT.len * Math.max(0, toFace) ** SNOUT.sharp * e;
+  const r = CURL_R + FACE_BUMP * smooth(toFace, 0.45, 0.62);
   const cx = d.x * r, cy = d.y * r, cz = d.z * r, sx = d.x * s, sy = -0.5 * K + b + d.y * s, sz = d.z * s;
   return out.set(cx + (sx - cx) * e + SNOUT_DIR.x * snout, cy + (sy - cy) * e + SNOUT_DIR.y * snout, cz + (sz - cz) * e + SNOUT_DIR.z * snout);
 }
