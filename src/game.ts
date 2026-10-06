@@ -4,7 +4,7 @@ import { APPLE, BALL_RADIUS, ORIGIN_LEAVE, START_PAD_H, inOrigin, moverAt, start
 import { buildLevel, createScene, fitSun, hideHullsAround, posePlank, puffRings, turnBelts, type Built, type SceneEnv } from "./scene.ts";
 import { disposeDecor } from "./decor.ts";
 import { NEAR_ON } from "./fade.ts";
-import { makeHedgehog } from "./hedgehog.ts";
+import { makeCritter } from "./critter.ts";
 import { STEP, createSim, moverTime, type Sim } from "./sim.ts";
 import { decorStems } from "./decor.ts";
 import { DEFAULT_TUNING, FIXED_KEYS, PLAYER_KEYS, TUNING, TUNING_RANGES, resetTuning, saveTuning, type TuningKey } from "./tuning.ts";
@@ -33,7 +33,7 @@ export class Game implements Mode {
   private env: SceneEnv;
   private camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
   private built: Built;
-  private ball = makeHedgehog();
+  private ball = makeCritter();
   private input = new Input();
   private sim: Sim | null = null;
   // Pose before the latest physics step; the frame renders between it and the current pose.

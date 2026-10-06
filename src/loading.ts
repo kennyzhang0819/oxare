@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { LEVELS } from "./levels/index.ts";
 import { BALL_RADIUS } from "./level.ts";
 import { buildLevel, createScene, initMaterials } from "./scene.ts";
-import { makeHedgehog } from "./hedgehog.ts";
+import { makeCritter } from "./critter.ts";
 import { createSim, initPhysics } from "./sim.ts";
 import { h } from "./ui.ts";
 import type { Ctx, Mode } from "./main.ts";
@@ -47,7 +47,7 @@ export class Loading implements Mode {
     const level = LEVELS[0]!;
     const env = createScene();
     const built = buildLevel(level, false);
-    const ball = makeHedgehog();
+    const ball = makeCritter();
     ball.mesh.position.set(level.pieces[0]!.x, BALL_RADIUS, level.pieces[0]!.z);
     env.scene.add(built.group, ball.mesh);
     const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth / canvas.clientHeight, 0.1, 500);

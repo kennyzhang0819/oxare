@@ -76,7 +76,7 @@ export const DECOR = {
 };
 
 // Effects, not pieces, keep their own colours: the jump pad's rising squares and the magnet's aura.
-// (The goal's portal is drawn in its own shaders; the hedgehog's colours are in hedgehog.ts.)
+// (The goal's portal is drawn in its own shaders; the protagonist's colours are in raccoon.ts and hedgehog.ts.)
 export const EFFECTS = {
   jumpHolo: 0xffe566,
   magnetAura: 0xff6b6b,

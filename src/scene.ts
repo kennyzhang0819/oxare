@@ -2609,7 +2609,7 @@ export function stylize(root: THREE.Object3D): void {
   });
   for (const [o, hull] of hulls) o.add(hull);
 }
-// The shared ink outline material, for meshes drawn outside stylize (the hedgehog).
+// The shared ink outline material, for meshes drawn outside stylize (the protagonist).
 export const inkMaterial = (): THREE.MeshBasicMaterial => (OUTLINE_MAT ??= outlineMaterial(ENV.outline, ENV.outlineColor));
 export function outlineMaterial(width: number, color: number): THREE.MeshBasicMaterial {
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });

@@ -93,7 +93,7 @@ The shared popup (`openDialog`, dialog.ts) is the UI's one way to tell the playe
 
 ## Effects
 
-Effects are not pieces and keep their own colors, in `EFFECTS`: the jump pad's rising squares (#f0c45a), the magnet's aura (#ff2828); the hedgehog keeps its own browns and creams (`HOG` in hedgehog.ts). The origin's wormhole is drawn in its own shaders, from `GOAL.disc` (the accretion disc's cool blue) and `CYAN` (its hot inner glow and sparks). Sky, sea, lighting and the editor's guides are outside the palette too.
+Effects are not pieces and keep their own colors, in `EFFECTS`: the jump pad's rising squares (#f0c45a), the magnet's aura (#ff2828); the protagonist keeps its own colours (`COON` in raccoon.ts, `HOG` in hedgehog.ts). The origin's wormhole is drawn in its own shaders, from `GOAL.disc` (the accretion disc's cool blue) and `CYAN` (its hot inner glow and sparks). Sky, sea, lighting and the editor's guides are outside the palette too.
 
 ## Looks
 

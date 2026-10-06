@@ -3,6 +3,7 @@ import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { BALL_RADIUS } from "./level.ts";
 import { ENV } from "./palette.ts";
 import { inkMaterial, outlineMaterial, toonRamp } from "./scene.ts";
+import type { Critter } from "./critter.ts";
 
 // The protagonist: a hedgehog drawn over the physics ball, which it never changes. Rolling, it is a
 // curled ball of quills with its face on one side, turning with the ball; still for SIT_AFTER seconds,
@@ -64,17 +65,7 @@ function material(color: number, vertexColors = false): THREE.Material {
     : new THREE.MeshStandardMaterial({ color, vertexColors, roughness: 0.7 });
 }
 
-export interface HogState {
-  // The ball's rotation, how fast it spins and rises, whether the player is pushing, and the eye.
-  rot: { x: number; y: number; z: number; w: number };
-  spin: number;
-  rise: number;
-  push: boolean;
-  eye: THREE.Vector3;
-}
-export interface Hedgehog { mesh: THREE.Group; update(dt: number, s: HogState): void; dispose(): void }
-
-export function makeHedgehog(): Hedgehog {
+export function makeHedgehog(): Critter {
   const mesh = new THREE.Group(), ink = ENV.outline > 0 ? inkMaterial() : null;
   const disposables: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(x: T): T => { disposables.push(x); return x; };

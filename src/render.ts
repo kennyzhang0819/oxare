@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import type { Level } from "./level.ts";
 import { buildLevel, createScene, fitSun, hideHullsAround, initMaterials, unfadeAll } from "./scene.ts";
-import { makeHedgehog } from "./hedgehog.ts";
+import { makeCritter } from "./critter.ts";
 import { NEAR_ON } from "./fade.ts";
 import showcase from "./showcase.json";
 import { LEVELS } from "./levels/index.ts";
@@ -18,7 +18,7 @@ const env = createScene();
 // `?level=<id>` builds that level in place of the showcase.
 const pick = new URLSearchParams(location.search).get("level");
 const built = buildLevel(LEVELS.find((l) => l.id === pick) ?? (showcase as Level), false);
-const ball = makeHedgehog();
+const ball = makeCritter();
 env.scene.add(built.group, ball.mesh);
 fitSun(env.sun, built);
 const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 500);
