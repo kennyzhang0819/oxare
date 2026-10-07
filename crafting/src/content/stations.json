@@ -1,0 +1,10 @@
+[
+  {"id":"workbench","name":"Workbench","tier":0,"icon":"🪚"},
+  {"id":"furnace","name":"Furnace","tier":1,"unlock":"smelting","icon":"🔥"},
+  {"id":"kiln","name":"Kiln","tier":1,"unlock":"masonry","icon":"🧱"},
+  {"id":"forge","name":"Forge","tier":1,"unlock":"ironworking","icon":"⚒️"},
+  {"id":"alchemy_bench","name":"Alchemy Bench","tier":1,"unlock":"alchemy","icon":"⚗️"},
+  {"id":"blast_furnace","name":"Blast Furnace","tier":2,"unlock":"advanced_smelting","icon":"🌋"},
+  {"id":"machine_shop","name":"Machine Shop","tier":2,"unlock":"machining","icon":"🏭"},
+  {"id":"assembly_yard","name":"Assembly Yard","tier":3,"unlock":"engineering","icon":"🏗️"}
+]

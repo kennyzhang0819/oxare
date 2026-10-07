@@ -1,0 +1,9 @@
+{
+  "skills": [
+    {"id":"mining","name":"Mining","icon":"⛏️"},
+    {"id":"woodcutting","name":"Woodcutting","icon":"🪓"},
+    {"id":"harvesting","name":"Harvesting","icon":"🌿"}
+  ],
+  "startTechs": ["basic_tools"],
+  "goals": ["steam_generator"]
+}

@@ -1,0 +1,14 @@
+[
+  {"id":"stone_quarry","name":"Stone Quarry","skill":"mining","time":2,"icon":"🪨","drops":[{"item":"stone","min":2,"max":4,"chance":1},{"item":"flint","min":1,"max":1,"chance":0.3}]},
+  {"id":"clay_pit","name":"Clay Pit","skill":"mining","time":2,"icon":"🟫","drops":[{"item":"clay","min":2,"max":4,"chance":1},{"item":"sand","min":1,"max":2,"chance":0.5}]},
+  {"id":"copper_vein","name":"Copper Vein","skill":"mining","time":3,"toolTier":1,"icon":"🟠","drops":[{"item":"copper_ore","min":1,"max":3,"chance":1},{"item":"stone","min":1,"max":1,"chance":0.5}]},
+  {"id":"coal_seam","name":"Coal Seam","skill":"mining","time":3,"toolTier":1,"icon":"⚫","drops":[{"item":"coal","min":1,"max":3,"chance":1}]},
+  {"id":"iron_vein","name":"Iron Vein","skill":"mining","time":4,"toolTier":2,"icon":"🟥","drops":[{"item":"iron_ore","min":1,"max":2,"chance":1}]},
+  {"id":"tin_vein","name":"Tin Vein","skill":"mining","time":4,"toolTier":2,"icon":"⚪","drops":[{"item":"tin_ore","min":1,"max":2,"chance":1}]},
+  {"id":"limestone_outcrop","name":"Limestone Outcrop","skill":"mining","time":3,"toolTier":3,"icon":"🩶","drops":[{"item":"limestone","min":1,"max":3,"chance":1}]},
+  {"id":"forest_edge","name":"Forest Edge","skill":"woodcutting","time":2,"icon":"🌲","drops":[{"item":"wood","min":1,"max":3,"chance":1},{"item":"bark","min":1,"max":1,"chance":0.4}]},
+  {"id":"old_oak","name":"Old Oak","skill":"woodcutting","time":4,"toolTier":1,"icon":"🌳","drops":[{"item":"hardwood","min":1,"max":2,"chance":1},{"item":"resin","min":1,"max":1,"chance":0.35}]},
+  {"id":"meadow","name":"Meadow","skill":"harvesting","time":2,"icon":"🌾","drops":[{"item":"fiber","min":2,"max":4,"chance":1},{"item":"herb","min":1,"max":1,"chance":0.4}]},
+  {"id":"marsh","name":"Marsh","skill":"harvesting","time":3,"toolTier":1,"icon":"🎋","drops":[{"item":"reed","min":1,"max":3,"chance":1},{"item":"bog_iron","min":1,"max":1,"chance":0.25}]},
+  {"id":"sand_bank","name":"Sand Bank","skill":"harvesting","time":2,"icon":"⏳","drops":[{"item":"sand","min":2,"max":4,"chance":1}]}
+]
