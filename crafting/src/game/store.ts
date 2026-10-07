@@ -7,8 +7,8 @@ import {
   type GameState,
 } from "../engine/sim.ts";
 
-const SAVE_KEY = "crafting.save.v1";
-const CONTENT_KEY = "crafting.content.v1";
+const SAVE_KEY = "zerkka.save.v1";
+const CONTENT_KEY = "zerkka.content.v1";
 
 export type Screen = "gather" | "fight" | "craft" | "research" | "goals" | "inventory" | "admin";
 

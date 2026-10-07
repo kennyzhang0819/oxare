@@ -1,4 +1,4 @@
-# Crafting
+# Zerkka-Craft
 
 A Melvor-shaped idle game where the crafting graph is the game. Three branches feed one graph: gathering gives bulk, combat gives the scarce stuff, support systems transform it, and every big craft reaches back into all three. This is the vertical slice: one milestone craft (the Steam Generator) that bottoms out into ore, wood, fiber and monster parts through 57 recipes.
 

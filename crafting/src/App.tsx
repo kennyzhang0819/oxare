@@ -33,7 +33,7 @@ export function App() {
   return (
     <div className="app">
       <nav className="nav">
-        <div className="brand">Crafting<span className="brand-sub">vertical slice</span></div>
+        <div className="brand">Zerkka Craft<span className="brand-sub">vertical slice</span></div>
         {NAV.map((n) => (
           <button key={n.id} className={"nav-btn" + (screen === n.id ? " active" : "")} onClick={() => setScreen(n.id)}>
             <span className="nav-icon">{n.icon}</span>
