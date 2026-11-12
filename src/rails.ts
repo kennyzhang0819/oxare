@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RAILS } from "./palette.ts";
 import { railSweep } from "./geometry.ts";
-import { PAINT, FENCE_RAIL_Y, RAIL_R, fenceRings, railsLines, railsRings, tubeRings, type FencePiece, type Level, type Rails, type TubeRing } from "./level.ts";
+import { PAINT, RAIL_R, fenceH, fenceRings, railsLines, railsRings, tubeRings, type FencePiece, type Level, type Rails, type TubeRing } from "./level.ts";
 
 
 // The props' surface exactly, so the same white looks the same on a rail as on a prop.
@@ -40,7 +40,7 @@ export function buildFence(p: FencePiece, into: THREE.Group): void {
   const rail = mesh(railSweep(rings, 0, RAIL_R, 16, 0), RAIL_MAT);
   rail.castShadow = true;
   into.add(rail);
-  const top = trim(tubeRings(p, FENCE_RAIL_Y), 0.25);
+  const top = trim(tubeRings(p, fenceH(p)), 0.25);
   if (top.length > 1) into.add(mesh(railSweep(top, STRIPE_IN - 0.025, 0.025, 6, 0), STRIPE_MAT));
 }
 

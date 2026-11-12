@@ -12,6 +12,7 @@ import type { Ctx, Mode } from "./main.ts";
 
 const PROGRESS_KEY = "balling.progress";
 type Progress = Record<string, { best: number }>;
+const WIN_ORBIT_RATE = 0.5;
 export function loadProgress(): Progress {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}") as Progress; } catch { return {}; }
 }
@@ -40,6 +41,7 @@ export class Game implements Mode {
   private time = 0;
   private falls = 0;
   private done = false;
+  private orbit = 0;
   private frames = 0;
   ready: Promise<void>;
   private drawn!: () => void;
@@ -135,6 +137,9 @@ export class Game implements Mode {
         this.acc -= STEP;
       }
       simMs = performance.now() - t0;
+    } else if (this.done) {
+      this.orbit += dt;
+      this.yaw += WIN_ORBIT_RATE * Math.min(this.orbit, 1) * dt;
     }
     // Frames run 0-3 physics steps each, so the raw post-step pose judders; blending back toward
     // the previous pose by the unconsumed fraction of a step moves the ball by exactly the frame's dt.

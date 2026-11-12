@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_Y, FENCE_RAIL_CORNER, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
+import { BALL_RADIUS, KICKER_TRACK, curveSweep, isMoving, isShaped, type Slab, isSliding, kickerSlide, PLANK_T, LAYER_H, HEIGHT_STEP, PIECE_TYPES, TUBE_BEND, TUBE_R, FENCE_RAIL_CORNER, fenceH, fenceSides, platformFence, cloneLevel, isTilted, holeTurned, pieceTilt, MIRRORED, supportOver, pieceRot, pieceRoll, propLift, isProp, ROLLED_PROPS, rotXZ, type Platform, tubeNodeWorld, tubeTurns, type PathPiece, isPlatform, isStructure, levelProblems, newMove, PIECE_VARIANTS, railsEndYaw, midBounds, fitMid, newPiece, platformFootprint, platformHeightAt, platformOverlaps, surfaceAt, validateLevel, type Level, type Piece, type PieceType, type RailEnd, type XZ } from "./level.ts";
 import { buildLevel, createScene, FOG_EDITOR, fitSun, markOverlapping, type Built, type SceneEnv } from "./scene.ts";
 import { createSim } from "./sim.ts";
 import { pieceThumbs, saveThumb } from "./thumbs.ts";
@@ -67,7 +67,7 @@ const NUM_FIELDS: Record<PieceType, [key: string, step: number][]> = {
   goal: [],
   tube: [["rot", 15]],
   hoop: [["rot", 15], ["tilt", 15], ["roll", 15]],
-  fence: [["rot", 15]],
+  fence: [["h", 0.1], ["rot", 15]],
 };
 // What the panels call each field; the level files keep the short keys.
 const LABELS: Record<string, string> = {
@@ -133,7 +133,7 @@ const midSnap = (v: number) => to(Math.min(SNAP.structure, 0.5))(v);
 // Pull every curve point back inside its segment's box (see fitMid), after any path edit.
 const fitMids = (p: PathPiece) => p.path.forEach((n, k) => { if (n.mid) n.mid = fitMid(p, k, n.mid); });
 // How far above its nodes a path piece's handles sit: at the rail, the bean's centre or the tube's.
-const pathLift = (p: PathPiece): number => (p.type === "fence" ? FENCE_RAIL_Y : p.type === "bean" ? p.r : TUBE_R);
+const pathLift = (p: PathPiece): number => (p.type === "fence" ? fenceH(p) : p.type === "bean" ? p.r : TUBE_R);
 
 // Structures snap to the placement grid and drop onto whatever platform is under them; a tube's
 // entrance drops onto the platform under it, the rest of the tube moving with it.
@@ -848,10 +848,13 @@ export class Editor implements Mode {
       const row = h("div", { class: `node${k === this.node ? " picked" : ""}`, onclick: (e: Event) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) { this.node = k; this.mid = -1; this.refresh(); } } },
         h("span", { class: "tag" }, k === 0 || last ? "end" : `${k}`));
       if (k === 0) {
-        // World x y z, like the piece's own fields, but moving this end alone.
+        // Always 0 0 0, as every node is relative to it; typing an offset moves this end alone by it.
         const first = (axis: "x" | "y" | "z", step: number) => {
-          const input = h("input", { type: "number", step, value: p[axis], onchange: () => this.editTube((ns) => { ns[0]![axis] = r3(Number(input.value)); }) }) as HTMLInputElement;
-          return h("label", { title: `Moves this ${p.type === "tube" ? "mouth" : "end"} alone; the piece's ${axis} above moves the whole ${p.type}` }, axis, input);
+          const input = h("input", { type: "number", step, value: 0, onchange: () => this.editTube((ns) => {
+            const v = Number(input.value), o = rotXZ(axis === "x" ? v : 0, axis === "z" ? v : 0, p.rot), n = ns[0]!;
+            n.x = r3(n.x + o.x); n.y = r3(n.y + (axis === "y" ? v : 0)); n.z = r3(n.z + o.z);
+          }) }) as HTMLInputElement;
+          return h("label", { title: `The ${p.type === "tube" ? "mouth" : "end"} every node is measured from. Type an offset to move it alone (the rest stay put, so their numbers change); the piece's ${axis} above moves the whole ${p.type}` }, axis, input);
         };
         row.append(first("x", SNAP.platform), first("y", HEIGHT_STEP), first("z", SNAP.platform));
       } else row.append(num(n as unknown as Record<string, number>, "x", SNAP.platform), num(n as unknown as Record<string, number>, "y", HEIGHT_STEP), num(n as unknown as Record<string, number>, "z", SNAP.platform));

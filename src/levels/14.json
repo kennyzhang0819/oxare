@@ -6,7 +6,7 @@
     {"type": "start", "x": 0, "y": 0, "z": 0},
     {"type": "goal", "x": 76, "y": 5, "z": -14, "r": 1},
     {"type": "slab", "x": 0, "y": 0, "z": -4, "w": 8, "d": 16, "rot": 0, "tilt": 0},
-    {"type": "slab", "x": 0, "y": 0, "z": -36, "w": 8, "d": 8, "rot": 180, "tilt": 0, "move": {"speed": 3, "wait": 1, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -20, "wait": 1}]}},
+    {"type": "slab", "x": 0, "y": 0, "z": -36, "w": 8, "d": 8, "rot": 180, "tilt": 0, "move": {"speed": 3, "wait": 0, "offset": 0, "loop": "pingpong", "stops": [{"x": 0, "y": 0, "z": -20, "wait": 0}]}},
     {"type": "slab", "x": 6, "y": 0, "z": -26, "w": 4, "d": 16, "rot": 0, "tilt": 0},
     {"type": "slab", "x": -6, "y": 0, "z": -26, "w": 4, "d": 16, "rot": 0, "tilt": 0},
     {"type": "fence", "x": -5, "y": 0, "z": -26, "rot": 0, "path": [{"x": 10, "y": 0, "z": 0, "bend": 0.2}]},

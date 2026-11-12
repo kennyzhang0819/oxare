@@ -45,8 +45,9 @@ export const crateRound = (w: number, h: number, d: number): number => Math.min(
 export const SPINNER_HUB_R = 0.35;
 export const GOAL_DISC_H = 0.1, GOAL_RING = { gap: 0.06, tube: 0.07, y: 0.08 };
 export const BRIDGE_BARREL = { r: 0.06, inset: 0.25 }, BRIDGE_LUG = { w: 0.22, h: 0.26, d: 0.4, r: 0.04, x: 0.45, z: 0.12 };
-// A pillar: its body up to the cap, a collar and a squashed dome on top, and a glow ring round its foot.
-export const PILLAR_CAP = 0.3, PILLAR_COLLAR = { r: 0.05, h: 0.12 }, PILLAR_RING = { r: 0.04, h: 0.12 };
+// A pillar: a glow band at its foot, its body up to the cap, a collar and a squashed dome on top, all
+// one radius so nothing stands wider than the body.
+export const PILLAR_CAP = 0.3, PILLAR_COLLAR_H = 0.12, PILLAR_RING_H = 0.12;
 // Stool: a block that slides on a track along its local x only, `track` long and centred on its
 // (x, z); it starts `offset` along the track from the centre. Two wide, one thick, by default.
 export const STOOL_W = 2, STOOL_H = 1.2, STOOL_D = 1, STOOL_TRACK = 8;
@@ -921,7 +922,7 @@ export type Piece =
   | (At & { type: "spinner"; length: number; speed: number })
   | (At & { type: "goal"; r: number })
   | (At & { type: "tube"; rot: number; path: TubeNode[]; smooth?: true })
-  | (At & { type: "fence"; rot: number; path: TubeNode[]; smooth?: true })
+  | (At & { type: "fence"; rot: number; h: number; path: TubeNode[]; smooth?: true })
   | (At & { type: "hoop"; rot: number; roll?: number; tilt?: number })
   | (At & { type: "column"; h: number; rot?: number; roll?: number; tilt?: number })
   | (At & { type: "bumper"; rot?: number; roll?: number; tilt?: number })
@@ -1137,19 +1138,22 @@ export function fenceSamples(p: Platform, side: FenceSide, a: number, b: number)
   return out.sort((x, y) => x - y);
 }
 
-// Fence: one rail at fence height (FENCE_RAIL_Y) over a path laid like a tube's: (x, y, z) is its
-// first node and `path` the rest, relative to it before `rot`; a node's y is the surface the fence
-// stands on there. `bend` rounds a corner, `mid` curves a segment, `smooth` makes it one curve.
-// Each end turns straight down on FENCE_RAIL_CORNER, to FENCE_RAIL_FOOT below the surface.
+// Fence: one rail `h` above the surface (FENCE_RAIL_Y by default) over a path laid like a tube's:
+// (x, y, z) is its first node and `path` the rest, relative to it before `rot`; a node's y is the
+// surface the fence stands on there. `bend` rounds a corner, `mid` curves a segment, `smooth` makes
+// it one curve. Each end turns straight down on FENCE_RAIL_CORNER, to FENCE_RAIL_FOOT below the surface.
 export type FencePiece = Piece & { type: "fence" };
-export function fenceRings(p: { path: TubeNode[]; smooth?: true }): TubeRing[] {
-  const top = tubeNodes(p, FENCE_RAIL_Y), first = top[0]!, last = top[top.length - 1]!, lastNode = p.path[p.path.length - 1];
+// Kept at least a rail's radius up so the rail never sinks into the floor.
+export const fenceH = (p: { h?: number }): number => Math.max(RAIL_R, p.h ?? FENCE_RAIL_Y);
+export function fenceRings(p: { path: TubeNode[]; smooth?: true; h?: number }): TubeRing[] {
+  const H = fenceH(p);
+  const top = tubeNodes(p, H), first = top[0]!, last = top[top.length - 1]!, lastNode = p.path[p.path.length - 1];
   if (!lastNode) return [];
-  const down = (v: V3): V3 => [v[0], v[1] - FENCE_RAIL_Y - FENCE_RAIL_FOOT, v[2]];
-  const lift = (m?: { x: number; y: number; z: number }) => (m ? { mid: { x: m.x, y: m.y + FENCE_RAIL_Y, z: m.z } } : {});
+  const down = (v: V3): V3 => [v[0], v[1] - H - FENCE_RAIL_FOOT, v[2]];
+  const lift = (m?: { x: number; y: number; z: number }) => (m ? { mid: { x: m.x, y: m.y + H, z: m.z } } : {});
   const between: TubeNode[] = p.smooth
     ? smoothCurve(top).slice(1, -1).map((v) => ({ x: v[0], y: v[1], z: v[2], bend: 0 }))
-    : p.path.slice(0, -1).map((n) => ({ x: n.x, y: n.y + FENCE_RAIL_Y, z: n.z, bend: n.bend, ...lift(n.mid) }));
+    : p.path.slice(0, -1).map((n) => ({ x: n.x, y: n.y + H, z: n.z, bend: n.bend, ...lift(n.mid) }));
   const foot = down(first), rel = (n: TubeNode): TubeNode => ({ ...n, x: n.x - foot[0], y: n.y - foot[1], z: n.z - foot[2], ...(n.mid ? { mid: { x: n.mid.x - foot[0], y: n.mid.y - foot[1], z: n.mid.z - foot[2] } } : {}) });
   const end = down(last);
   const path = [
@@ -1209,7 +1213,7 @@ function legacyFences(p: Platform, spec: Record<string, Fence>): Piece[] {
   return runs.map((run): Piece => {
     const w = run.map((q) => ({ v: world(q.v), mid: q.mid ? world(q.mid) : undefined })), o = w[0]!.v;
     const rel = (v: V3) => ({ x: r3(v[0] - o[0]), y: r3(v[1] - o[1]), z: r3(v[2] - o[2]) });
-    return { type: "fence", x: r3(o[0]), y: r3(o[1]), z: r3(o[2]), rot: 0,
+    return { type: "fence", x: r3(o[0]), y: r3(o[1]), z: r3(o[2]), rot: 0, h: FENCE_RAIL_Y,
       path: w.slice(1).map((q) => ({ ...rel(q.v), bend: FENCE_RAIL_CORNER, ...(q.mid ? { mid: rel(q.mid) } : {}) })) };
   });
 }
@@ -1334,9 +1338,7 @@ export function pieceCylinders(p: Piece): Cylinder[] {
   if (p.type === "barrier") return [BARRIER_LEG_X, -BARRIER_LEG_X].map((x) => ({ r: BARRIER_LEG_R, h: BARRIER_LEG + 0.1, x, z: 0 }));
   if (p.type === "column") return [{ r: COLUMN_R, h: p.h }];
   if (p.type === "pillar") return [
-    { r: PILLAR_R, h: PILLAR_H - PILLAR_CAP },
-    { r: PILLAR_R + PILLAR_COLLAR.r, h: PILLAR_COLLAR.h, y0: PILLAR_H - PILLAR_CAP },
-    { r: PILLAR_R + PILLAR_RING.r, h: PILLAR_RING.h },
+    { r: PILLAR_R, h: PILLAR_H - PILLAR_CAP + PILLAR_COLLAR_H },
   ];
   if (p.type === "spinner") return [{ r: SPINNER_HUB_R, h: SPINNER_HEIGHT + 0.05 }];
   if (p.type === "goal") return [{ r: p.r, h: GOAL_DISC_H }];
@@ -1594,7 +1596,7 @@ export function newPiece(type: PieceType, x = 0, y = 0, z = 0): Piece {
     case "slab": return { type, x, y, z, w: LANE_WIDTH, d: 16, rot: 0, tilt: 0 };
     case "curve": return { type, x, y, z, inner: 8, outer: 8 + LANE_WIDTH, rot: 0 };
     case "ramp": return { type, x, y, z, w: LANE_WIDTH, d: 24, rot: 0, rise: RAMP_RISE };
-    case "fence": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -8, bend: FENCE_RAIL_CORNER }] };
+    case "fence": return { type, x, y, z, rot: 0, h: FENCE_RAIL_Y, path: [{ x: 0, y: 0, z: -8, bend: FENCE_RAIL_CORNER }] };
     case "bridge": return { type, x, y, z, w: 4, d: 8, rot: 0 };
     case "rails": return { type, x, y, z, rot: 0, path: [{ x: 0, y: 0, z: -12, bend: 0 }], smooth: true, lines: 2, a: "top", b: "top" };
     case "plank": return { type, x, y, z, w: 4, h: 8, rot: 0, tilt: 0 };
@@ -1892,7 +1894,7 @@ export function validateLevel(raw: unknown): Level {
         ...(p.move ? { move: parseMove(p.move as Record<string, unknown>, i) } : {}) }, f, ["n", "e", "s", "w"]);
       case "curve": return keep({ type: "curve", ...at, inner: num(p.inner, "inner"), outer: num(p.outer, "outer"), rot: num(p.rot ?? 0, "rot"), ...(p.sweep !== undefined && num(p.sweep, "sweep") !== 90 ? { sweep: num(p.sweep, "sweep") } : {}), ...(p.roll ? { roll: num(p.roll, "roll") } : {}), ...(p.rollAt === "b" ? { rollAt: "b" as const } : {}) }, f, ["a", "outer", "b", "inner"]);
       case "ramp": return keep({ type: "ramp", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot"), rise: num(p.rise, "rise") }, f, ["e", "w"]);
-      case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
+      case "fence": return { type: "fence", ...at, rot: num(p.rot ?? 0, "rot"), h: num(p.h ?? FENCE_RAIL_Y, "h"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}) };
       case "bridge": return { type: "bridge", ...at, w: num(p.w, "w"), d: num(p.d, "d"), rot: num(p.rot ?? 0, "rot") };
       case "rails": return { type: "rails", ...at, rot: num(p.rot ?? 0, "rot"), path: parsePath(p.path, i), ...(p.smooth === true ? { smooth: true as const } : {}),
         lines: p.lines === 1 ? 1 : 2, a: railEnd(p.a), b: railEnd(p.b),
